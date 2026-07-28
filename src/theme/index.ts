@@ -1,39 +1,18 @@
 /**
- * theme/index.ts — design tokens.
+ * theme/index.ts — the public surface of the theme layer.
  *
- * Purpose:      One place for colour, spacing, radius, and type scale, so screens
- *               never hardcode a hex value and a restyle stays a one-file change.
- * Notes:        Values follow GDD §10: quiet, high-contrast, generous spacing.
- *               Arrow colour is a *secondary* cue only — direction is always
- *               carried by the glyph's rotation, so the game stays readable for
- *               colour-blind players.
+ * Purpose:      One import path for skins and layout tokens.
+ * Responsibilities:
+ *               - Re-export the theme types and registry.
+ *               - Own the layout scale (spacing, radius, type), which is *not*
+ *                 themeable — a theme changes how the game looks, not how the
+ *                 interface is proportioned.
+ * Notes:        Screens import from `@theme`; nothing imports `themes.ts` or
+ *               `types.ts` directly.
  */
 
-export const colors = {
-  background: '#11141b',
-  surface: '#1a1f2b',
-  surfaceRaised: '#232a39',
-  border: '#2f3849',
-
-  text: '#eef2f9',
-  textMuted: '#98a3b8',
-  textFaint: '#647084',
-
-  accent: '#5b8dee',
-  accentMuted: '#2c3f63',
-
-  success: '#3fbf87',
-  successMuted: '#1c3d31',
-  danger: '#e2606a',
-  dangerMuted: '#42222a',
-  warning: '#e0a33f',
-
-  boardCell: '#1e2430',
-  boardCellEmpty: '#171c26',
-  arrow: '#dfe6f2',
-  arrowSafe: '#3fbf87',
-  arrowTrap: '#e2606a',
-} as const;
+export * from './types';
+export * from './themes';
 
 /** 4pt spacing scale. Large tap targets are a GDD accessibility requirement. */
 export const spacing = {
@@ -49,15 +28,17 @@ export const radius = {
   sm: 6,
   md: 10,
   lg: 16,
+  xl: 22,
   pill: 999,
 } as const;
 
 export const typography = {
-  title: { fontSize: 24, fontWeight: '700' },
-  heading: { fontSize: 17, fontWeight: '600' },
-  body: { fontSize: 15, fontWeight: '400' },
-  small: { fontSize: 13, fontWeight: '400' },
-  mono: { fontSize: 13, fontWeight: '500' },
+  display: { fontSize: 30, fontWeight: '800' },
+  title: { fontSize: 22, fontWeight: '700' },
+  heading: { fontSize: 16, fontWeight: '700' },
+  body: { fontSize: 15, fontWeight: '500' },
+  small: { fontSize: 13, fontWeight: '500' },
+  tiny: { fontSize: 11, fontWeight: '600' },
 } as const;
 
 /** Minimum touch target, in dp. Below this, taps start getting missed. */

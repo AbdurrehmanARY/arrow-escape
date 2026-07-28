@@ -11,10 +11,12 @@
 - **Phase 1 — core domain + scaffold.**
   - Expo SDK 57 / RN 0.86 / React 19.2 / TypeScript 6.0 scaffold, strict mode plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`.
   - Pure domain layer in `src/game/`: `types`, `board`, `rules`, `solver`, `hints`, `ascii`, `diagnostics`, `index`.
-  - 98 unit tests, 6 suites, green. 96% statements / 91% branches / 99% lines on `src/game`. Thresholds enforced in `jest.config.js`.
+  - 112 unit tests, 7 suites, green. 96% statements / 91% branches / 99% lines on `src/game`. Thresholds enforced in `jest.config.js`.
   - Solver validated against an exhaustive brute-force reference over 500 random boards, with both verdicts well represented.
-  - `EngineCheckScreen` — on-device self-check plus a playable 8×8 tangle with the hearts HUD.
-  - Verified: `tsc --noEmit` clean; Metro bundles for Android.
+  - **Renderer:** `react-native-svg` board with per-theme grid patterns, snakes drawn as single polylines with rounded joins, and per-cell touch targets. Six themes shipped.
+  - `GameScreen` — a playable 8×8 tangle with the hearts HUD and a live theme picker.
+  - `tools/preview-themes.ts` renders every theme to an HTML page from the app's own geometry module.
+  - Verified: `tsc --noEmit` clean; Metro bundles for Android (705 modules).
 
 ## The mechanic (settled)
 Arrows are **snakes**: connected chains of cells with an arrowhead at one end.
@@ -58,7 +60,12 @@ model in [MECHANIC_ANALYSIS.md](MECHANIC_ANALYSIS.md).
 17. **Hints are "the first move of a winning line"**, not a heuristic. Strongest possible guarantee, and free given the solver. Hints cost a rewarded ad, so a hint that spends a heart is ruled out structurally rather than tested for.
 18. **ASCII notation (`ascii.ts`) is production code** — uppercase letter = head, lowercase = body. Shared by tests, the generator, and validator error messages.
 19. **`diagnostics.ts` is itself unit-tested**, so the on-device green light cannot silently rot into a check that always passes.
-20. **Path aliases** (`@game`, `@screens`, `@theme`, …) work in both Metro and `tsc`.
+20. **Path aliases** (`@game`, `@theme`, `@components`, `@screens`, …) work in both Metro and `tsc`, with bare and wildcard forms.
+21. **A theme is data, not code.** `Palette` + `ArrowStyle` + `BoardStyle` are set independently, every measurement is a ratio of one cell, and **the renderer never branches on a theme's `id`**. Adding a theme is a registry entry; adding a new *kind* of look is one field plus one branch. Six themes ship: Paper, Midnight, Noodles, Bold, Blueprint, Graphite.
+22. **`ArrowStyle.colorful` is the one theme option with gameplay effect** — per-snake colour makes levels materially easier, because telling snakes apart is the skill. Themes using it say so; difficulty metrics assume it is off.
+23. **Drawing maths lives in a pure module** (`components/arrowGeometry.ts`) with no React and no SVG elements. It is unit-tested, and `tools/preview-themes.ts` renders the whole theme set to HTML from that same module — so a preview cannot disagree with what ships.
+24. **Touch targets are real `Pressable` views, one per occupied cell** — not SVG `onPress`. Hit-testing a transparent stroke is inconsistent across platforms, and a full-cell target is the better tap regardless.
+25. **The grid pattern is a playing aid, not decoration.** Without visible cell structure a player cannot tell whether two ropes share a column, which is the core judgement of the game.
 
 ### Reversed in Phase 1
 - The `slide-and-stop` rule variant was built, tested, and then **removed** once the reference screenshots settled the mechanic. It is in git history at commit `b725e00` if a later pack ever wants it. Carrying an unused variant through eight more phases would have branched every function and doubled every test for nothing.
@@ -92,8 +99,9 @@ no DHCP lease (a `169.254.x.x` APIPA address), so only Ethernet
 commands are in [PHASE_1_TESTING.md](PHASE_1_TESTING.md).
 
 ## Pending work (next up)
-- **You:** run the Phase 1 build on device (see [PHASE_1_TESTING.md](PHASE_1_TESTING.md)) and confirm the mechanic feels right.
-- **Then Phase 2:** playable board — SVG snake paths with rounded joins, thread-out release animation, blocked flash + heart drain, `gameReducer`, one hardcoded level.
+- **You:** run the Phase 1 build on device (see [PHASE_1_TESTING.md](PHASE_1_TESTING.md)), pick a default theme, and confirm the mechanic feels right.
+- **Then Phase 2:** motion and state — the thread-out release animation (`strokeDashoffset` along the exit path), the blocked shake, the heart-drain transition, and the `gameReducer` that sequences them. The static renderer is already done.
+- **Also Phase 2:** persist the chosen theme in `settingsStore`, and re-validate the difficulty bands on device now that stroke weight and cell size affect how hard a board is to read.
 
 ## Deferred features (post-v0.1)
 Coins/economy, undo/redo, leaderboards, daily challenges, online/multiplayer, cloud saves, live events, cosmetics, battle pass, seasonal content, IAP. Level count beyond 50 (target 600). Additional layout shapes. Crash reporting. ESLint/Prettier config (deps installed, not yet configured).

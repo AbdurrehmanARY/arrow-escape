@@ -6,8 +6,8 @@
  * be structure without a purpose.
  */
 
-import EngineCheckScreen from '@screens/EngineCheckScreen';
+import GameScreen from '@screens/GameScreen';
 
 export default function App() {
-  return <EngineCheckScreen />;
+  return <GameScreen />;
 }

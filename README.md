@@ -14,7 +14,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ```bash
 npm install
-npm run verify        # typecheck + 98 unit tests
+npm run verify        # typecheck + 112 unit tests
 npm run start:tunnel  # then scan the QR code with Expo Go
 ```
 
@@ -41,16 +41,38 @@ The proof, the measurements, and the difficulty model that follows from it are i
 ## Layout
 
 ```
-src/game/      pure TypeScript rules engine — no React, no I/O
-src/screens/   UI
-src/theme/     design tokens
-__tests__/     Jest suites for the domain layer
-docs/          design docs, roadmap, project memory
+src/game/        pure TypeScript rules engine — no React, no I/O
+src/components/  SVG board renderer + pure drawing geometry
+src/theme/       six themes, each a single data entry
+src/screens/     UI
+tools/           off-device scripts (theme preview; generator in Phase 3)
+__tests__/       Jest suites
+docs/            design docs, roadmap, project memory
 ```
 
 The domain layer is deliberately pure so the *same code* runs the game on the
 phone and validates levels off-device. There is one definition of "how the game
 works" in the codebase.
+
+## Theming
+
+A theme sets three things independently — the **palette**, the **arrow style**
+(head shape, tail cap, thickness, shadow, gloss, eyes), and the **board style**
+(dots, ruled lines, crosses, checker, or nothing). Every measurement is a ratio of
+one cell, so a theme looks the same on any board size.
+
+The renderer never branches on a theme's id, so **adding a theme is a data entry**
+in `src/theme/themes.ts`. Six ship today: Paper, Midnight, Noodles, Bold,
+Blueprint, Graphite.
+
+See them all in a browser without building the app:
+
+```bash
+npx tsx tools/preview-themes.ts > preview.html
+```
+
+That page draws from `src/components/arrowGeometry.ts` — the app's own geometry
+module — so it can't disagree with what ships.
 
 ## Commands
 

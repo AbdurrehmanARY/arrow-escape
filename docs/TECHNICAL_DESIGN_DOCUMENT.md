@@ -153,13 +153,23 @@ arrow-escape-game/
 │  │  └─ index.ts               # the public surface
 │  ├─ state/                    # (Phase 2+) gameReducer, Zustand stores
 │  ├─ screens/
-│  │  └─ EngineCheckScreen.tsx  # Phase 1 deliverable
-│  ├─ components/               # (Phase 2+) Board, ArrowView, Hud, overlays
+│  │  └─ GameScreen.tsx         # Phase 1 deliverable
+│  ├─ components/
+│  │  ├─ arrowGeometry.ts       # pure drawing maths — no React, no SVG
+│  │  ├─ ArrowSnake.tsx         # paints one snake per ArrowStyle
+│  │  ├─ BoardCanvas.tsx        # board panel, grid pattern, touch targets
+│  │  ├─ Hud.tsx                # level, hearts, buttons
+│  │  └─ index.ts               # the public surface
 │  ├─ services/                 # (Phase 4+) storage, audio, ads
 │  ├─ data/levels/              # (Phase 3+) 001.json … 050.json
-│  ├─ theme/                    # colors, spacing, radius, typography tokens
+│  ├─ theme/
+│  │  ├─ types.ts               # Palette, ArrowStyle, BoardStyle, Theme
+│  │  ├─ themes.ts              # the six shipped themes, as data
+│  │  └─ index.ts               # + spacing/radius/type scale (not themeable)
 │  └─ config/                   # (Phase 6+) constants, flags, ad unit ids
-├─ tools/                       # (Phase 3+) off-device generator/validator
+├─ tools/
+│  └─ preview-themes.ts         # renders every theme to an HTML page
+│                               # (Phase 3+) generator/validator land here too
 ├─ __tests__/                   # unit tests for game/ and tools/
 ├─ assets/
 └─ docs/                        # GDD, TDD, MECHANIC_ANALYSIS, PROJECT_MEMORY, ROADMAP
@@ -171,11 +181,38 @@ arrow-escape-game/
 
 ## 5. Rendering system
 
-- **Board:** an absolutely-positioned grid. Cell size = `min(screenWidth, maxBoardWidth) / cols`, computed once per level; the board is centered and letterboxed on tall screens.
-- **Arrow:** each snake is one SVG `<path>` built from its body cells, stroked with round joins and caps so bends read as smooth corners, plus an arrowhead marker at the head. One path per arrow rather than one node per cell — a 7-cell body is a single draw call, and the rounded joins are what make the board look like the reference art rather than like pixels.
-- **Hit area:** the stroked path itself is the tap target, widened via `strokeWidth` on an invisible hit path so thin bodies are still easy to hit anywhere along their length.
-- Colour carries **state only** (red on a failed tap), never identity or direction — all snakes share one colour because telling them apart is the game.
-- Only the tapped arrow animates; all others are static. This keeps frame cost trivial even on low-end devices.
+- **Board:** one SVG root for the whole board, so it is a single native view however many arrows are on it. Cell size comes from `fitCellSize`, which fits the grid plus its padding ring into the space available and keeps cells square, so a wide board and a tall one look like the same game.
+- **Grid pattern:** dots, ruled lines, crosses, checker, or nothing — chosen by the theme. This is a *playing aid*, not decoration: without visible cell structure the player cannot tell whether two ropes share a column, which is exactly the judgement the game asks for.
+- **Arrow:** each snake is one `<Polyline>` through its body cells with `strokeLinejoin="round"`, which is what turns a chain of cells into something that reads as rope. A 7-cell body is a single draw call, not seven. The head is drawn on top as a separate shape.
+- **Hit area:** real `Pressable` views overlaid one per occupied cell, *not* SVG `onPress`. Hit-testing a transparent stroke is inconsistent across platforms, and a full-cell target is the better tap anyway — any part of a snake selects the whole snake, so a thin arrow is no harder to hit than a fat one.
+- **Geometry lives in `arrowGeometry.ts`**, a pure module with no React and no SVG elements — just coordinates. That makes the drawing maths unit-testable, and it lets `tools/preview-themes.ts` render the whole theme set to an HTML page from the exact same code the app uses, so a preview cannot quietly disagree with what ships.
+- Colour carries **state only** (red for a failed tap, orange for the blocker, green for assist), never identity or direction — all snakes share one colour because telling them apart is the game.
+- Only the tapped arrow animates; all others are static, and `ArrowSnake` is memoised so an untouched snake does not re-render. This keeps frame cost trivial even on low-end devices.
+
+### Theming
+
+A theme is **data**, described in `src/theme/types.ts` and registered in
+`themes.ts`. It sets three independent things:
+
+| Part | What it controls |
+|---|---|
+| `Palette` | every colour, including a `scheme` flag so system chrome can match |
+| `ArrowStyle` | head shape (`triangle`/`pencil`/`chevron`/`rounded`/`none`), tail cap, corner join, thickness, shadow, gloss highlight, eyes, per-arrow colour |
+| `BoardStyle` | grid pattern, dot/line weight, panel corner radius, padding ring |
+
+Every measurement is a **ratio of one cell**, so a theme looks identical on a 4×4
+board and a 10×10 one.
+
+**The contract: the renderer never branches on a theme's `id`.** It reads these
+fields and draws. Adding a theme is an entry in the registry; adding a new *kind*
+of look is one new field plus one branch in the renderer. Anything that cannot be
+expressed that way is a signal the type is missing a field, not a licence for a
+special case.
+
+Themes are cosmetic with one documented exception: `ArrowStyle.colorful` gives
+each snake its own hue, which makes levels materially easier because telling
+snakes apart is the skill being tested. Themes that use it say so in their
+description, and the difficulty metrics assume it is off.
 
 ---
 

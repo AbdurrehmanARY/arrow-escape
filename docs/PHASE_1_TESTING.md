@@ -14,8 +14,8 @@ npm run verify
 Runs `tsc --noEmit` then the full Jest suite. Expect:
 
 ```
-Test Suites: 6 passed, 6 total
-Tests:       98 passed, 98 total
+Test Suites: 7 passed, 7 total
+Tests:       112 passed, 112 total
 ```
 
 Coverage, if you want it: `npm run test:coverage` → 96% statements, 91% branches
@@ -75,12 +75,13 @@ it is a real problem independent of this project.
 
 ## 3. What you should see
 
-A dark screen titled **ArrowPath — Phase 1 — rules engine**, with two cards.
+A warm paper-coloured screen headed **LEVEL 1 · Tangle**, with a heart row, the
+board, and a theme picker underneath.
 
-### Card 1 — Tangle (the game)
+### The board
 
-An 8×8 board with **7 snakes** and a row of **5 hearts**. This is the real
-mechanic, playable:
+An 8×8 dotted grid with **7 snakes** and **5 hearts**. This is the real mechanic,
+playable:
 
 - Each snake is a chain of cells with an arrowhead at one end.
 - **Tap any cell of a snake** to try to send it out through its head.
@@ -97,46 +98,61 @@ without losing a single one. That gap is the entire game.
 
 Worth trying, in order:
 
-1. **Play it cold.** Don't use any of the toggles. See how it feels to hunt for a
+1. **Play it cold.** No Assist, no theme switching. See how it feels to hunt for a
    head and follow it. This is the real experience.
-2. **Tap something blocked on purpose** and watch a heart drain while the board
-   stays exactly as it was. Note that you can lose this level with the board still
-   perfectly winnable — that is by design and the fail message says so.
-3. **Restart, then hit "Show safe"** — green outlines every snake that can
-   currently leave. Compare that against what you guessed.
-4. **Hit "Colour snakes"** — each body gets its own colour. Suddenly the board is
-   trivial. That contrast *is* the difficulty: the real game draws every snake the
-   same colour on purpose.
-5. **Hit "Hint"** — the engine names a snake that genuinely has a clear run. It
-   can never cost you a heart.
+2. **Tap something blocked on purpose.** The snake flashes red, the *blocker*
+   flashes orange so you can see what stopped it, and a heart drains — while the
+   board stays exactly as it was. You can lose this level with the board still
+   perfectly winnable; that is by design, and the fail message says so.
+3. **Restart, then turn on Assist** — every snake with a clear run turns green.
+   Compare that against what you guessed.
+4. **Switch to the Noodles theme.** Each snake gets its own colour and the board
+   becomes trivial. That contrast *is* the difficulty: every other theme draws all
+   snakes in one colour on purpose.
+5. **Hit Hint** — the engine names a snake that genuinely has a clear run. It can
+   never cost you a heart.
 
-### Card 2 — Engine self-check
+### Themes
 
-Should read **12 passed**, in single-digit milliseconds. This re-runs core engine
-checks on the phone's JS engine (Hermes), which is *not* the engine the Jest tests
-run on. If anything here fails, stop and send me the failing line — it means the
-engine behaves differently on device than on desktop, which is worth fixing before
-anything is built on top of it.
+Below the board is a picker with six themes. Tap through them — the board redraws
+live.
 
-Among other things it verifies on your hardware that a wrong tap costs a heart and
-leaves the board alone, that running out of hearts fails a level that was still
-winnable, that hints never cost a heart, and that 300 random boards can all be
-cleared by tapping in any order.
+| Theme | Arrow head | Grid | Note |
+|---|---|---|---|
+| **Paper** | triangle | dots | The default: warm paper, charcoal arrows |
+| **Midnight** | triangle | dots | The same design inverted |
+| **Noodles** | rounded, with eyes | none | Each snake its own colour — **plays easier** |
+| **Bold** | triangle, mitred | none | Heavy black on flat yellow |
+| **Blueprint** | chevron | ruled lines | Thin arrows on drafting blue |
+| **Graphite** | pencil | crosses | Slim tips on graph paper |
+
+A theme sets the palette, the arrow shape, and the board pattern independently, so
+they mix freely. Adding another one is a data entry — the renderer never branches
+on which theme is active, so new looks cost nothing structurally.
+
+You can also see all six side by side in a browser without building anything:
+
+```bash
+npx tsx tools/preview-themes.ts > preview.html
+```
+
+That page renders from the app's own geometry module, so it cannot disagree with
+what the phone shows.
 
 ---
 
 ## 4. What I need from you
 
-1. **Confirm the self-check reads 12 passed** and nothing is red.
-2. **Confirm the mechanic matches the game you showed me** — snakes, the whole
+1. **Confirm the mechanic matches the game you showed me** — snakes, the whole
    body leaving at once through the head, hearts draining on a wrong tap.
+2. **Pick a default theme**, or tell me what to change about one. Arrow thickness,
+   head size, dot visibility, and corner rounding are all single numbers.
 3. **Tell me anything that feels off** about how it plays. Board size, snake
    length, how many are free at the start, whether 5 hearts feels right.
 
-Then I'll start **Phase 2**: the production renderer — SVG snake paths with
-rounded corners so they look like your reference art, the thread-out release
-animation, the red flash and heart drain on a blocked tap, and shaped levels
-(heart, spiral, diamond).
+Then I'll start **Phase 2**: motion and state — the thread-out release animation
+where the body follows the head off the board, the shake and heart-drain on a
+blocked tap, and the reducer that sequences them. The static renderer is done.
 
 ---
 
