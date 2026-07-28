@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 
 import {
   BoardCanvas,
+  CoachCard,
   ConfirmDialog,
   FailOverlay,
   Hud,
@@ -34,6 +35,7 @@ import { availability, preload, showRewarded } from '@services/ads';
 import { playSfx } from '@services/audio';
 import { gameReducer, initGameState } from '@state/gameReducer';
 import { useHintStore } from '@state/hintStore';
+import { useOnboardingStore, type CoachMoment } from '@state/onboardingStore';
 import { useProgressStore } from '@state/progressStore';
 import { useSettingsStore } from '@state/settingsStore';
 import { radius, spacing, typography } from '@theme';
@@ -78,6 +80,53 @@ export default function PlayScreen() {
 
   const status = state.session.status;
 
+  // ---- First-run teaching -------------------------------------------------
+  const shouldShowCoach = useOnboardingStore((s) => s.shouldShow);
+  const markCoachSeen = useOnboardingStore((s) => s.markSeen);
+  const onboardingHydrated = useOnboardingStore((s) => s.hydrated);
+
+  /**
+   * Which single piece of guidance, if any, applies right now.
+   *
+   * Deliberately one at a time and situation-driven: the welcome only on the very
+   * first board, the block explanation only after a tap has actually failed, and
+   * the reassurance only once hearts are genuinely low. Front-loading all three
+   * would be the text wall the GDD rules out.
+   */
+  const coach: CoachMoment | undefined = useMemo(() => {
+    if (!onboardingHydrated || status !== 'playing') return undefined;
+    if (levelId === 1 && state.taps === 0 && shouldShowCoach('welcome')) return 'welcome';
+    if (state.session.mistakes > 0 && shouldShowCoach('firstBlock')) return 'firstBlock';
+    if (state.session.heartsLeft <= 2 && shouldShowCoach('lowHearts')) return 'lowHearts';
+    return undefined;
+  }, [
+    onboardingHydrated,
+    status,
+    levelId,
+    state.taps,
+    state.session.mistakes,
+    state.session.heartsLeft,
+    shouldShowCoach,
+  ]);
+
+  const COACH_COPY: Record<CoachMoment, { title: string; body: string; dismiss: string }> = {
+    welcome: {
+      title: 'Get every arrow off the board',
+      body: 'An arrow can leave only if the straight line from its arrowhead to the edge is empty. The green ones can go right now — tap one and watch its whole body follow.',
+      dismiss: 'Show me',
+    },
+    firstBlock: {
+      title: "That one couldn't leave",
+      body: 'Something was sitting on its path out, so it stayed put and cost you a heart. Follow each arrowhead straight to the edge before tapping — if anything crosses that line, it has to wait.',
+      dismiss: 'Understood',
+    },
+    lowHearts: {
+      title: 'The board is still fine',
+      body: 'A blocked tap never changes anything, so this level is exactly as winnable as when you started. Only your hearts are running out — restart any time, it costs nothing.',
+      dismiss: 'Keep going',
+    },
+  };
+
   useEffect(() => {
     setLastPlayed(levelId);
   }, [levelId, setLastPlayed]);
@@ -99,9 +148,12 @@ export default function PlayScreen() {
 
   const safeArrows = useMemo(() => {
     if (!built?.ok) return [];
-    if (assist && status === 'playing') return findAllSafeMoves(built.value.board, state.session.state);
+    // The welcome card says "the green ones can go" — so it has to make them green.
+    // Words alone would leave a first-time player hunting for what the card means.
+    const showAll = (assist || coach === 'welcome') && status === 'playing';
+    if (showAll) return findAllSafeMoves(built.value.board, state.session.state);
     return hintedArrow !== undefined ? [hintedArrow] : [];
-  }, [assist, built, hintedArrow, state.session.state, status]);
+  }, [assist, coach, built, hintedArrow, state.session.state, status]);
 
   const onTapArrow = useCallback(
     (index: number) => {
@@ -246,9 +298,19 @@ export default function PlayScreen() {
         />
       </View>
 
-      <Text style={[styles.message, { color: palette.textMuted }]} numberOfLines={2}>
-        {hintNotice ?? state.message}
-      </Text>
+      {coach ? (
+        <CoachCard
+          palette={palette}
+          title={COACH_COPY[coach].title}
+          body={COACH_COPY[coach].body}
+          dismissLabel={COACH_COPY[coach].dismiss}
+          onDismiss={() => markCoachSeen(coach)}
+        />
+      ) : (
+        <Text style={[styles.message, { color: palette.textMuted }]} numberOfLines={2}>
+          {hintNotice ?? state.message}
+        </Text>
+      )}
 
       <View style={styles.actions}>
         <PillButton palette={palette} label="Restart" icon="↺" onPress={onRestartPressed} />

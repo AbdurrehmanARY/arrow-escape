@@ -43,12 +43,16 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run typecheck && npm run test && npm run levels:validate",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run levels:validate",
     "levels:build": "tsx tools/build-levels.ts",
     "levels:preview": "tsx tools/preview-themes.ts",
     "levels:validate": "tsx tools/validate.ts",
     "levels:check": "tsx tools/check-curriculum.ts",
-    "start:clear": "expo start --clear"
+    "start:clear": "expo start --clear",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "private": true
 }

@@ -20,6 +20,7 @@ import { APP_VERSION } from '@config';
 import { hasAudioAssets } from '@services/audio';
 import { clearAll } from '@services/storage';
 import { useHintStore } from '@state/hintStore';
+import { useOnboardingStore } from '@state/onboardingStore';
 import { useProgressStore } from '@state/progressStore';
 import { useSettingsStore } from '@state/settingsStore';
 import { radius, spacing, THEMES, typography, type Palette } from '@theme';
@@ -30,6 +31,7 @@ export default function SettingsScreen() {
   const settings = useSettingsStore();
   const resetProgress = useProgressStore((state) => state.resetProgress);
   const resetHints = useHintStore((state) => state.resetHints);
+  const resetOnboarding = useOnboardingStore((state) => state.resetOnboarding);
   const [confirmReset, setConfirmReset] = useState(false);
 
   const audioAvailable = hasAudioAssets();
@@ -38,6 +40,7 @@ export default function SettingsScreen() {
     setConfirmReset(false);
     resetProgress();
     resetHints();
+    resetOnboarding();
     settings.resetSettings();
     await clearAll();
     router.replace('/');

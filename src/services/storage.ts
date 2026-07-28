@@ -31,7 +31,6 @@ export interface SaveEnvelope<T> {
 /** Dev-only logging, so a storage hiccup is visible in development and silent in production. */
 function warn(message: string, error: unknown): void {
   if (__DEV__) {
-    // eslint-disable-next-line no-console
     console.warn(`[storage] ${message}`, error);
   }
 }
@@ -93,4 +92,5 @@ export const STORAGE_KEYS = {
   progress: 'progress',
   settings: 'settings',
   hints: 'hints',
+  onboarding: 'onboarding',
 } as const;

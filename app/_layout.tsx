@@ -23,6 +23,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initAds } from '@services/ads';
 import { applyAudioSettings, initAudio, startMusic } from '@services/audio';
 import { useHintStore } from '@state/hintStore';
+import { useOnboardingStore } from '@state/onboardingStore';
 import { useProgressStore } from '@state/progressStore';
 import { useSettingsStore } from '@state/settingsStore';
 
@@ -56,6 +57,7 @@ export default function RootLayout() {
   const hydrateSettings = useSettingsStore((state) => state.hydrate);
   const hydrateProgress = useProgressStore((state) => state.hydrate);
   const hydrateHints = useHintStore((state) => state.hydrate);
+  const hydrateOnboarding = useOnboardingStore((state) => state.hydrate);
 
   const music = useSettingsStore((state) => state.music);
   const sfx = useSettingsStore((state) => state.sfx);
@@ -71,6 +73,7 @@ export default function RootLayout() {
 
       void hydrateProgress();
       void hydrateHints();
+      void hydrateOnboarding();
       void initAudio().then(() => startMusic());
       void initAds();
     })();
@@ -78,7 +81,7 @@ export default function RootLayout() {
     return () => {
       cancelled = true;
     };
-  }, [hydrateSettings, hydrateProgress, hydrateHints]);
+  }, [hydrateSettings, hydrateProgress, hydrateHints, hydrateOnboarding]);
 
   useEffect(() => {
     if (!ready) return;

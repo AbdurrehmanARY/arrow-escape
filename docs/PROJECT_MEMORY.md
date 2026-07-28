@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 9 — all nine roadmap phases built. Awaiting device testing, audio assets, and store accounts.
+> **Last updated:** end of Phase 10 — first-run teaching, state-layer tests, and lint. Awaiting device testing, audio assets, and store accounts.
 
 ---
 
@@ -57,6 +57,9 @@ wrong *plans*, are the failure mode. Full proof and the difficulty model are in
 21. **Progress saves the moment a level is cleared**, not when the win overlay is dismissed.
 22. **Audio degrades to silence.** Every call is a no-op when the asset is missing, so the game ships and plays without any audio files.
 23. **`.npmrc` pins `legacy-peer-deps=true`.** Expo 57 ships a `react-dom` whose peer range excludes the pinned React; mixing strict and legacy installs against one tree prunes packages and silently breaks the babel/jest toolchains.
+24. **Metro caches transformed code with the compiling plugin's version baked in.** Any dependency version change needs `npm run start:clear`, or you get an error naming two versions of a package that only exists once. `start:tunnel` clears by default.
+25. **A `require` of a missing asset cannot be caught.** Metro resolves it at build time, so try/catch is wishful thinking and the app ships a broken module-graph entry. Optional assets go in an explicit registry (`services/audioAssets.ts`) that starts empty.
+26. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
 
 ### Reversed along the way
 - The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`.
@@ -92,8 +95,8 @@ cannot reach the LAN dev server. The Wi-Fi adapter also has no DHCP lease
 - **Ads are unexercised.** The code path is written but has never run against a real SDK, because installing it breaks Expo Go. First dev-client build is where that gets proven.
 
 ## Known issues / technical debt
-- ESLint + Prettier are installed but not configured.
 - Audio and ad services have no unit tests — both are thin I/O wrappers whose only real behaviour is degrading gracefully, which is exercised by the app running without either.
+- No component-level tests. The reducer, stores, storage and geometry are covered; the React tree is only covered by the bundle building and by manual testing.
 - `npm audit` reports moderate advisories from the Expo dependency tree; none are in code paths this app uses.
 - The IDE's JSON schema flags `module: "preserve"` in `tsconfig.json`. Valid in TS 5.4+, inherited from `expo/tsconfig.base`; `tsc` accepts it.
 

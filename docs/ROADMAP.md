@@ -72,6 +72,13 @@
 **Deliverables:** signed AAB, listing assets, staged-rollout plan.
 **Gate — v0.1 release.**
 
+## Phase 10 — First-run teaching + hardening ✅
+**Objective:** close the gap between "code complete" and "ready for a stranger".
+**Files:** `state/onboardingStore.ts`, `components/CoachCard.tsx`, `__tests__/state/*`, `__tests__/services/*`, `eslint.config.js`, `.prettierrc`.
+**Deliverables:** three one-time coach moments that teach the rule a player cannot infer; tests for the reducer, progress selectors and the save envelope; ESLint and Prettier wired into `npm run verify`.
+**Why this before more levels:** the roadmap gates level packs on playtesting the 50, and a playtester who does not understand the rule tests nothing useful.
+**Gate.**
+
 ---
 
 ### After v0.1

@@ -8,3 +8,4 @@ export * from './gameReducer';
 export * from './progressStore';
 export * from './settingsStore';
 export * from './hintStore';
+export * from './onboardingStore';

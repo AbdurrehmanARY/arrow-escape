@@ -5,10 +5,10 @@ snaking bodies with an arrowhead at one end. Tap one and it threads out through
 its head, but only if the straight line from that head to the board edge is clear.
 Misread it and it costs a heart. Five wrong reads and the level is over.
 
-**Status:** all nine roadmap phases are code-complete — 50 solver-verified levels,
-six themes, animation, hearts, hints, persistence, and settings. What remains
-needs accounts and assets: audio files, an app icon, AdMob, and a Play listing.
-See [docs/RELEASE.md](docs/RELEASE.md).
+**Status:** code-complete — 50 solver-verified levels, six themes, animation,
+hearts, hints, persistence, first-run teaching, and settings. What remains needs
+accounts and assets: audio files, an app icon, AdMob, and a Play listing. See
+[docs/RELEASE.md](docs/RELEASE.md).
 
 ---
 
@@ -16,7 +16,7 @@ See [docs/RELEASE.md](docs/RELEASE.md).
 
 ```bash
 npm install
-npm run verify        # typecheck + 370 tests + level validation
+npm run verify        # typecheck + lint + 412 tests + level validation
 npm run start:tunnel  # then scan the QR code with Expo Go
 ```
 
@@ -52,7 +52,7 @@ src/services/    storage, audio, ads — all fail quietly by design
 src/theme/       six themes, each a single data entry
 src/data/levels/ 50 generated, solver-verified levels
 tools/           generator, validator, curriculum, theme preview
-__tests__/       370 tests
+__tests__/       412 tests
 docs/            design docs, roadmap, project memory
 ```
 
@@ -100,12 +100,14 @@ geometry module — so the preview cannot disagree with what ships.
 
 | Command | Purpose |
 |---|---|
-| `npm run verify` | typecheck + tests + level validation. Run before every commit |
+| `npm run verify` | typecheck + lint + tests + level validation. Run before every commit |
 | `npm start` | Expo dev server (LAN) |
 | `npm run start:tunnel` | Expo dev server via ngrok — use if the LAN route is firewalled |
 | `npm test` | Jest |
 | `npm run test:coverage` | coverage, thresholds enforced on `src/game` |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint, zero warnings tolerated |
+| `npm run format` | Prettier |
 
 ## Docs
 
@@ -116,6 +118,6 @@ geometry module — so the preview cannot disagree with what ships.
 | [TECHNICAL_DESIGN_DOCUMENT.md](docs/TECHNICAL_DESIGN_DOCUMENT.md) | architecture and rationale |
 | [MECHANIC_ANALYSIS.md](docs/MECHANIC_ANALYSIS.md) | why order can't lose, and what makes levels hard instead |
 | [TESTING.md](docs/TESTING.md) | how to test, and what to look for |
-| [ROADMAP.md](docs/ROADMAP.md) | the nine phases |
+| [ROADMAP.md](docs/ROADMAP.md) | the phases, and what comes after v0.1 |
 | [ADS_SETUP.md](docs/ADS_SETUP.md) | turning on rewarded ads |
 | [RELEASE.md](docs/RELEASE.md) | getting it into the Play Store |

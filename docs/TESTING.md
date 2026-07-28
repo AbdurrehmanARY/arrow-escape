@@ -16,14 +16,15 @@ Runs three things in order:
 | Step | What it proves |
 |---|---|
 | `tsc --noEmit` | the whole project typechecks under `strict` |
-| `jest` | 370 tests — rules, solver, geometry, and every shipped level |
+| `eslint` | no lint errors anywhere |
+| `jest` | 412 tests — rules, solver, geometry, reducer, stores, storage, and every shipped level |
 | `levels:validate` | re-reads the level JSON *from disk* and re-solves all 50 |
 
 Expect:
 
 ```
-Test Suites: 8 passed, 8 total
-Tests:       370 passed, 370 total
+Test Suites: 11 passed, 11 total
+Tests:       412 passed, 412 total
 ...
 All levels solvable, all recorded solutions verified.
 Difficulty runs 0.5 → 21.3 expected blind mistakes.
