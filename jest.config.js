@@ -22,7 +22,9 @@ module.exports = {
     '^@theme/(.*)$': '<rootDir>/src/theme/$1',
     '^@config/(.*)$': '<rootDir>/src/config/$1',
   },
-  collectCoverageFrom: ['src/game/**/*.ts'],
+  // `index.ts` is a pure re-export barrel with no logic of its own; counting it
+  // only ever drags the number down without telling us anything.
+  collectCoverageFrom: ['src/game/**/*.ts', '!src/game/index.ts'],
   coverageThreshold: {
     './src/game/': { branches: 80, functions: 90, lines: 90, statements: 90 },
   },

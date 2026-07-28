@@ -3,23 +3,21 @@
  *
  * Not a test file itself (the Jest `testMatch` only picks up `*.test.ts`).
  * Provides board authoring from ASCII art and a deterministic random-board
- * generator, so the property tests below produce the same boards on every run and
- * on every machine. A flaky property test is worse than no property test.
+ * generator, so the property tests produce the same boards on every run and on
+ * every machine. A flaky property test is worse than no property test.
  */
 
 import {
+  type ArrowSpec,
   buildLevel,
   type BuiltLevel,
-  DIRECTIONS,
-  type Direction,
   type LevelDefinition,
   parseAscii,
-  type RuleVariant,
 } from '@game';
 
 /** Build a playable board from ASCII art, failing loudly if the art is invalid. */
-export function build(art: string, variant: RuleVariant = 'escape-only'): BuiltLevel {
-  const level = parseAscii(art, { variant });
+export function build(art: string, hearts?: number): BuiltLevel {
+  const level = parseAscii(art, hearts !== undefined ? { hearts } : {});
   const result = buildLevel(level);
   if (!result.ok) throw new Error(`build() fixture is invalid: ${result.error}`);
   return result.value;
@@ -28,7 +26,7 @@ export function build(art: string, variant: RuleVariant = 'escape-only'): BuiltL
 /**
  * mulberry32 — a tiny seeded PRNG.
  *
- * `Math.random` is deliberately avoided: every property test below must be
+ * `Math.random` is deliberately avoided: every property test must be
  * reproducible, so a failure can be re-run and debugged rather than shrugged at.
  */
 export function seededRandom(seed: number): () => number {
@@ -46,23 +44,73 @@ export interface RandomBoardOptions {
   readonly rows: number;
   readonly cols: number;
   readonly arrowCount: number;
-  readonly variant?: RuleVariant;
+  /** Cells per snake. Longer bodies tangle more, which is the point of the game. */
+  readonly maxBodyLength?: number;
 }
 
-/** Scatter `arrowCount` randomly-directed arrows over an empty grid. */
+/**
+ * Grow `arrowCount` random snakes on an empty grid by self-avoiding random walk.
+ *
+ * Snakes are grown rather than placed because a body must be a connected,
+ * non-self-touching path — the same constraint the level generator will face in
+ * Phase 3, so these boards exercise realistic shapes rather than toy ones.
+ */
 export function randomLevel(
   rng: () => number,
-  { rows, cols, arrowCount, variant = 'escape-only' }: RandomBoardOptions,
+  { rows, cols, arrowCount, maxBodyLength = 4 }: RandomBoardOptions,
 ): LevelDefinition {
-  const cells: number[] = [];
-  for (let i = 0; i < rows * cols; i += 1) cells.push(i);
+  const owner = new Int32Array(rows * cols).fill(-1);
+  const arrows: ArrowSpec[] = [];
 
-  for (let i = cells.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rng() * (i + 1));
-    [cells[i], cells[j]] = [cells[j]!, cells[i]!];
+  const freeNeighbours = (cell: number): number[] => {
+    const r = Math.floor(cell / cols);
+    const c = cell % cols;
+    const out: number[] = [];
+    if (r > 0) out.push(cell - cols);
+    if (r + 1 < rows) out.push(cell + cols);
+    if (c > 0) out.push(cell - 1);
+    if (c + 1 < cols) out.push(cell + 1);
+    return out.filter((n) => owner[n] === -1);
+  };
+
+  for (let index = 0; index < arrowCount; index += 1) {
+    // Pick a free starting cell for the tail.
+    const candidates: number[] = [];
+    for (let cell = 0; cell < owner.length; cell += 1) {
+      if (owner[cell] === -1) candidates.push(cell);
+    }
+    if (candidates.length === 0) break;
+
+    const start = candidates[Math.floor(rng() * candidates.length)]!;
+    const body: number[] = [start];
+    owner[start] = index;
+
+    const target = 2 + Math.floor(rng() * Math.max(1, maxBodyLength - 1));
+    let cursor = start;
+    while (body.length < target) {
+      const options = freeNeighbours(cursor);
+      if (options.length === 0) break;
+      const next = options[Math.floor(rng() * options.length)]!;
+      owner[next] = index;
+      body.push(next);
+      cursor = next;
+    }
+
+    // A one-cell snake has no last segment, so its direction cannot be inferred.
+    // Release it and move on rather than emit an arrow the builder would reject.
+    if (body.length < 2) {
+      owner[start] = -1;
+      continue;
+    }
+
+    // The walk grew tail-first; the head is the far end, so reverse it.
+    body.reverse();
+    arrows.push({
+      id: `a${arrows.length}`,
+      body: body.map((cell) => [Math.floor(cell / cols), cell % cols] as const),
+    });
   }
 
-  const chosen = cells.slice(0, Math.min(arrowCount, cells.length));
   return {
     id: 0,
     name: 'random',
@@ -70,51 +118,13 @@ export function randomLevel(
     cols,
     layout: 'free',
     difficulty: 1,
-    variant,
-    arrows: chosen.map((cell, index) => ({
-      id: `a${index}`,
-      row: Math.floor(cell / cols),
-      col: cell % cols,
-      dir: DIRECTIONS[Math.floor(rng() * DIRECTIONS.length)] as Direction,
-    })),
+    arrows,
   };
 }
 
-/** Build a random board, skipping the `Result` unwrap that random input can't fail. */
+/** Build a random board, skipping the `Result` unwrap. */
 export function randomBoard(rng: () => number, options: RandomBoardOptions): BuiltLevel {
   const result = buildLevel(randomLevel(rng, options));
   if (!result.ok) throw new Error(`randomBoard produced invalid level: ${result.error}`);
   return result.value;
 }
-
-/**
- * The reference `slide-and-stop` trap board.
- *
- *     . v <
- *     > > .
- *     . . ^
- *
- * Two arrows can be tapped: `a3` (the second `>`, which has a clear run to the
- * right edge) and `a4` (the `^` in the bottom-right, which is blocked by `a1` and
- * so can only slide one cell up).
- *
- * Tapping `a4` first slides it into (1,2) — exactly the cell `a3` needed to exit
- * through. `a4` can never move again, `a3` is now walled in, and the board is
- * lost. Tapping `a3` first wins.
- *
- * This one board is the entire practical difference between the two rule sets,
- * and it is shared rather than re-derived so all three suites assert on the same
- * concrete example. Found by exhaustive search over random boards, then verified
- * by hand.
- */
-export const TRAP_BOARD = `
-  . v <
-  > > .
-  . . ^
-`;
-
-/** The tap that loses `TRAP_BOARD`: slides `a4` into `a3`'s only exit. */
-export const TRAP_MOVE = 4;
-
-/** The tap that wins `TRAP_BOARD`: lets `a3` out before its path is stolen. */
-export const SAFE_MOVE = 3;

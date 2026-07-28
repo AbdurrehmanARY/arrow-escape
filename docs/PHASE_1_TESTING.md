@@ -1,7 +1,7 @@
 # Phase 1 — how to test it on your phone
 
 Two things to check: that the engine is correct (desktop, 30 seconds), and that it
-runs correctly on real hardware while you decide the rule variant (phone).
+runs correctly on real hardware while you play the mechanic (phone).
 
 ---
 
@@ -14,48 +14,59 @@ npm run verify
 Runs `tsc --noEmit` then the full Jest suite. Expect:
 
 ```
-Test Suites: 5 passed, 5 total
-Tests:       80 passed, 80 total
+Test Suites: 6 passed, 6 total
+Tests:       98 passed, 98 total
 ```
 
-Coverage, if you want it: `npm run test:coverage` → 92% statements, 89% branches
+Coverage, if you want it: `npm run test:coverage` → 96% statements, 91% branches
 on `src/game`.
 
 ---
 
 ## 2. Phone check
 
-### Option A — Expo Go over Wi-Fi (easiest)
+**On this machine, use the tunnel.** Windows Firewall is blocking inbound Node on
+your only working network adapter, so Expo Go cannot reach the LAN dev server:
 
-1. Install **Expo Go** from the Play Store on your Android phone.
-2. Put the phone and this PC on the **same Wi-Fi network**.
-3. In the project folder:
-   ```bash
-   npm start
-   ```
-4. Scan the QR code in the terminal with Expo Go.
+```bash
+npm run start:tunnel
+```
 
-If the QR times out, your Wi-Fi is probably blocking device-to-device traffic
-(common on public or guest networks). Use Option B, or run `npx expo start --tunnel`
-— slower, but it works through anything.
+Then scan the QR code with **Expo Go** (install it from the Play Store). Tunnel is
+slower than LAN but works through firewalls and mismatched networks.
 
-### Option B — USB (no Wi-Fi needed)
+<details>
+<summary>Optional: fix the LAN path instead (faster, needs admin)</summary>
 
-1. On the phone: Settings → About phone → tap **Build number** seven times to
-   unlock Developer options, then enable **USB debugging**.
-2. Plug the phone in and accept the "Allow USB debugging?" prompt.
-3. Confirm the PC sees it:
-   ```bash
-   adb devices
-   ```
-   You want one device listed as `device` (not `unauthorized`).
-4. Then:
-   ```bash
-   npm run android
-   ```
+Two separate problems were found on this PC:
 
-`adb` ships with Android Platform Tools. If it is not on your PATH, install
-Android Studio or the standalone platform-tools package.
+1. Two **enabled Block rules** for `node.exe` inbound on the Public firewall
+   profile, and your Ethernet adapter is categorised Public.
+2. Your Wi-Fi adapter has no DHCP lease — it is on `169.254.29.96`, an APIPA
+   address, so the PC is not really on Wi-Fi at all. Only Ethernet
+   (`192.168.10.253`, gateway `192.168.10.1`) works.
+
+In an **Administrator** PowerShell:
+
+```powershell
+Remove-NetFirewallRule -DisplayName "Node.js JavaScript Runtime"
+New-NetFirewallRule -DisplayName "Expo Metro 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow -Profile Any
+Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
+```
+
+Then pin the address so Expo cannot advertise the dead Wi-Fi adapter:
+
+```powershell
+$env:REACT_NATIVE_PACKAGER_HOSTNAME='192.168.10.253'
+npm start
+```
+
+This only works if your phone's Wi-Fi is on the same router — check it gets a
+`192.168.10.x` address. If not, stay on the tunnel.
+
+The Wi-Fi adapter failing to get a DHCP lease is worth looking at separately;
+it is a real problem independent of this project.
+</details>
 
 > Expo Go is enough for Phases 1–5. Phase 6 adds the AdMob native module, which
 > Expo Go cannot load — that is when we switch to a custom dev build via EAS.
@@ -66,66 +77,66 @@ Android Studio or the standalone platform-tools package.
 
 A dark screen titled **ArrowPath — Phase 1 — rules engine**, with two cards.
 
-### Card 1 — Engine self-check
+### Card 1 — Tangle (the game)
 
-Should read **8 passed**, in single-digit milliseconds. This re-runs core engine
-checks on the phone's JS engine (Hermes), which is *not* the same engine the Jest
-tests run on. If anything here fails, stop and send me the failing line — it means
-the engine behaves differently on device than on desktop, which would be a serious
-problem worth fixing before anything is built on top of it.
+An 8×8 board with **7 snakes** and a row of **5 hearts**. This is the real
+mechanic, playable:
 
-### Card 2 — the decision
+- Each snake is a chain of cells with an arrowhead at one end.
+- **Tap any cell of a snake** to try to send it out through its head.
+- If the straight line from that arrowhead to the board edge is clear, the whole
+  snake threads out and disappears.
+- If anything is in the way, nothing happens to the board and **you lose a heart**.
+  The status line tells you which snake blocked it.
+- Clear all 7 to win. Spend all 5 hearts and the level fails.
 
-A 3×3 board with five arrows and a toggle between the two rule variants.
+**Three of the seven are free at the start.** A player who taps at random is
+expected to burn about **11 hearts** clearing this board — against the 5 available,
+so guessing reliably fails. A player who traces each head to the edge clears it
+without losing a single one. That gap is the entire game.
 
-```
-. ▼ ◀
-▶ ▶ .
-. . ▲
-```
+Worth trying, in order:
 
-**Please actually play both.** This is the fastest way to feel a difference that
-is hard to argue about in prose.
+1. **Play it cold.** Don't use any of the toggles. See how it feels to hunt for a
+   head and follow it. This is the real experience.
+2. **Tap something blocked on purpose** and watch a heart drain while the board
+   stays exactly as it was. Note that you can lose this level with the board still
+   perfectly winnable — that is by design and the fail message says so.
+3. **Restart, then hit "Show safe"** — green outlines every snake that can
+   currently leave. Compare that against what you guessed.
+4. **Hit "Colour snakes"** — each body gets its own colour. Suddenly the board is
+   trivial. That contrast *is* the difficulty: the real game draws every snake the
+   same colour on purpose.
+5. **Hit "Hint"** — the engine names a snake that genuinely has a clear run. It
+   can never cost you a heart.
 
-**With `escape-only` selected (the GDD rule):**
-- Tap arrows in any order you like. Try deliberately to lose.
-- You can't. Every order clears the board. Nothing is ever highlighted red.
-- Blocked arrows simply do nothing when tapped.
+### Card 2 — Engine self-check
 
-**With `slide-and-stop` selected:**
-- Two arrows are tappable: the middle `▶` (green, safe) and the bottom-right `▲`
-  (red, a trap).
-- Tap the red `▲` first. It slides up into the exact cell the `▶` needed to exit
-  through. Status turns red: **Deadlocked**.
-- Restart, tap the green `▶` first instead, and the board clears.
+Should read **12 passed**, in single-digit milliseconds. This re-runs core engine
+checks on the phone's JS engine (Hermes), which is *not* the engine the Jest tests
+run on. If anything here fails, stop and send me the failing line — it means the
+engine behaves differently on device than on desktop, which is worth fixing before
+anything is built on top of it.
 
-Same arrows, same layout — the rule is the only difference.
-
-Buttons: **Restart** resets the board, **Hint** asks the solver for a provably
-safe move, **Show/Hide safe** toggles the green/red highlighting.
+Among other things it verifies on your hardware that a wrong tap costs a heart and
+leaves the board alone, that running out of hearts fails a level that was still
+winnable, that hints never cost a heart, and that 300 random boards can all be
+cleared by tapping in any order.
 
 ---
 
-## 4. The decision I need from you
+## 4. What I need from you
 
-Read [MECHANIC_ANALYSIS.md](MECHANIC_ANALYSIS.md) — it is short, and it has the
-proof and the trade-offs.
+1. **Confirm the self-check reads 12 passed** and nothing is red.
+2. **Confirm the mechanic matches the game you showed me** — snakes, the whole
+   body leaving at once through the head, hearts draining on a wrong tap.
+3. **Tell me anything that feels off** about how it plays. Board size, snake
+   length, how many are free at the start, whether 5 hearts feels right.
 
-Then tell me one of:
-
-- **"Option A / escape-only"** — ship the calm spatial-search game. No code change;
-  I retune the difficulty model around board density and search load, and delete
-  the deadlock UX from the plan.
-- **"Option B / slide-and-stop"** — ship the logic game the GDD describes. I make
-  it the default variant, update GDD §2/§6/§8, and design the Phase 3 generator
-  around the much lower yield of solvable boards.
-
-My recommendation is **Option B**, because the GDD is explicit that ArrowPath is a
-game about dependency order and about the "aha" — and `escape-only` cannot deliver
-that at any level size. The property is structural, not a tuning problem.
-
-Either way, say the word and I'll start Phase 2 (the real board: SVG arrows,
-release animation, blocked shake, `gameReducer`, one hardcoded level).
+Then I'll start **Phase 2**: the production renderer — SVG snake paths with
+rounded corners so they look like your reference art, the thread-out release
+animation, the red flash and heart drain on a blocked tap, and shaped levels
+(heart, spiral, diamond).
 
 ---
 
@@ -133,8 +144,8 @@ release animation, blocked shake, `gameReducer`, one hardcoded level).
 
 | Symptom | Fix |
 |---|---|
+| Expo Go: "Failed to download remote update" | The phone can't reach the dev server. Use `npm run start:tunnel` |
 | `npm start` fails to resolve `@game` | `npx expo start --clear` to reset the Metro cache |
-| QR scans but never loads | Wi-Fi is isolating devices — use `npx expo start --tunnel` or the USB route |
-| `adb devices` shows `unauthorized` | Unlock the phone and accept the USB debugging prompt |
+| Tunnel is very slow to load | Normal on first bundle; later reloads are faster |
 | Red screen on the phone | Screenshot it and send it over — the stack trace names the file |
 | Expo Go says the SDK version is unsupported | Update Expo Go from the Play Store; this project is on SDK 57 |

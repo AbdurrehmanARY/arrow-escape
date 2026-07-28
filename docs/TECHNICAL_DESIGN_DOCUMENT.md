@@ -53,35 +53,32 @@ Hand-authoring 600 solvable, difficulty-graded, non-trivial puzzles solo is the 
 
 The output still *feels* handcrafted — you choose the shapes, the difficulty targets, and which candidates ship. What you no longer do is manually verify solvability or hand-place every arrow. This is what makes 600 levels tractable for one person.
 
-**Solver design (as built).** Two engines behind one `solve()` API, picked by rule
-variant:
+**Solver design (as built).** No search is required, and that is a result rather
+than a shortcut. An arrow can leave iff every arrow on its head's ray has already
+left, and because a tap only ever *removes* arrows, that blocker set never grows.
+So the level is "delete the nodes of a directed graph in topological order," and
+it is solvable **exactly when that graph is acyclic**. `solve()` is Kahn's
+algorithm and runs in microseconds even on a 30-arrow board — which is what makes
+validating hundreds of levels in CI effectively free. See
+[MECHANIC_ANALYSIS.md](MECHANIC_ANALYSIS.md).
 
-- **`escape-only`** reduces to a graph problem and needs no search at all. An
-  arrow can leave iff every arrow initially on its ray has left, and that blocker
-  set never grows — so the level is "delete the nodes of a directed graph in
-  topological order," and it is solvable **exactly when that graph is acyclic**.
-  Implemented as Kahn's algorithm; microseconds per level. See
-  [MECHANIC_ANALYSIS.md](MECHANIC_ANALYSIS.md).
-- **`slide-and-stop`** needs real search, because a moved arrow becomes a blocker
-  somewhere new. Memoised DFS; the state space is a DAG (each arrow only ever
-  advances along its own direction), so no cycle guard is needed. Bounded by a
-  node budget that reports `exhausted` rather than falsely claiming `unsolvable`.
-
-Both are checked against an exhaustive brute-force reference solver over
-thousands of random boards in the test suite. The same solver ships (tiny) into
-the app for **on-device hints and deadlock detection** — no server, fully offline.
+It is checked against an exhaustive brute-force reference solver over hundreds of
+random boards in the test suite. The same solver ships (tiny) into the app for
+**on-device hints** — no server, fully offline.
 
 **Difficulty metrics (revised in Phase 1).** The original "solution depth" dial
-does not survive contact with `escape-only`, where planning depth is always zero.
-`analyze()` measures instead:
+does not survive: tap order cannot lose a level, so planning depth is always zero.
+Difficulty lives in how hard the board is to *read*. `analyze()` measures:
 
 | Metric | Meaning |
 |---|---|
-| `minFrontier` / `avgFrontier` | how many arrows are tappable at once — the visual-search load, and the real difficulty dial for `escape-only` |
+| `avgBodyLength`, `maxBodyLength` | tracing burden — a 7-cell snake takes real effort to follow |
+| `avgTurns` | bends per body; a straight arrow is read at a glance, a hooked one is not |
+| `crowding` | adjacent cells belonging to *different* snakes — what makes a tangle read as a tangle |
+| `minFrontier` / `avgFrontier` | how many arrows are free at once |
+| `expectedBlindMistakes` | **the key number** — hearts a random-tapping player would burn. Graded against the level's hearts |
 | `dependencyDepth` | longest forced chain of "this must go before that" |
-| `density` | arrows per cell |
-| `forcedSteps` | steps where exactly one arrow was tappable |
-| `trapMoves` | `slide-and-stop` only: legal opening taps that lose the level |
+| `density` | occupied cells per board cell |
 
 **Level data format (`levels/NNN.json`):**
 
@@ -89,18 +86,28 @@ does not survive contact with `escape-only`, where planning depth is always zero
 {
   "id": 12,
   "name": "Crossing",
-  "rows": 6,
-  "cols": 6,
+  "rows": 8,
+  "cols": 8,
   "layout": "cross",
-  "difficulty": 2,          // curated band 1-5
-  "variant": "escape-only", // optional; defaults to escape-only
+  "difficulty": 2,   // curated band 1-5
+  "hearts": 5,       // optional; defaults to 5
   "arrows": [
-    { "id": "a1", "row": 0, "col": 2, "dir": "down" },
-    { "id": "a2", "row": 2, "col": 0, "dir": "right" }
+    // Cells head first. Consecutive cells must be orthogonally adjacent.
+    // Direction is inferred from the last segment, so it is not stored:
+    // this head is at (0,2) with its neck at (1,2), so it points up.
+    { "id": "a1", "body": [[0, 2], [1, 2], [1, 3], [2, 3]] },
+    { "id": "a2", "body": [[2, 0], [2, 1], [3, 1]] }
   ],
   "solution": ["a2", "a1", "..."]  // canonical order from the validator
 }
 ```
+
+**Why direction is inferred rather than stored.** An arrowhead always continues
+the line it is drawn on, so `dir` is a function of the body's last segment.
+Storing it would create a second source of truth that a hand edit could silently
+desync — moving a head without updating its direction is the most likely mistake
+in a level file. The builder validates any `dir` that *is* supplied against the
+geometry and rejects a mismatch. Only a single-cell arrow must state one.
 
 Levels are **data, not code** — they load without app changes, which is exactly what a 50→600 roadmap needs.
 
@@ -136,12 +143,12 @@ arrow-escape-game/
 ├─ App.tsx                      # entry; renders one screen in Phase 1
 ├─ src/
 │  ├─ game/                     # DOMAIN — pure, no React, no I/O
-│  │  ├─ types.ts               # Arrow, Direction, Board, BoardState, MoveOutcome
-│  │  ├─ board.ts               # geometry, level validation, castRay
-│  │  ├─ rules.ts               # resolveTap, applyOutcome, win/deadlock detection
-│  │  ├─ solver.ts              # both engines, verifySolution, analyze
+│  │  ├─ types.ts               # Arrow (snake body), Board, BoardState, PlaySession
+│  │  ├─ board.ts               # geometry, body validation, castRay
+│  │  ├─ rules.ts               # resolveTap, applyOutcome, hearts, win/fail
+│  │  ├─ solver.ts              # graph peeling, verifySolution, analyze
 │  │  ├─ hints.ts               # next-safe-move selection
-│  │  ├─ ascii.ts               # board <-> text notation
+│  │  ├─ ascii.ts               # board <-> text notation (uppercase = head)
 │  │  ├─ diagnostics.ts         # on-device engine self-check (dev-facing)
 │  │  └─ index.ts               # the public surface
 │  ├─ state/                    # (Phase 2+) gameReducer, Zustand stores
@@ -165,29 +172,41 @@ arrow-escape-game/
 ## 5. Rendering system
 
 - **Board:** an absolutely-positioned grid. Cell size = `min(screenWidth, maxBoardWidth) / cols`, computed once per level; the board is centered and letterboxed on tall screens.
-- **Arrow:** `ArrowView` renders an SVG arrow glyph inside a `Pressable`. Direction chooses the glyph rotation. Colour is a secondary cue only (colour-blind safe — shape/rotation is primary).
+- **Arrow:** each snake is one SVG `<path>` built from its body cells, stroked with round joins and caps so bends read as smooth corners, plus an arrowhead marker at the head. One path per arrow rather than one node per cell — a 7-cell body is a single draw call, and the rounded joins are what make the board look like the reference art rather than like pixels.
+- **Hit area:** the stroked path itself is the tap target, widened via `strokeWidth` on an invisible hit path so thin bodies are still easy to hit anywhere along their length.
+- Colour carries **state only** (red on a failed tap), never identity or direction — all snakes share one colour because telling them apart is the game.
 - Only the tapped arrow animates; all others are static. This keeps frame cost trivial even on low-end devices.
 
 ---
 
 ## 6. Game loop (the reducer state machine)
 
-State: `{ board, movesMade, status: 'playing' | 'won' | 'deadlocked' }`.
+The live state is a `PlaySession`: `{ state, heartsLeft, maxHearts, status, mistakes }`.
 
 ```
 TAP(arrowId)
-  ├─ path clear?  ── no ───► emit BLOCKED (view shakes); state unchanged
-  └─ yes ───► remove arrow (or slide it, per variant)
-             ├─ board empty?     ───► status = 'won'  → persist progress
-             └─ any legal move?  ── no ───► status = 'deadlocked' → offer Restart/Hint
-RESTART ───► reload level's initial board
-HINT    ───► ask game/hints for next safe arrow, highlight it (consumes a hint)
+  ├─ head's ray clear?  ── no ───► BLOCKED: flash snake red, pulse the blocker,
+  │                                 board unchanged, heartsLeft -= 1
+  │                                 └─ heartsLeft == 0? ───► status = 'failed'
+  └─ yes ───► thread the whole snake off the board
+             └─ board empty? ───► status = 'won' → persist progress
+RESTART ───► reload the level's initial board, hearts restored
+HINT    ───► ask game/hints for a genuinely free arrow, highlight it (consumes a hint)
 ```
 
-All transitions are pure functions in `game/`. The reducer just sequences them. This means the core is fully unit-testable without rendering anything.
+Note there is **no deadlock branch**. A blocked tap changes nothing, and removing
+a snake can never block another, so a board that starts solvable stays solvable no
+matter what the player does. Hearts are the only loss condition.
+
+All transitions are pure functions in `game/` — `tapArrow` already returns the new
+session plus the outcome, so the Phase 2 reducer is a thin wrapper that sequences
+animations around it. The core is fully unit-testable without rendering anything.
 
 `applyOutcome` returns the *same object* when nothing changed, so the reducer can
 use `next === prev` as a cheap "don't re-render" test.
+
+**Hearts live in the session, not the board.** They are a property of *this
+attempt*, not of the level, so the solver and the level validator never see them.
 
 ---
 
@@ -204,8 +223,9 @@ Persisted stores hydrate from AsyncStorage on launch and write on change. Clear 
 
 ## 8. Animation system
 
-- Reanimated shared values drive arrow `translateX/Y` + `opacity` for release; a short spring/`withSequence` for the blocked shake.
-- `MoveOutcome` carries a `distance` in cells, so the view computes the travel purely from the outcome and the cell size — no geometry duplicated between layers.
+- **Release** animates the snake threading out: the SVG path's `strokeDashoffset` is driven along the combined exit path, so the head leads and each body segment follows through cells the head has already cleared. One shared value per animating arrow.
+- **Blocked** is a short `withSequence` shake at the head plus a red colour interpolation across the whole path, and a heart draining in the HUD.
+- `MoveOutcome` carries `exitDistance` and `bodyLength` in cells, so the view computes the whole travel from the outcome and the cell size — no geometry duplicated between the domain and the renderer.
 - Reduced-motion setting swaps animations for instant state changes (accessibility + a perf fallback).
 - Win overlay uses a brief, cancellable animation — never blocks input for long.
 
@@ -237,7 +257,7 @@ Persisted stores hydrate from AsyncStorage on launch and write on change. Clear 
 
 ## 12. Testing strategy
 
-- **Unit (Jest) — the priority.** `game/` is pure and gets thorough coverage: path/blocking correctness, win/deadlock detection, solver solvability, hint safety. Coverage thresholds are enforced on `src/game/` only (90% lines/statements/functions, 80% branches) — a gate, not a vanity metric.
+- **Unit (Jest) — the priority.** `game/` is pure and gets thorough coverage: body validation, ray/blocking correctness, hearts and win/fail transitions, solver solvability, hint safety. Coverage thresholds are enforced on `src/game/` only (90% lines/statements/functions, 80% branches) — a gate, not a vanity metric. Currently 98 tests across 6 suites at 96% statements.
 - **Property tests over random boards**, with a seeded PRNG so failures reproduce. The fast solver engines are checked against exhaustive brute force.
 - **Invariant tests** encode the load-bearing design claims of each rule variant, so a rule change surfaces as a failing test rather than a silent design regression.
 - **Level integrity test (Phase 3):** loads every `levels/*.json`, asserts the solver can solve it and the stored `solution` replays cleanly.
@@ -250,7 +270,8 @@ Persisted stores hydrate from AsyncStorage on launch and write on change. Clear 
 ## 13. Performance
 
 - One animated element at a time — trivially smooth.
-- `castRay` is the hot path (the solver calls it ~10^5–10^6 times per level); it allocates nothing and reads a flat `Int32Array` occupancy grid, so blocking checks are O(1) per step.
+- `castRay` is the hot path; it allocates nothing and reads a flat `Int32Array` occupancy grid, so each step of a ray walk is O(1). An arrow's own cells are skipped by index comparison rather than by a set lookup.
+- Each snake is one SVG path, not one node per cell — an 8×8 board of 7 long snakes is 7 draw calls, not 45.
 - Board geometry computed once per level, not per frame.
 - Level JSON is small and lazy-loaded per level; no giant bundle of 600 in memory.
 - Reduced-motion path avoids animation cost entirely on weak devices.

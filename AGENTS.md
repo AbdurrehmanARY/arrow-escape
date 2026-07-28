@@ -33,8 +33,16 @@ Nothing outside `game/` imports a `game/` file directly — everything goes thro
 - `npm run verify` (typecheck + tests) must be green before any commit.
 - Coverage thresholds on `src/game/` are enforced in `jest.config.js`.
 
-## Open decision
+## The mechanic, in one paragraph
 
-The rule variant (`escape-only` vs `slide-and-stop`) is **not settled** — see
-[docs/MECHANIC_ANALYSIS.md](docs/MECHANIC_ANALYSIS.md). Both are implemented.
-Do not delete either until the user chooses.
+An arrow is a **snake**: a connected chain of cells with an arrowhead at one end.
+Tapping it sends the whole snake out through its head; the body threads out along
+the trail the head clears. It can leave **iff the straight ray from its head to
+the edge is clear** — its own body never blocks it. A blocked tap changes nothing
+and costs a heart; five spent hearts fails the level.
+
+**Tap order provably cannot lose a level**, so difficulty lives entirely in
+*reading* the board, not planning it. Before changing anything about the rules,
+read [docs/MECHANIC_ANALYSIS.md](docs/MECHANIC_ANALYSIS.md) — and note that
+`__tests__/game/mechanic-invariants.test.ts` will fail loudly if a change ever
+breaks that property.

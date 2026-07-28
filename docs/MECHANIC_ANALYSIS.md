@@ -1,177 +1,158 @@
-# Mechanic analysis — the core rule has no decisions in it
+# Mechanic analysis — where the difficulty actually lives
 
-> **Status:** open design decision. Blocks Phase 2.
-> **Written:** Phase 1, alongside the rules engine.
-> **Evidence:** `__tests__/game/mechanic-invariants.test.ts`, reproducible on device via the Phase 1 build.
+> **Status:** settled. The rule set below is what ArrowPath ships.
+> **Written:** Phase 1, alongside the rules engine. Revised once the reference
+> screenshots arrived and the snake-body model was confirmed.
+> **Evidence:** `__tests__/game/mechanic-invariants.test.ts`, re-run on device by
+> the Phase 1 build.
 
 ---
 
-## The claim
+## The rules
 
-Under the rule set as written in the GDD, **the player cannot make a wrong move.**
+- The board is a grid. Each arrow is a **snake**: a connected chain of cells with
+  an **arrowhead** at one end. Bodies bend, hook, and spiral.
+- **Tapping an arrow** sends it out through its own head, in the direction the
+  head points. The body threads out along the trail the head clears behind it, so
+  the whole snake leaves in one move.
+- An arrow can leave **iff the straight ray from its arrowhead to the board edge
+  is clear.** Its own body never counts — each segment vacates its cell as the one
+  ahead advances, so a body that spirals in front of its own head is fine.
+- If anything else is on that ray, the tap **fails**: the board is completely
+  unchanged and the player **loses a heart**.
+- **Win:** the board is empty. **Lose:** all five hearts spent.
 
-Every level that can be finished at all is finished by *any* tap order. There is no
-ordering to discover, no dependency to plan around, and no way to deadlock a board
-that started solvable. The GDD's central question — *"what is the right order to
-tap?"* — has the answer "any of them."
+---
 
-## Why
+## The one result everything else follows from
 
-The GDD rule is:
+**Tap order cannot lose a level.**
 
-- Tap an arrow. If its straight path to the edge is empty, it flies off.
-- If anything blocks that path, **nothing happens at all.**
+A tap either removes a whole snake or changes nothing at all. Removing a snake can
+only ever *free* cells — it can never put something into another arrow's way. So
+"this arrow is free" is a one-way door: once a head has a clear run, it keeps that
+clear run until it is tapped.
 
-The second half is what does the damage. Because a blocked arrow does not move,
-the only thing that ever changes on the board is that arrows **leave**. And an
-arrow leaving can never put something *into* another arrow's path.
+The proof is a one-line exchange argument. Suppose the board is solvable and arrow
+**X** is free. Take any winning order `S` and move `X` to the front. Every other
+arrow in `S` now faces a board with strictly fewer snakes on it at the moment it
+is tapped, and fewer snakes can only mean fewer blockers — so each is still free
+when its turn comes. The reordered sequence still wins. ∎
 
-So "this arrow is free" is a one-way door. Once an arrow's path is clear, it stays
-clear until that arrow is tapped. Nothing can ever re-block it.
+Three consequences:
 
-That gives the proof directly. Suppose the board is solvable, and arrow **X** is
-free right now. Take any winning order `S`. Move `X` to the front of `S`. Every
-other arrow in `S` now faces a board with *strictly fewer* arrows on it at the
-moment it is tapped than it did before — and fewer arrows can only mean fewer
-blockers. So each of them is still free when its turn comes, and the reordered
-sequence still wins. Tapping any free arrow first is therefore always safe. ∎
+- **Greedy always works.** Tap anything that can move, in any order, and every
+  solvable board clears.
+- **A solvable board can never become stuck.** Being stuck is only reachable on a
+  board that was *already* unsolvable before the first tap, which the level
+  pipeline rejects.
+- **Solvability is a graph property, not a search problem.** An arrow's blockers
+  are fixed from the start, so the level is exactly "delete the nodes of a
+  directed graph in topological order." It is solvable **iff that graph is
+  acyclic** — an unsolvable board is literally a cycle of arrows pointing at each
+  other. `solve()` is Kahn's algorithm and runs in microseconds. Validating
+  hundreds of levels in CI is effectively free.
 
-The consequences follow immediately:
-
-- **Greedy always works.** Repeatedly tap anything that can move; you will clear
-  every solvable board.
-- **A solvable board can never become deadlocked.** Deadlock is only reachable on
-  a board that was *already* unsolvable before the first tap.
-- **"Solution depth" is not a difficulty dial.** There is no planning depth to
-  vary, because there is no planning.
-
-## The evidence
-
-Three independent checks, all of which agree:
+### The evidence
 
 | Check | Result |
 |---|---|
-| Exhaustive search over 20,000 random boards, comparing "solvable by some order" against "can any order get stuck" | 11,158 solvable boards, **0** that any order could deadlock |
-| `escape-only: every tap order wins` — plays every solvable board five times with uniformly random tapping | never once got stuck |
-| `escape-only: a board that starts solvable can never become deadlocked` — asserts solvability is preserved after *every* move, not just good ones | holds on every board tested |
+| Exhaustive search over 20,000 random boards, comparing "solvable by some order" against "can any order get stuck" | 11,158 solvable, **0** that any order could stall |
+| `random play always clears a solvable board` — plays each board three times tapping uniformly at random | never once stalled |
+| `solvability survives every single move, not just good ones` | holds on every board tested |
+| Graph solver vs. exhaustive brute force, 500 random boards | perfect agreement, both verdicts well represented |
 
-The solver takes advantage of this rather than fighting it. Since an arrow's
-blockers are fixed from the start, the whole variant reduces to a graph problem:
-draw an edge from X to Y when X sits on Y's path, and the level is "delete these
-nodes in topological order." A level is solvable **exactly when that graph is
-acyclic** — an unsolvable board is a literal cycle of arrows pointing at each
-other. No search is required; `solveEscapeOnly` is Kahn's algorithm and runs in
-microseconds. That is a genuinely nice property, and it is why level validation
-over hundreds of levels will be instant.
+---
 
-## What this does *not* mean
+## So where is the game?
 
-It does not mean the game is bad. It means it is a **different genre** than the
-GDD describes. This exact structure is what *Parking Jam* and *Traffic Escape*
-ship, and they are enormously successful. In those games the challenge is
-**visual search under density** — spotting which car is actually free on a
-crowded board — not planning. That is a real skill and a real game.
+If order cannot lose, something else has to. It is the **hearts**.
 
-But it does mean two things in the GDD are currently false and need to be
-rewritten whichever way this goes:
+The skill this game tests is **reading the board**, not planning it. To know
+whether an arrow can leave you must find its head among a mass of near-identical
+lines, work out which way it points, and trace its ray across the tangle to the
+edge — checking nothing crosses it. Get that wrong and it costs a heart. Five
+wrong reads and the level is over.
 
-- §2: *"Removing one arrow can open a path for others... or it can trap the arrows
-  behind it forever."* The second half cannot happen.
-- §6: difficulty is tuned by "solution depth (how many moves must be planned
-  ahead)." There is nothing to plan ahead.
+This is why the bodies are long, bent, and drawn in a single colour. Every one of
+those is a difficulty device: they exist to make tracing hard. A board of short
+straight arrows in seven colours would be trivial under identical rules.
 
-## The two options
+The failure state is therefore honest and slightly unusual, and the UI should say
+so plainly: **you lose with the board still perfectly winnable.** The Phase 1
+build asserts exactly this — `hearts are the only way to lose` fails a level and
+then checks the board it left behind is still solvable.
 
-### Option A — keep `escape-only`, retune the difficulty model
+### What this replaces
 
-Accept that ArrowPath is a spatial-search game. Nothing about the code changes;
-the engine already ships this variant as the default.
+Two things in the original GDD do not survive and have been corrected in place:
 
-What changes is **how levels are made hard**. The metrics in `analyze()` were
-rewritten for this:
+- §2 claimed removing an arrow "can trap the arrows behind it forever." It cannot.
+- §6 tuned difficulty by "solution depth (how many moves must be planned ahead)."
+  There is no planning depth, because there is no planning.
 
-- `minFrontier` / `avgFrontier` — how many arrows are tappable at once. A board
-  where only one arrow is ever free is a hunt; one where twelve are free is
-  effortless. **This is the real difficulty dial.**
-- `dependencyDepth` — the longest forced chain of removals. Adds structure and
-  a sense of cascade even though the player never has to *choose*.
-- `density` — dense boards read as harder and feel more satisfying to clear.
+---
 
-Hints stay meaningful (they point out a free arrow you missed). Deadlock UX can be
-deleted entirely, which simplifies Phase 5. The GDD's "no hard lose" tone becomes
-literally true.
+## The difficulty model that replaces it
 
-**Cost:** the game has no *aha*. It is calm and pleasant, not clever.
+`analyze()` measures what actually varies. These are the dials the Phase 3
+generator will tune.
 
-### Option B — switch to `slide-and-stop`
+**Tracing load** — how hard is one snake to follow?
 
-Change one rule: a blocked arrow **slides as far as it can and stops** just short
-of whatever blocked it, instead of doing nothing. It is still on the board, in a
-new cell, now blocking different arrows.
+| Metric | Why it matters |
+|---|---|
+| `avgBodyLength`, `maxBodyLength` | a 7-cell snake takes real effort to follow head to tail |
+| `avgTurns` | a straight arrow is read at a glance; a hooked or spiralled one is not |
+| `crowding` | adjacent cells belonging to *different* snakes — bodies running alongside each other is what makes a tangle read as a tangle |
 
-This restores everything the GDD promised. Order genuinely decides the level.
-Deadlock is real and is the player's own doing. Planning depth exists.
+**Guess pressure** — how badly does misreading hurt?
 
-Here is the smallest board that shows it, found by search and verified by hand.
-It is the fixture the test suite and the on-device self-check both use:
+| Metric | Why it matters |
+|---|---|
+| `minFrontier` / `avgFrontier` | how many arrows are free at once; 1-of-9 is a hunt, 6-of-9 is a stroll |
+| `expectedBlindMistakes` | **the most useful single number.** How many hearts a player who taps at random would burn clearing the level |
 
-```
-. ▼ ◀
-▶ ▶ .
-. . ▲
-```
+`expectedBlindMistakes` is worth stating precisely, because it is what makes the
+heart count tunable rather than arbitrary. At each step a blind player picks
+uniformly among the arrows still on the board and keeps picking until one works —
+a geometric distribution with success chance `free/alive`, so the expected wrong
+picks before a right one is `(alive - free) / free`. Summed over every step, that
+is the hearts a blind player spends.
 
-Two arrows can be tapped: the middle `▶`, which has a clear run to the right edge,
-and the bottom-right `▲`, which is blocked and can only shuffle one cell up.
+Compare it against the level's hearts to grade a board:
 
-- Tap the `▶` first → the board is winnable.
-- Tap the `▲` first → it slides into the exact cell the `▶` needed. Both are now
-  jammed, and **the level is unwinnable.**
+| `expectedBlindMistakes` vs hearts | What it means |
+|---|---|
+| well below | even careless play survives — an onboarding level |
+| roughly equal | reading the board is worth doing but forgiving |
+| well above | guessing reliably fails; only correct reading wins |
 
-Same arrows. Same layout. The rule is the only difference.
+The Phase 1 demo board measures **10.8 against 5 hearts**. A player who taps
+without looking loses; a player who traces properly clears it having lost nothing.
+That gap is the entire game, and it is now a number the generator can target.
 
-**Cost:** real, but contained.
+---
 
-- The solver needs actual search for this variant (already written, already
-  tested against brute force). Validation is slower but still fast enough.
-- Levels get harder to generate — most random boards under this rule are
-  *unsolvable*, because two arrows pointing at each other simply crash and jam.
-  The generator will need to reject a lot of candidates. Trap boards are rare in
-  random sampling (~0.4% of solvable boards), so the generator must search for
-  them deliberately rather than stumble on them.
-- Phase 2 needs a slide animation as well as an exit animation.
-- Deadlock recovery UX (Phase 5) becomes load-bearing rather than decorative.
+## Consequences for the rest of the build
 
-## Recommendation
+- **Phase 2** needs a *thread-out* animation — head first along its ray, body
+  following through the cells the head clears — plus a red flash and a heart
+  decrement on a blocked tap. There is no "slide part-way" case to build.
+- **Phase 3's generator** must grow self-avoiding snakes, reject any board whose
+  blocking graph has a cycle, and then *tune* `expectedBlindMistakes` and the
+  tracing metrics to hit a difficulty band. Solvability checking is cheap, so it
+  can afford to generate and discard aggressively.
+- **Phase 5** has no deadlock-recovery flow to build. What it needs instead is the
+  out-of-hearts flow, and hint copy that reads as "here is one you missed."
+- **Level shapes** (heart, spiral, diamond) are masks the snakes are grown inside.
+  They are cosmetic to the rules and are one of the main reasons bodies bend —
+  which means they contribute to difficulty as a side effect, not just to looks.
 
-**Option B, `slide-and-stop`** — if the goal is the game the GDD describes.
+## What would change this
 
-The GDD is unambiguous that ArrowPath is meant to be a logic game about
-dependency order, and it repeatedly promises an *aha*. `escape-only` cannot
-deliver that at any level size, because the property is structural, not a matter
-of tuning. No amount of clever level design creates a decision where the rules
-admit none.
-
-The added cost is mostly in the level generator, which is Phase 3 work that has
-not started — so this is the cheapest moment in the entire project to make this
-call. Making it after 50 levels are curated would be far more expensive.
-
-**Choose Option A instead if** you specifically want the calm, no-fail,
-*Parking Jam* feel. That is a legitimate product, and it is a materially smaller
-build. Just retitle the pitch: it is a spatial-search game, not a logic game.
-
-## How the code is set up either way
-
-Both rule sets are implemented, tested, and shippable **today**. `RuleVariant` is
-a field on the level, so the decision is one line per level file, not a rewrite:
-
-```ts
-export type RuleVariant = 'escape-only' | 'slide-and-stop';
-```
-
-`escape-only` is the current default, matching the GDD as written. Every function
-in `game/` handles both. Whichever you pick, the other can be deleted in an
-afternoon — or kept, if a later level pack wants to mix them.
-
-The one thing that should **not** happen is shipping `escape-only` while telling
-players it is a planning puzzle. They will notice.
+The property above depends on exactly one thing: **a blocked tap changes nothing.**
+If a future mechanic ever lets a blocked arrow move — even a single cell — order
+starts to matter, deadlock becomes real, and the entire difficulty model here has
+to be rebuilt. `mechanic-invariants.test.ts` is what will tell you, loudly, on the
+day someone tries it.

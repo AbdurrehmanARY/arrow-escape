@@ -1,91 +1,81 @@
-/** The rule set: what a tap does under each variant, and when a level is over. */
+/** The rule set: what a tap does, how hearts are spent, and when a level ends. */
 
 import {
   applyOutcome,
-  getStatus,
+  blockedArrows,
+  DEFAULT_HEARTS,
+  EMPTY,
   hasLegalMove,
+  isBoardStuck,
   isCleared,
   legalMoves,
   resolveTap,
-  tap,
-  toCell,
+  startSession,
+  tapArrow,
 } from '@game';
 import { build } from '../helpers';
 
-describe('escape-only variant', () => {
-  it('lets an arrow with a clear path fly off the board', () => {
-    const { board, initial } = build('> . . .');
+describe('tapping a free arrow', () => {
+  it('threads the whole snake off the board in one move', () => {
+    const { board, initial } = build(`
+      A a a
+      . . a
+    `);
     const outcome = resolveTap(board, initial, 0);
 
     expect(outcome.kind).toBe('escaped');
     if (outcome.kind !== 'escaped') return;
-    // Three empty cells ahead, plus one more to clear the edge entirely.
-    expect(outcome.distance).toBe(4);
+    expect(outcome.headCell).toBe(0);
+    expect(outcome.bodyLength).toBe(4);
+    // Head at (0,0) pointing left: one step clears the board.
+    expect(outcome.exitDistance).toBe(1);
 
     const next = applyOutcome(initial, outcome);
     expect(next.remaining).toBe(0);
     expect(isCleared(next)).toBe(true);
+    // Every cell the body held is released, not just the head's.
+    expect(Array.from(next.occupancy).every((cell) => cell === EMPTY)).toBe(true);
   });
 
-  it('does nothing at all when the path is blocked', () => {
-    const { board, initial } = build('> . < .');
+  it('frees only that arrow cells, leaving others in place', () => {
+    const { board, initial } = build(`
+      A a . B
+      . . . b
+    `);
+    const next = applyOutcome(initial, resolveTap(board, initial, 0));
+
+    expect(next.remaining).toBe(1);
+    expect(next.alive[0]).toBe(0);
+    expect(next.alive[1]).toBe(1);
+    expect(next.occupancy[0]).toBe(EMPTY);
+    expect(next.occupancy[3]).toBe(1);
+  });
+});
+
+describe('tapping a blocked arrow', () => {
+  it('changes nothing and names the blocker', () => {
+    const { board, initial } = build('a A . b B');
     const outcome = resolveTap(board, initial, 0);
 
     expect(outcome.kind).toBe('blocked');
     if (outcome.kind !== 'blocked') return;
     expect(outcome.blockerIndex).toBe(1);
+    expect(outcome.blockedAt).toBe(3);
 
     // Identity equality is the contract: nothing changed, so nothing re-renders.
     expect(applyOutcome(initial, outcome)).toBe(initial);
-  });
-
-  it('never moves an arrow part-way, even with room ahead', () => {
-    const { board, initial } = build('> . . <');
-    const { outcome, next } = tap(board, initial, 0);
-    expect(outcome.kind).toBe('blocked');
-    expect(next.positions[0]).toBe(initial.positions[0]);
-  });
-});
-
-describe('slide-and-stop variant', () => {
-  it('slides a blocked arrow up against the blocker', () => {
-    const { board, initial } = build('> . . <', 'slide-and-stop');
-    const outcome = resolveTap(board, initial, 0);
-
-    expect(outcome.kind).toBe('moved');
-    if (outcome.kind !== 'moved') return;
-    expect(outcome.from).toBe(0);
-    expect(outcome.to).toBe(2);
-    expect(outcome.distance).toBe(2);
-    expect(outcome.blockerIndex).toBe(1);
-
-    const next = applyOutcome(initial, outcome);
-    expect(next.remaining).toBe(2); // moved, not removed
-    expect(next.positions[0]).toBe(2);
-    expect(next.occupancy[0]).toBe(-1);
-    expect(next.occupancy[2]).toBe(0);
-  });
-
-  it('still lets a clear arrow escape', () => {
-    const { board, initial } = build('> . . .', 'slide-and-stop');
-    expect(resolveTap(board, initial, 0).kind).toBe('escaped');
-  });
-
-  it('reports blocked when the arrow is already hard against the blocker', () => {
-    const { board, initial } = build('> < .', 'slide-and-stop');
-    expect(resolveTap(board, initial, 0).kind).toBe('blocked');
   });
 });
 
 describe('invalid taps', () => {
   it('rejects an out-of-range arrow index', () => {
-    const { board, initial } = build('> . .');
+    const { board, initial } = build('A a .');
     expect(resolveTap(board, initial, 99)).toEqual({ kind: 'invalid', reason: 'unknown-arrow' });
     expect(resolveTap(board, initial, -1)).toEqual({ kind: 'invalid', reason: 'unknown-arrow' });
   });
 
   it('rejects tapping an arrow that already left', () => {
-    const { board, initial } = build('> . .');
+    const { board, initial } = build('A a .');
     const next = applyOutcome(initial, resolveTap(board, initial, 0));
     expect(resolveTap(board, next, 0)).toEqual({ kind: 'invalid', reason: 'already-escaped' });
   });
@@ -93,93 +83,153 @@ describe('invalid taps', () => {
 
 describe('applyOutcome immutability', () => {
   it('leaves the previous state untouched', () => {
-    const { board, initial } = build('> . . .');
-    const before = Array.from(initial.positions);
-    const beforeOccupancy = Array.from(initial.occupancy);
+    const { board, initial } = build('A a . B b');
+    const alive = Array.from(initial.alive);
+    const occupancy = Array.from(initial.occupancy);
 
     applyOutcome(initial, resolveTap(board, initial, 0));
 
-    expect(Array.from(initial.positions)).toEqual(before);
-    expect(Array.from(initial.occupancy)).toEqual(beforeOccupancy);
-    expect(initial.remaining).toBe(1);
+    expect(Array.from(initial.alive)).toEqual(alive);
+    expect(Array.from(initial.occupancy)).toEqual(occupancy);
+    expect(initial.remaining).toBe(2);
   });
 });
 
-describe('legal moves and status', () => {
-  it('lists only arrows whose tap changes something', () => {
-    // a0 can leave to the left; a1 is walled in behind it.
-    const { board, initial } = build('< < .');
-    expect(legalMoves(board, initial)).toEqual([0]);
+describe('legal and blocked arrows', () => {
+  it('splits the board into what can move and what cannot', () => {
+    const { board, initial } = build('a A . b B');
+    expect(legalMoves(board, initial)).toEqual([1]);
+    expect(blockedArrows(board, initial)).toEqual([0]);
     expect(hasLegalMove(board, initial)).toBe(true);
   });
 
-  it('counts a partial slide as a legal move only under slide-and-stop', () => {
-    const art = '> . . <';
-
-    const strict = build(art, 'escape-only');
-    expect(legalMoves(strict.board, strict.initial)).toEqual([]);
-
-    const slide = build(art, 'slide-and-stop');
-    expect(legalMoves(slide.board, slide.initial)).toEqual([0, 1]);
-  });
-
-  it('reports won on an empty board', () => {
-    const { board, initial } = build('> . .');
-    const next = applyOutcome(initial, resolveTap(board, initial, 0));
-    expect(getStatus(board, next)).toBe('won');
-  });
-
-  it('reports playing while a move remains', () => {
-    // a1 has a clear run to the right edge; a0 is stuck behind it for now.
-    const { board, initial } = build('> > .');
-    expect(legalMoves(board, initial)).toEqual([1]);
-    expect(getStatus(board, initial)).toBe('playing');
-  });
-
-  it('reports deadlocked when two arrows converge on the same gap', () => {
-    // Under escape-only neither can pass the other, and neither ever moves.
-    const { board, initial } = build('> . <');
-    expect(getStatus(board, initial)).toBe('deadlocked');
-  });
-
-  it('reports deadlocked when two arrows face each other with no way out', () => {
-    // The minimal knot: each arrow is the other's only obstacle, forever.
-    const { board, initial } = build('> <');
+  it('reports a mutually blocking pair as stuck', () => {
+    // Two heads pointing into each other with no way past.
+    const { board, initial } = build('a A B b');
     expect(legalMoves(board, initial)).toEqual([]);
-    expect(getStatus(board, initial)).toBe('deadlocked');
+    expect(isBoardStuck(board, initial)).toBe(true);
   });
 
-  it('treats a four-arrow pinwheel as deadlocked', () => {
-    // Each arrow points at the next one around the ring, so none can ever leave.
-    const { board, initial } = build(`
-      > v
-      ^ <
-    `);
-    expect(legalMoves(board, initial)).toEqual([]);
-    expect(getStatus(board, initial)).toBe('deadlocked');
+  it('does not call a cleared board stuck', () => {
+    const { board, initial } = build('A a .');
+    const cleared = applyOutcome(initial, resolveTap(board, initial, 0));
+    expect(isBoardStuck(board, cleared)).toBe(false);
+  });
+});
+
+describe('sessions and hearts', () => {
+  it('starts with the default five hearts', () => {
+    const { initial } = build('A a .');
+    const session = startSession(initial);
+    expect(session.heartsLeft).toBe(DEFAULT_HEARTS);
+    expect(session.maxHearts).toBe(DEFAULT_HEARTS);
+    expect(session.status).toBe('playing');
+    expect(session.mistakes).toBe(0);
+  });
+
+  it('honours a per-level heart count', () => {
+    const { initial } = build('A a .', 3);
+    expect(startSession(initial, 3).heartsLeft).toBe(3);
+  });
+
+  it('spends a heart on a blocked tap and leaves the board alone', () => {
+    const { board, initial } = build('a A . b B');
+    const session = startSession(initial);
+
+    const { session: after, outcome } = tapArrow(board, session, 0);
+
+    expect(outcome.kind).toBe('blocked');
+    expect(after.heartsLeft).toBe(DEFAULT_HEARTS - 1);
+    expect(after.mistakes).toBe(1);
+    expect(after.status).toBe('playing');
+    expect(after.state).toBe(session.state);
+  });
+
+  it('does not spend a heart on a good tap', () => {
+    const { board, initial } = build('a A . b B');
+    const { session } = tapArrow(board, startSession(initial), 1);
+    expect(session.heartsLeft).toBe(DEFAULT_HEARTS);
+    expect(session.state.remaining).toBe(1);
+  });
+
+  it('fails the level when the last heart is spent', () => {
+    const { board, initial } = build('a A . b B');
+    let session = startSession(initial, 2);
+
+    session = tapArrow(board, session, 0).session;
+    expect(session.status).toBe('playing');
+    expect(session.heartsLeft).toBe(1);
+
+    session = tapArrow(board, session, 0).session;
+    expect(session.status).toBe('failed');
+    expect(session.heartsLeft).toBe(0);
+  });
+
+  it('ignores taps once the level is over', () => {
+    const { board, initial } = build('a A . b B');
+    let session = startSession(initial, 1);
+    session = tapArrow(board, session, 0).session;
+    expect(session.status).toBe('failed');
+
+    const { session: after, outcome } = tapArrow(board, session, 1);
+    expect(outcome.kind).toBe('invalid');
+    expect(after).toBe(session);
+  });
+
+  it('wins when the last arrow leaves', () => {
+    const { board, initial } = build('a A . b B');
+    let session = startSession(initial);
+
+    session = tapArrow(board, session, 1).session;
+    expect(session.status).toBe('playing');
+
+    session = tapArrow(board, session, 0).session;
+    expect(session.status).toBe('won');
+    expect(session.heartsLeft).toBe(DEFAULT_HEARTS);
   });
 });
 
 describe('a full level plays out', () => {
-  it('clears a three-deep dependency chain in the only order that works', () => {
-    // a2 must leave before a1 can move, and a1 before a0.
+  it('clears independent arrows in any order without spending a heart', () => {
+    // Three snakes in separate rows, each head pointing at the near edge. None
+    // interacts with another, so every order works.
     const { board, initial } = build(`
-      v . .
-      > > .
-      . . .
+      A a . . .
+      . . . . .
+      B b . . .
+      . . . . .
+      C c . . .
     `);
-    let state = initial;
+    let session = startSession(initial);
+    expect(legalMoves(board, session.state)).toEqual([0, 1, 2]);
 
-    for (const expected of [2, 1, 0]) {
-      expect(legalMoves(board, state)).toEqual([expected]);
-      const outcome = resolveTap(board, state, expected);
+    for (const index of [2, 0, 1]) {
+      const { session: next, outcome } = tapArrow(board, session, index);
       expect(outcome.kind).toBe('escaped');
-      state = applyOutcome(state, outcome);
+      session = next;
     }
 
-    expect(isCleared(state)).toBe(true);
-    expect(getStatus(board, state)).toBe('won');
-    expect(state.occupancy.every((cell) => cell === -1)).toBe(true);
-    expect(state.occupancy[toCell(1, 1, 3)]).toBe(-1);
+    expect(session.status).toBe('won');
+    expect(session.heartsLeft).toBe(DEFAULT_HEARTS);
+  });
+
+  it('opens up blocked arrows as the arrows ahead of them leave', () => {
+    // Three heads pointing right in the same row: only the rightmost is free,
+    // and each departure releases the next.
+    const { board, initial } = build('c C b B a A');
+    let session = startSession(initial);
+
+    // Arrows are id-sorted by the parser: index 0 = 'a' (rightmost head).
+    expect(legalMoves(board, session.state)).toEqual([0]);
+
+    session = tapArrow(board, session, 0).session;
+    expect(legalMoves(board, session.state)).toEqual([1]);
+
+    session = tapArrow(board, session, 1).session;
+    expect(legalMoves(board, session.state)).toEqual([2]);
+
+    session = tapArrow(board, session, 2).session;
+    expect(session.status).toBe('won');
+    expect(session.mistakes).toBe(0);
   });
 });

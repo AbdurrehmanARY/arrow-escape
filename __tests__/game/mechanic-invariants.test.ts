@@ -1,32 +1,33 @@
 /**
- * The load-bearing property of each rule variant.
+ * The load-bearing properties of the rule set.
  *
- * These tests are the reason `docs/MECHANIC_ANALYSIS.md` exists. They are not
- * regression tests for a bug — they are executable evidence for a design claim
- * that decides what kind of game ArrowPath is:
+ * These are not regression tests for a bug — they are executable evidence for the
+ * design claims the whole game rests on:
  *
- *   Under `escape-only`, tap order provably cannot matter.
- *   Under `slide-and-stop`, it provably can.
+ *   1. Tap *order* can never lose a level. Removing a snake only ever frees
+ *      cells, so an arrow that is free stays free until it is tapped.
+ *   2. Therefore the failure mode is *wrong taps*, not wrong plans, and the heart
+ *      counter is what makes the game a game.
  *
- * If the first ever fails, the rules changed and the GDD's difficulty model is
- * back in play. If the second ever fails, `slide-and-stop` has stopped earning
- * its complexity and should be deleted.
+ * If (1) ever fails, the rules changed and the difficulty model in `analyze()`
+ * needs rethinking from scratch. See `docs/MECHANIC_ANALYSIS.md`.
  */
 
 import {
   applyOutcome,
   castRay,
   EMPTY,
-  ESCAPED,
   isSolvable,
   legalMoves,
   renderAscii,
   resolveTap,
+  startSession,
+  tapArrow,
 } from '@game';
-import { build, randomBoard, SAFE_MOVE, seededRandom, TRAP_BOARD, TRAP_MOVE } from '../helpers';
+import { build, randomBoard, seededRandom } from '../helpers';
 
-describe('escape-only: freeness is monotone', () => {
-  it('an arrow that can escape now can still escape after any other arrow leaves', () => {
+describe('freeness is monotone', () => {
+  it('an arrow that can leave now can still leave after any other arrow goes', () => {
     const rng = seededRandom(2024);
     let observations = 0;
 
@@ -34,8 +35,10 @@ describe('escape-only: freeness is monotone', () => {
       const { board, initial } = randomBoard(rng, {
         rows: 3 + Math.floor(rng() * 3),
         cols: 3 + Math.floor(rng() * 3),
-        arrowCount: 3 + Math.floor(rng() * 6),
+        arrowCount: 3 + Math.floor(rng() * 4),
+        maxBodyLength: 4,
       });
+      if (board.arrows.length === 0) continue;
 
       const freeBefore = legalMoves(board, initial);
       for (const removed of freeBefore) {
@@ -43,10 +46,10 @@ describe('escape-only: freeness is monotone', () => {
 
         for (const stillThere of freeBefore) {
           if (stillThere === removed) continue;
-          const ray = castRay(board, after, stillThere);
-          if (ray.blockerIndex !== EMPTY) {
+          if (castRay(board, after, stillThere).blockerIndex !== EMPTY) {
             throw new Error(
-              `removing arrow ${removed} blocked arrow ${stillThere}:\n${renderAscii(board, initial)}`,
+              `removing arrow ${removed} blocked arrow ${stillThere}:\n` +
+                renderAscii(board, initial),
             );
           }
           observations += 1;
@@ -54,32 +57,34 @@ describe('escape-only: freeness is monotone', () => {
       }
     }
 
-    expect(observations).toBeGreaterThan(500);
+    expect(observations).toBeGreaterThan(300);
   });
 });
 
-describe('escape-only: every tap order wins', () => {
-  it('random play never gets stuck on a solvable board', () => {
+describe('tap order cannot lose a level', () => {
+  it('random play always clears a solvable board', () => {
     const rng = seededRandom(1337);
     let boardsPlayed = 0;
 
-    for (let trial = 0; trial < 500; trial += 1) {
+    for (let trial = 0; trial < 400; trial += 1) {
       const { board, initial } = randomBoard(rng, {
         rows: 3 + Math.floor(rng() * 4),
         cols: 3 + Math.floor(rng() * 4),
-        arrowCount: 3 + Math.floor(rng() * 8),
+        arrowCount: 3 + Math.floor(rng() * 6),
+        maxBodyLength: 4,
       });
+      if (board.arrows.length === 0) continue;
       if (!isSolvable(board, initial)) continue;
 
       // Play the whole level by picking uniformly at random from whatever is
-      // tappable — the least strategic player imaginable.
-      for (let attempt = 0; attempt < 5; attempt += 1) {
+      // free — the least strategic player imaginable.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         let state = initial;
         while (state.remaining > 0) {
           const moves = legalMoves(board, state);
           if (moves.length === 0) {
             throw new Error(
-              `random play deadlocked a solvable board with ${state.remaining} left:\n` +
+              `random play stalled with ${state.remaining} left:\n` +
                 `${renderAscii(board, initial)}\nstuck at:\n${renderAscii(board, state)}`,
             );
           }
@@ -90,19 +95,20 @@ describe('escape-only: every tap order wins', () => {
       boardsPlayed += 1;
     }
 
-    // Sanity: the assertion above is only meaningful if boards actually played.
-    expect(boardsPlayed).toBeGreaterThan(150);
+    expect(boardsPlayed).toBeGreaterThan(100);
   });
 
-  it('a board that starts solvable can never become deadlocked', () => {
+  it('solvability survives every single move, not just good ones', () => {
     const rng = seededRandom(4711);
 
-    for (let trial = 0; trial < 300; trial += 1) {
+    for (let trial = 0; trial < 250; trial += 1) {
       const { board, initial } = randomBoard(rng, {
         rows: 4,
         cols: 4,
-        arrowCount: 4 + Math.floor(rng() * 6),
+        arrowCount: 3 + Math.floor(rng() * 4),
+        maxBodyLength: 4,
       });
+      if (board.arrows.length === 0) continue;
       if (!isSolvable(board, initial)) continue;
 
       let state = initial;
@@ -110,73 +116,63 @@ describe('escape-only: every tap order wins', () => {
         const moves = legalMoves(board, state);
         const pick = moves[Math.floor(rng() * moves.length)]!;
         state = applyOutcome(state, resolveTap(board, state, pick));
-        // The point: solvability is preserved by *every* move, not just good ones.
         expect(isSolvable(board, state)).toBe(true);
       }
     }
   });
-});
 
-describe('slide-and-stop: tap order decides the level', () => {
-  it('a legal opening move can throw the game away', () => {
-    const { board, initial } = build(TRAP_BOARD, 'slide-and-stop');
+  it('a blocked tap never changes the board, so it cannot ruin the level', () => {
+    const rng = seededRandom(9090);
+    let blockedTapsSeen = 0;
 
-    expect(isSolvable(board, initial)).toBe(true);
-    expect(legalMoves(board, initial)).toEqual([SAFE_MOVE, TRAP_MOVE]);
-
-    const winning = applyOutcome(initial, resolveTap(board, initial, SAFE_MOVE));
-    expect(isSolvable(board, winning)).toBe(true);
-
-    const losing = applyOutcome(initial, resolveTap(board, initial, TRAP_MOVE));
-    expect(isSolvable(board, losing)).toBe(false);
-  });
-
-  it('the same layout under escape-only cannot be thrown away', () => {
-    // Head-to-head on one board: the rule variant is the only thing that differs.
-    const { board, initial } = build(TRAP_BOARD, 'escape-only');
-    if (!isSolvable(board, initial)) return;
-
-    for (const move of legalMoves(board, initial)) {
-      const after = applyOutcome(initial, resolveTap(board, initial, move));
-      expect(isSolvable(board, after)).toBe(true);
-    }
-  });
-
-  it('an arrow that could escape can be walled in by moving another arrow', () => {
-    // Hand-built: a1 has a clear run to the right edge. Sliding a0 right parks it
-    // directly in a1's path, and a0 can never move again because a2 pins it.
-    // This single board is the whole difference between the two rule sets.
-    const rng = seededRandom(6060);
-    let found = false;
-
-    for (let trial = 0; trial < 3000 && !found; trial += 1) {
+    for (let trial = 0; trial < 300; trial += 1) {
       const { board, initial } = randomBoard(rng, {
-        rows: 3,
+        rows: 4,
         cols: 4,
         arrowCount: 4,
-        variant: 'slide-and-stop',
+        maxBodyLength: 4,
       });
+      if (board.arrows.length === 0) continue;
 
-      const freeBefore = new Set(
-        legalMoves(board, initial).filter(
-          (i) => castRay(board, initial, i).blockerIndex === EMPTY,
-        ),
-      );
-
-      for (const move of legalMoves(board, initial)) {
-        const after = applyOutcome(initial, resolveTap(board, initial, move));
-        for (const other of freeBefore) {
-          if (other === move) continue;
-          if (after.positions[other] === ESCAPED) continue;
-          if (castRay(board, after, other).blockerIndex !== EMPTY) {
-            found = true;
-            break;
-          }
-        }
-        if (found) break;
+      for (let i = 0; i < board.arrows.length; i += 1) {
+        const outcome = resolveTap(board, initial, i);
+        if (outcome.kind !== 'blocked') continue;
+        expect(applyOutcome(initial, outcome)).toBe(initial);
+        blockedTapsSeen += 1;
       }
     }
 
-    expect(found).toBe(true);
+    expect(blockedTapsSeen).toBeGreaterThan(50);
+  });
+});
+
+describe('hearts are the only way to lose', () => {
+  it('a player who taps blindly can fail a board that is perfectly solvable', () => {
+    // The whole design in one test: this board can always be cleared, but a
+    // player who cannot read it will run out of hearts trying.
+    const { board, initial } = build('c C b B a A');
+    expect(isSolvable(board, initial)).toBe(true);
+
+    let session = startSession(initial, 2);
+    // Two taps on the arrow at the back of the queue, which is blocked twice over.
+    session = tapArrow(board, session, 2).session;
+    session = tapArrow(board, session, 2).session;
+
+    expect(session.status).toBe('failed');
+    // The board itself was never damaged — only the player's hearts.
+    expect(session.state.remaining).toBe(3);
+    expect(isSolvable(board, session.state)).toBe(true);
+  });
+
+  it('the same board is cleared without losing a heart when read correctly', () => {
+    const { board, initial } = build('c C b B a A');
+    let session = startSession(initial, 2);
+
+    for (const index of [0, 1, 2]) {
+      session = tapArrow(board, session, index).session;
+    }
+
+    expect(session.status).toBe('won');
+    expect(session.mistakes).toBe(0);
   });
 });

@@ -1,9 +1,9 @@
 /**
  * Hint safety.
  *
- * The hint system makes one promise to the player: following a hint never costs
- * you the level. Since hints are paid for with a rewarded ad, a hint that ruins a
- * board is worse than no hint at all. These tests hold that promise to the fire.
+ * The hint system makes one promise: following a hint never costs you a heart.
+ * Hints are paid for with a rewarded ad, so a hint that spends a life is worse
+ * than no hint at all. These tests hold that promise to the fire.
  */
 
 import {
@@ -15,175 +15,150 @@ import {
   renderAscii,
   resolveTap,
   solve,
+  startSession,
+  tapArrow,
 } from '@game';
-import { build, randomBoard, SAFE_MOVE, seededRandom, TRAP_BOARD, TRAP_MOVE } from '../helpers';
+import { build, randomBoard, seededRandom } from '../helpers';
+
+const CHAIN = 'c C b B a A';
 
 describe('findSafeMove', () => {
-  it('returns the next arrow in a forced chain', () => {
-    const { board, initial } = build(`
-      v . .
-      > > .
-      . . .
-    `);
-    const hint = findSafeMove(board, initial);
-    expect(hint).toEqual({ kind: 'move', arrowIndex: 2, arrowId: 'a2' });
+  it('returns the only arrow that can move in a forced chain', () => {
+    const { board, initial } = build(CHAIN);
+    expect(findSafeMove(board, initial)).toEqual({ kind: 'move', arrowIndex: 0, arrowId: 'a' });
   });
 
   it('reports already-won on a cleared board', () => {
-    const { board, initial } = build('> . .');
+    const { board, initial } = build('A a .');
     const cleared = applyOutcome(initial, resolveTap(board, initial, 0));
     expect(findSafeMove(board, cleared)).toEqual({ kind: 'already-won' });
   });
 
   it('offers no move — and explains why — on an unsolvable board', () => {
-    const { board, initial } = build('> <');
+    const { board, initial } = build('a A B b');
     const hint = findSafeMove(board, initial);
     expect(hint.kind).toBe('no-safe-move');
     if (hint.kind !== 'no-safe-move') return;
     expect(hint.reason).toMatch(/Restart/);
   });
-
-  it('does not claim "no safe move" just because it ran out of search budget', () => {
-    const rng = seededRandom(777);
-    const { board, initial } = randomBoard(rng, {
-      rows: 5,
-      cols: 5,
-      arrowCount: 12,
-      variant: 'slide-and-stop',
-    });
-    const hint = findSafeMove(board, initial, { maxNodes: 1 });
-    if (hint.kind === 'no-safe-move') {
-      // The budget-limited wording must be the "too tangled" one, never the
-      // definitive "nothing can finish this board".
-      expect(hint.reason).toMatch(/too tangled/);
-    }
-  });
 });
 
-describe('a hint never loses the level', () => {
-  it.each(['escape-only', 'slide-and-stop'] as const)(
-    'holds on 250 random %s boards',
-    (variant) => {
-      const rng = seededRandom(variant === 'escape-only' ? 111 : 222);
-      let checked = 0;
+describe('a hint never costs a heart', () => {
+  it('holds on 300 random boards', () => {
+    const rng = seededRandom(111);
+    let checked = 0;
 
-      for (let trial = 0; trial < 250; trial += 1) {
-        const { board, initial } = randomBoard(rng, {
-          rows: 3 + Math.floor(rng() * 2),
-          cols: 3 + Math.floor(rng() * 2),
-          arrowCount: 3 + Math.floor(rng() * 4),
-          variant,
-        });
+    for (let trial = 0; trial < 300; trial += 1) {
+      const { board, initial } = randomBoard(rng, {
+        rows: 3 + Math.floor(rng() * 3),
+        cols: 3 + Math.floor(rng() * 3),
+        arrowCount: 2 + Math.floor(rng() * 5),
+        maxBodyLength: 4,
+      });
+      if (board.arrows.length === 0) continue;
+      if (!isSolvable(board, initial)) continue;
 
-        if (!isSolvable(board, initial)) continue;
+      const hint = findSafeMove(board, initial);
+      expect(hint.kind).toBe('move');
+      if (hint.kind !== 'move') continue;
 
-        const hint = findSafeMove(board, initial);
-        expect(hint.kind).toBe('move');
-        if (hint.kind !== 'move') continue;
-
-        const after = applyOutcome(initial, resolveTap(board, initial, hint.arrowIndex));
-        if (!isSolvable(board, after)) {
-          throw new Error(
-            `hint "${hint.arrowId}" made this ${variant} board unsolvable:\n` +
-              renderAscii(board, initial),
-          );
-        }
-        checked += 1;
+      const outcome = resolveTap(board, initial, hint.arrowIndex);
+      if (outcome.kind !== 'escaped') {
+        throw new Error(
+          `hint "${hint.arrowId}" was blocked on:\n${renderAscii(board, initial)}`,
+        );
       }
+      checked += 1;
+    }
 
-      expect(checked).toBeGreaterThan(40);
-    },
-  );
+    expect(checked).toBeGreaterThan(60);
+  });
 
-  it('stays safe when followed all the way to a win', () => {
+  it('clears a whole level on full hearts when followed all the way', () => {
     const rng = seededRandom(8080);
     let levelsFinished = 0;
 
-    for (let trial = 0; trial < 120; trial += 1) {
+    for (let trial = 0; trial < 200; trial += 1) {
       const { board, initial } = randomBoard(rng, {
         rows: 4,
         cols: 4,
-        arrowCount: 5,
-        variant: trial % 2 === 0 ? 'escape-only' : 'slide-and-stop',
+        arrowCount: 4,
+        maxBodyLength: 3,
       });
+      if (board.arrows.length === 0) continue;
       if (!isSolvable(board, initial)) continue;
 
-      let state = initial;
+      let session = startSession(initial);
       let guard = 0;
-      while (state.remaining > 0 && guard < 200) {
-        const hint = findSafeMove(board, state);
+      while (session.status === 'playing' && guard < 100) {
+        const hint = findSafeMove(board, session.state);
         expect(hint.kind).toBe('move');
         if (hint.kind !== 'move') break;
-        state = applyOutcome(state, resolveTap(board, state, hint.arrowIndex));
+        session = tapArrow(board, session, hint.arrowIndex).session;
         guard += 1;
       }
 
-      expect(state.remaining).toBe(0);
+      expect(session.status).toBe('won');
+      // The whole point: not a single heart lost following hints.
+      expect(session.mistakes).toBe(0);
       levelsFinished += 1;
     }
 
-    expect(levelsFinished).toBeGreaterThan(20);
+    expect(levelsFinished).toBeGreaterThan(30);
   });
 });
 
 describe('findAllSafeMoves', () => {
-  it('under escape-only, every legal move is safe', () => {
-    // This is the practical consequence of the monotonicity result: there is
-    // nothing to warn the player away from, so assist mode can light up
-    // everything that is tappable.
+  it('is exactly the set of free arrows on a winnable board', () => {
     const rng = seededRandom(303);
+    let checked = 0;
 
-    for (let trial = 0; trial < 200; trial += 1) {
+    for (let trial = 0; trial < 300; trial += 1) {
       const { board, initial } = randomBoard(rng, {
         rows: 4,
         cols: 4,
-        arrowCount: 3 + Math.floor(rng() * 5),
+        arrowCount: 2 + Math.floor(rng() * 4),
+        maxBodyLength: 4,
       });
+      if (board.arrows.length === 0) continue;
       if (!isSolvable(board, initial)) continue;
+
+      // No free arrow can ever be the wrong choice, so "safe" and "legal" match.
       expect(findAllSafeMoves(board, initial)).toEqual(legalMoves(board, initial));
+      checked += 1;
     }
+
+    expect(checked).toBeGreaterThan(60);
   });
 
-  it('under slide-and-stop, it is a strict subset when the board holds a trap', () => {
-    // If this ever fails, slide-and-stop has stopped adding decisions and the
-    // variant no longer justifies its extra complexity.
-    const { board, initial } = build(TRAP_BOARD, 'slide-and-stop');
-
-    expect(legalMoves(board, initial)).toEqual([SAFE_MOVE, TRAP_MOVE]);
-    expect(findAllSafeMoves(board, initial)).toEqual([SAFE_MOVE]);
-  });
-
-  it('never widens beyond the legal moves on random boards', () => {
-    const rng = seededRandom(404);
-    for (let trial = 0; trial < 200; trial += 1) {
-      const { board, initial } = randomBoard(rng, {
-        rows: 4,
-        cols: 4,
-        arrowCount: 6,
-        variant: 'slide-and-stop',
-      });
-      const safe = findAllSafeMoves(board, initial);
-      const legal = legalMoves(board, initial);
-      expect(safe.length).toBeLessThanOrEqual(legal.length);
-      expect(legal).toEqual(expect.arrayContaining(safe));
-    }
+  it('calls nothing safe on a board that is already past saving', () => {
+    // 'a' and 'b' are knotted head-to-head, so this board can never be cleared —
+    // but 'c' is still happily tappable. Calling that "safe" would be a lie.
+    const { board, initial } = build(`
+      a A B b
+      . C c .
+    `);
+    expect(isSolvable(board, initial)).toBe(false);
+    expect(legalMoves(board, initial).length).toBeGreaterThan(0);
+    expect(findAllSafeMoves(board, initial)).toEqual([]);
   });
 
   it('returns nothing on a cleared board', () => {
-    const { board, initial } = build('> . .');
+    const { board, initial } = build('A a .');
     const cleared = applyOutcome(initial, resolveTap(board, initial, 0));
     expect(findAllSafeMoves(board, cleared)).toEqual([]);
   });
 
   it('agrees with solve about whether anything is safe', () => {
     const rng = seededRandom(606);
-    for (let trial = 0; trial < 200; trial += 1) {
+    for (let trial = 0; trial < 250; trial += 1) {
       const { board, initial } = randomBoard(rng, {
         rows: 4,
         cols: 4,
         arrowCount: 4,
-        variant: trial % 2 === 0 ? 'escape-only' : 'slide-and-stop',
+        maxBodyLength: 3,
       });
+      if (board.arrows.length === 0) continue;
       const anySafe = findAllSafeMoves(board, initial).length > 0;
       expect(anySafe).toBe(solve(board, initial).kind === 'solved');
     }

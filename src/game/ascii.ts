@@ -1,68 +1,50 @@
 /**
  * ascii.ts — boards as text.
  *
- * Purpose:      A compact, eyeball-checkable notation for a board, so a level can
- *               be written, printed, and diffed as plain text.
+ * Purpose:      A compact, eyeball-checkable notation for a board of snakes, so a
+ *               level can be written, printed, and diffed as plain text.
  * Responsibilities:
  *               - `parseAscii`  — text -> `LevelDefinition`.
  *               - `renderAscii` — `BoardState` -> text.
- * Notes:        This is production code, not a test-only helper: the level
- *               generator prints candidates with it, the validator quotes failing
- *               boards with it, and the unit tests author fixtures with it. One
- *               notation everywhere means a board in a failing CI log can be
- *               pasted straight back into a test.
+ * Notes:        Production code, not a test-only helper: the level generator
+ *               prints candidates with it, the validator quotes failing boards
+ *               with it, and the unit tests author fixtures with it. One notation
+ *               everywhere means a board in a failing CI log can be pasted
+ *               straight back into a test.
  *
- *               Glyphs: `^` up, `v` down, `<` left, `>` right, `.` empty.
+ *               Notation: each arrow is one letter. **Uppercase marks the head**,
+ *               lowercase marks the rest of the body, `.` is empty.
+ *
+ *                   A a a .
+ *                   . . a .
+ *                   . . a .
+ *
+ *               The body order is recovered by walking from the head through
+ *               connected cells of the same letter, and the direction is inferred
+ *               from the head's last segment — an arrowhead always continues the
+ *               line it is drawn on. So the picture alone fully determines the
+ *               arrow, with nothing to keep in sync by hand.
  */
 
-import { rowOf, colOf } from './board';
+import { colOf, rowOf, toCell } from './board';
 import {
+  type ArrowSpec,
   type Board,
   type BoardState,
-  type Direction,
-  ESCAPED,
+  EMPTY,
   type LevelDefinition,
-  type ArrowSpec,
-  type RuleVariant,
 } from './types';
-
-const GLYPH_TO_DIR: Readonly<Record<string, Direction>> = {
-  '^': 'up',
-  v: 'down',
-  V: 'down',
-  '<': 'left',
-  '>': 'right',
-};
-
-/** Glyph used to draw each direction. Exported so the renderer can share it. */
-export const DIR_TO_GLYPH: Readonly<Record<Direction, string>> = {
-  up: '^',
-  down: 'v',
-  left: '<',
-  right: '>',
-};
 
 export interface ParseAsciiOptions {
   readonly id?: number;
   readonly name?: string;
   readonly layout?: string;
   readonly difficulty?: number;
-  readonly variant?: RuleVariant;
+  readonly hearts?: number;
 }
 
-/**
- * Read a board drawn as text into a `LevelDefinition`.
- *
- * Blank lines are ignored and each row is read by non-space glyphs, so both
- * `>.<` and `> . <` describe the same three-cell row. Arrows are given ids
- * `a0, a1, ...` in reading order, which keeps generated fixtures stable.
- *
- * Throws on malformed input. That is deliberate and is the one exception to the
- * "domain functions never throw" rule: this parser only ever sees developer- or
- * tool-authored input, never a shipped level file, so a loud failure at authoring
- * time is better than a `Result` every caller has to unwrap.
- */
-export function parseAscii(art: string, options: ParseAsciiOptions = {}): LevelDefinition {
+/** Split a drawing into a rectangular grid of single-character cells. */
+function toGrid(art: string): string[][] {
   const lines = art
     .split('\n')
     .map((line) => line.trim())
@@ -79,32 +61,122 @@ export function parseAscii(art: string, options: ParseAsciiOptions = {}): LevelD
     }
   });
 
-  const arrows: ArrowSpec[] = [];
+  return grid;
+}
+
+/**
+ * Read a board drawn as text into a `LevelDefinition`.
+ *
+ * Throws on malformed input. That is deliberate and is the one exception to the
+ * "domain functions never throw" rule: this parser only ever sees developer- or
+ * tool-authored input, never a shipped level file, so a loud failure at authoring
+ * time is better than a `Result` every caller has to unwrap.
+ */
+export function parseAscii(art: string, options: ParseAsciiOptions = {}): LevelDefinition {
+  const grid = toGrid(art);
+  const rows = grid.length;
+  const cols = grid[0]!.length;
+
+  /** letter -> every cell holding it, plus which one was the head. */
+  const cellsByLetter = new Map<string, { cells: number[]; head: number | undefined }>();
+
   grid.forEach((row, r) => {
     row.forEach((glyph, c) => {
       if (glyph === '.') return;
-      const dir = GLYPH_TO_DIR[glyph];
-      if (!dir) throw new Error(`parseAscii: unknown glyph "${glyph}" at (${r}, ${c})`);
-      arrows.push({ id: `a${arrows.length}`, row: r, col: c, dir });
+      if (!/^[A-Za-z]$/.test(glyph)) {
+        throw new Error(`parseAscii: unknown glyph "${glyph}" at (${r}, ${c})`);
+      }
+
+      const letter = glyph.toLowerCase();
+      const cell = toCell(r, c, cols);
+      const entry = cellsByLetter.get(letter) ?? { cells: [], head: undefined };
+      entry.cells.push(cell);
+
+      if (glyph === glyph.toUpperCase()) {
+        if (entry.head !== undefined) {
+          throw new Error(`parseAscii: arrow "${letter}" has two heads`);
+        }
+        entry.head = cell;
+      }
+
+      cellsByLetter.set(letter, entry);
     });
   });
 
-  const level: LevelDefinition = {
+  const arrows: ArrowSpec[] = [];
+
+  // Sort by letter so ids are stable regardless of drawing order.
+  for (const letter of [...cellsByLetter.keys()].sort()) {
+    const { cells, head } = cellsByLetter.get(letter)!;
+    if (head === undefined) {
+      throw new Error(
+        `parseAscii: arrow "${letter}" has no head — capitalise the cell with the arrowhead`,
+      );
+    }
+
+    const remaining = new Set(cells);
+    const body: number[] = [head];
+    remaining.delete(head);
+
+    // Walk the chain: from the current end, step to the single unvisited
+    // neighbour carrying the same letter.
+    let cursor = head;
+    while (remaining.size > 0) {
+      const row = rowOf(cursor, cols);
+      const col = colOf(cursor, cols);
+      const neighbours = [
+        row > 0 ? toCell(row - 1, col, cols) : -1,
+        row + 1 < rows ? toCell(row + 1, col, cols) : -1,
+        col > 0 ? toCell(row, col - 1, cols) : -1,
+        col + 1 < cols ? toCell(row, col + 1, cols) : -1,
+      ].filter((cell) => cell >= 0 && remaining.has(cell));
+
+      if (neighbours.length === 0) {
+        throw new Error(
+          `parseAscii: arrow "${letter}" is not one connected line — ` +
+            `${remaining.size} cell(s) are detached from the head`,
+        );
+      }
+      if (neighbours.length > 1) {
+        throw new Error(
+          `parseAscii: arrow "${letter}" branches at (${row}, ${col}) — a body must be a simple path`,
+        );
+      }
+
+      cursor = neighbours[0]!;
+      body.push(cursor);
+      remaining.delete(cursor);
+    }
+
+    if (body.length === 1) {
+      throw new Error(
+        `parseAscii: arrow "${letter}" is a single cell, so its direction cannot be ` +
+          'inferred — give it a body of at least two cells',
+      );
+    }
+
+    arrows.push({
+      id: letter,
+      body: body.map((cell) => [rowOf(cell, cols), colOf(cell, cols)] as const),
+    });
+  }
+
+  if (arrows.length === 0) throw new Error('parseAscii: board has no arrows');
+
+  return {
     id: options.id ?? 0,
     name: options.name ?? 'ascii',
-    rows: grid.length,
+    rows,
     cols,
     layout: options.layout ?? 'free',
     difficulty: options.difficulty ?? 1,
     arrows,
-    ...(options.variant ? { variant: options.variant } : {}),
+    ...(options.hearts !== undefined ? { hearts: options.hearts } : {}),
   };
-
-  return level;
 }
 
 /**
- * Draw the current board as text.
+ * Draw the current board as text, using the same notation `parseAscii` reads.
  *
  * Used for failure messages in tests and for the generator's console preview, so
  * a human can see the board that misbehaved instead of a list of coordinates.
@@ -115,10 +187,36 @@ export function renderAscii(board: Board, state: BoardState): string {
   );
 
   board.arrows.forEach((arrow, index) => {
-    const cell = state.positions[index]!;
-    if (cell === ESCAPED) return;
-    grid[rowOf(cell, board.cols)]![colOf(cell, board.cols)] = DIR_TO_GLYPH[arrow.dir];
+    if (state.alive[index] !== 1) return;
+    const letter = arrow.id.length === 1 ? arrow.id.toLowerCase() : String.fromCharCode(97 + index);
+    arrow.body.forEach((cell, position) => {
+      grid[rowOf(cell, board.cols)]![colOf(cell, board.cols)] =
+        position === 0 ? letter.toUpperCase() : letter;
+    });
   });
 
   return grid.map((row) => row.join(' ')).join('\n');
+}
+
+/**
+ * Arrow glyph for a direction, for compact debug output and the HUD.
+ *
+ * Direction is carried by the glyph's shape rather than by colour, which keeps
+ * the board readable for colour-blind players (GDD §10).
+ */
+export const DIR_GLYPH = { up: '▲', down: '▼', left: '◀', right: '▶' } as const;
+
+/** Render an arrow's head direction as a single glyph. */
+export function glyphFor(board: Board, arrowIndex: number): string {
+  return DIR_GLYPH[board.arrows[arrowIndex]!.dir];
+}
+
+/** True when nothing occupies this cell. Small helper for renderers. */
+export function isCellEmpty(state: BoardState, cell: number): boolean {
+  return state.occupancy[cell] === EMPTY;
+}
+
+/** Which arrow occupies a cell, or `EMPTY`. Small helper for renderers. */
+export function occupantOf(state: BoardState, cell: number): number {
+  return state.occupancy[cell] ?? EMPTY;
 }

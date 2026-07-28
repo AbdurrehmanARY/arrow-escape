@@ -1,11 +1,12 @@
 # ArrowPath
 
-A calm, logic-first puzzle game for Android. Each level is a board of arrows;
-every arrow wants to leave the board but can only fly straight out in the
-direction it points, and only if nothing is in its way. Clear every arrow to win.
+A calm, focus-first puzzle game for Android. Each level is a tangle of arrows —
+long snaking bodies with an arrowhead at one end. Tap one and it threads out
+through its head, but only if the straight line from that head to the board edge
+is clear. Misread it and it costs a heart. Five wrong reads and the level is over.
 
-**Status:** Phase 1 of 9 — rules engine complete, awaiting a device test and one
-design decision. See [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** Phase 1 of 9 — rules engine complete, awaiting a device test.
+See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -13,26 +14,27 @@ design decision. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ```bash
 npm install
-npm run verify   # typecheck + 80 unit tests
-npm start        # then scan the QR code with Expo Go
+npm run verify        # typecheck + 98 unit tests
+npm run start:tunnel  # then scan the QR code with Expo Go
 ```
 
 Testing on your phone: **[docs/PHASE_1_TESTING.md](docs/PHASE_1_TESTING.md)**.
 
 ---
 
-## ⚠️ Open decision
+## Where the difficulty lives
 
-Phase 1 established that under the core rule as originally specified, **the player
-cannot make a wrong move** — every solvable board is cleared by any tap order, and
-a solvable board can never deadlock.
+Tap order provably cannot lose a level: a tap only ever removes a snake, and
+removing a snake can never block another, so a free arrow stays free. Greedy
+always works.
 
-That makes ArrowPath a spatial-search game (like *Parking Jam*) rather than the
-logic game the design document describes. Both rule variants are implemented and
-tested; the app lets you play them side by side and decide.
+So the game is not about planning — it is about **reading**. Finding a head in the
+tangle, working out which way it points, and tracing its path to the edge. Wrong
+*reads*, not wrong *plans*, are what cost you the level. That is why bodies are
+long, bent, and all drawn in one colour: every one of those is a difficulty device.
 
-Read **[docs/MECHANIC_ANALYSIS.md](docs/MECHANIC_ANALYSIS.md)** for the proof, the
-evidence, and the two options.
+The proof, the measurements, and the difficulty model that follows from it are in
+**[docs/MECHANIC_ANALYSIS.md](docs/MECHANIC_ANALYSIS.md)**.
 
 ---
 
@@ -58,7 +60,8 @@ works" in the codebase.
 | `npm test` | Jest |
 | `npm run test:coverage` | coverage, with thresholds enforced on `src/game` |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm start` | Expo dev server |
+| `npm start` | Expo dev server (LAN) |
+| `npm run start:tunnel` | Expo dev server via ngrok — use this if the LAN route is firewalled |
 | `npm run android` | Expo dev server, launch on a USB-connected device |
 
 ## Docs
@@ -67,7 +70,7 @@ works" in the codebase.
 |---|---|
 | [GAME_DESIGN_DOCUMENT.md](docs/GAME_DESIGN_DOCUMENT.md) | the player's perspective |
 | [TECHNICAL_DESIGN_DOCUMENT.md](docs/TECHNICAL_DESIGN_DOCUMENT.md) | architecture and rationale |
-| [MECHANIC_ANALYSIS.md](docs/MECHANIC_ANALYSIS.md) | the open rule decision |
+| [MECHANIC_ANALYSIS.md](docs/MECHANIC_ANALYSIS.md) | why order can't lose, and what makes levels hard instead |
 | [ROADMAP.md](docs/ROADMAP.md) | nine phases, each ending at an approval gate |
 | [PROJECT_MEMORY.md](docs/PROJECT_MEMORY.md) | authoritative project state — read this first |
 | [PHASE_1_TESTING.md](docs/PHASE_1_TESTING.md) | how to test the current build |

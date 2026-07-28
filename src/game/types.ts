@@ -5,15 +5,21 @@
  *               declares a shared shape; they all import from here.
  * Responsibilities:
  *               - Level data as authored on disk (`LevelDefinition`).
- *               - Runtime board topology (`Board`) vs. mutable play state
- *                 (`BoardState`) — deliberately separate, see below.
+ *               - Runtime board topology (`Board`) vs. play state (`BoardState`).
+ *               - A level in progress including hearts (`PlaySession`).
  *               - The outcome of a single tap (`MoveOutcome`).
  * Notes:        Pure TypeScript. No React, no I/O, no imports. This file is
  *               shared verbatim between the app and the off-device level
  *               tooling in `tools/`, so it must never reach for a platform API.
+ *
+ *               An arrow is a *snake*, not a single cell: a connected chain of
+ *               cells with an arrowhead at one end. That is the whole source of
+ *               difficulty in this game — the bodies tangle, so working out
+ *               which head belongs to which tail, and whether that head has a
+ *               clear run to the edge, is genuinely hard by eye.
  */
 
-/** The four directions an arrow can point. Diagonals are deliberately absent. */
+/** The four directions an arrowhead can point. Diagonals are deliberately absent. */
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
 /** Stable identifier for an arrow, unique within a level. */
@@ -22,39 +28,33 @@ export type ArrowId = string;
 /**
  * A cell index: `row * cols + col`.
  *
- * Exists because the hot path (walking an arrow's ray and testing occupancy) runs
- * millions of times inside the solver. A single integer key into a flat typed
- * array is dramatically faster than allocating `{row, col}` pairs per step.
+ * Exists because the hot path (walking a head's ray and testing occupancy) runs
+ * many thousands of times per level inside the solver. A single integer key into
+ * a flat typed array is dramatically faster than allocating `{row, col}` pairs.
  */
 export type CellIndex = number;
 
-/** Sentinel stored in `BoardState.positions` for an arrow that has left the board. */
-export const ESCAPED = -1;
-
-/** Sentinel stored in `BoardState.occupancy` for a cell with no arrow on it. */
+/** Sentinel stored in `BoardState.occupancy` for a cell no arrow sits on. */
 export const EMPTY = -1;
-
-/**
- * Which rule set a level is played under.
- *
- * - `escape-only`  — the rule as written in the GDD. A tapped arrow flies off if
- *   its path is clear; if anything blocks it, *nothing happens at all*.
- * - `slide-and-stop` — a blocked arrow slides as far as it can and stops just
- *   short of the blocker, taking up a new cell and blocking different arrows.
- *
- * This is a variant rather than a hardcoded rule because the two produce very
- * different games, and which one ArrowPath ships is still an open design
- * decision. See `docs/MECHANIC_ANALYSIS.md` — under `escape-only`, removing an
- * arrow can never block another arrow, so tap order provably cannot matter.
- */
-export type RuleVariant = 'escape-only' | 'slide-and-stop';
 
 /** An arrow as authored in level JSON. */
 export interface ArrowSpec {
   readonly id: ArrowId;
-  readonly row: number;
-  readonly col: number;
-  readonly dir: Direction;
+  /**
+   * The arrow's cells, **head first**. Consecutive entries must be orthogonally
+   * adjacent — the body is a connected, non-self-touching path.
+   */
+  readonly body: readonly (readonly [row: number, col: number])[];
+  /**
+   * Which way the arrowhead points.
+   *
+   * Optional, and normally omitted: for a body of two or more cells the direction
+   * is *inferred* from the last segment, because an arrowhead always continues
+   * the line it is drawn on. Only a single-cell arrow needs it stated. When it is
+   * supplied alongside a longer body it is validated against the geometry, which
+   * catches hand-editing mistakes in level files.
+   */
+  readonly dir?: Direction;
 }
 
 /**
@@ -67,12 +67,12 @@ export interface LevelDefinition {
   readonly name: string;
   readonly rows: number;
   readonly cols: number;
-  /** Which shape mask the generator used. Purely descriptive/visual. */
+  /** Which shape mask the generator used ('heart', 'diamond', …). Descriptive only. */
   readonly layout: string;
   /** Curated difficulty band, 1–5. Assigned by a human, informed by metrics. */
   readonly difficulty: number;
-  /** Defaults to `escape-only` when absent, matching the original GDD rule. */
-  readonly variant?: RuleVariant;
+  /** Wrong taps the player may make before the level fails. Defaults to 5. */
+  readonly hearts?: number;
   readonly arrows: readonly ArrowSpec[];
   /** Canonical winning tap order, written by the validator. Verified in CI. */
   readonly solution?: readonly ArrowId[];
@@ -81,9 +81,10 @@ export interface LevelDefinition {
 /** Per-arrow data that never changes while a level is being played. */
 export interface Arrow {
   readonly id: ArrowId;
+  /** Direction the head points, and therefore the direction the arrow exits. */
   readonly dir: Direction;
-  /** Where this arrow starts. Restart returns every arrow here. */
-  readonly startCell: CellIndex;
+  /** Cells occupied, head first. `body[0]` is the arrowhead. */
+  readonly body: readonly CellIndex[];
   /** Row delta of `dir`, precomputed to keep the ray walk branch-free. */
   readonly dr: number;
   /** Column delta of `dir`. */
@@ -91,33 +92,34 @@ export interface Arrow {
 }
 
 /**
- * The static half of a level in play: geometry, rule variant, and arrow identity.
+ * The static half of a level in play: geometry and arrow identity.
  *
- * Split from `BoardState` so the solver can explore thousands of states while
- * allocating nothing but a small position array per state.
+ * Split from `BoardState` so the solver can explore many states while allocating
+ * nothing but a small typed array per state.
  */
 export interface Board {
   readonly rows: number;
   readonly cols: number;
   readonly cellCount: number;
-  readonly variant: RuleVariant;
   /** Indexed by arrow index. Index — not id — is the currency inside the engine. */
   readonly arrows: readonly Arrow[];
 }
 
 /**
- * The mutable half: where every arrow currently is.
+ * The mutable half: which arrows are still on the board.
  *
- * Treated as immutable by every exported function — `applyOutcome` returns a new
- * state and never edits the one it was given. (The typed arrays cannot be marked
- * `readonly` at the element level in TypeScript, so this is a convention the
- * tests enforce rather than something the compiler can prove.) The solver has an
- * internal mutable fast path that never escapes its own module.
+ * An arrow is either fully present or fully gone — there is no partial state,
+ * because a tap either clears the whole snake or changes nothing at all.
+ *
+ * Treated as immutable by every exported function: `applyOutcome` returns a new
+ * state and never edits the one it was given. (TypeScript cannot mark typed-array
+ * elements `readonly`, so this is a convention the tests enforce rather than
+ * something the compiler proves.)
  */
 export interface BoardState {
-  /** arrow index → `CellIndex`, or `ESCAPED`. */
-  readonly positions: Int32Array;
-  /** `CellIndex` → arrow index, or `EMPTY`. Kept in sync with `positions`. */
+  /** arrow index → 1 if still on the board, 0 if it has escaped. */
+  readonly alive: Uint8Array;
+  /** `CellIndex` → arrow index, or `EMPTY`. Kept in sync with `alive`. */
   readonly occupancy: Int32Array;
   /** How many arrows are still on the board. Cheap win check. */
   readonly remaining: number;
@@ -126,32 +128,28 @@ export interface BoardState {
 /**
  * What happened when the player tapped an arrow.
  *
- * A discriminated union rather than a boolean because the view needs to react
- * differently to each case: fly off, slide to a new cell, or shake in place.
+ * A discriminated union rather than a boolean because the view reacts very
+ * differently to each case: thread the snake off the board, or flash it red and
+ * dock a heart.
  */
 export type MoveOutcome =
   | {
-      /** Path was clear — the arrow leaves the board and is gone for good. */
+      /** The head's ray was clear — the whole snake threads out and is gone. */
       readonly kind: 'escaped';
       readonly arrowIndex: number;
-      readonly from: CellIndex;
-      /** Cells travelled to fully clear the board. Drives the exit animation. */
-      readonly distance: number;
+      readonly headCell: CellIndex;
+      /** Cells from the head to just past the edge. Drives the exit animation. */
+      readonly exitDistance: number;
+      /** Body length, so the view knows how long the tail takes to follow. */
+      readonly bodyLength: number;
     }
   | {
-      /** `slide-and-stop` only: moved forward but stopped short of a blocker. */
-      readonly kind: 'moved';
-      readonly arrowIndex: number;
-      readonly from: CellIndex;
-      readonly to: CellIndex;
-      readonly distance: number;
-      readonly blockerIndex: number;
-    }
-  | {
-      /** Could not move at all. The view shakes the arrow; state is unchanged. */
+      /** Something stands in the head's way. Costs a heart; the board is unchanged. */
       readonly kind: 'blocked';
       readonly arrowIndex: number;
       readonly blockerIndex: number;
+      /** Where the collision happens — the view flashes this cell. */
+      readonly blockedAt: CellIndex;
     }
   | {
       /** The tap was not a legal request (bad index, or already gone). */
@@ -159,8 +157,27 @@ export type MoveOutcome =
       readonly reason: 'unknown-arrow' | 'already-escaped';
     };
 
-/** High-level state of a level in progress, derived from `BoardState`. */
-export type GameStatus = 'playing' | 'won' | 'deadlocked';
+/** How a level in progress can end. */
+export type GameStatus = 'playing' | 'won' | 'failed';
+
+/**
+ * A level in progress: the board plus the player's remaining hearts.
+ *
+ * Hearts live here rather than in `BoardState` because they are a property of
+ * *this attempt*, not of the board. The solver and the level validator reason
+ * about boards and must never see or care about lives.
+ */
+export interface PlaySession {
+  readonly state: BoardState;
+  readonly heartsLeft: number;
+  readonly maxHearts: number;
+  readonly status: GameStatus;
+  /** Wrong taps so far. Drives the "how hard was this for you" curation signal. */
+  readonly mistakes: number;
+}
+
+/** Default hearts per level, matching the reference game's five. */
+export const DEFAULT_HEARTS = 5;
 
 /**
  * Success-or-explanation return type.
@@ -169,7 +186,9 @@ export type GameStatus = 'playing' | 'won' | 'deadlocked';
  * typed value, never a thrown exception, so a malformed level file can never
  * crash gameplay.
  */
-export type Result<T, E = string> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: E };
+export type Result<T, E = string> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: E };
 
 /** Build a successful `Result`. */
 export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
