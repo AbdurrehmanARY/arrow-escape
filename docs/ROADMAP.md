@@ -79,7 +79,27 @@
 **Why this before more levels:** the roadmap gates level packs on playtesting the 50, and a playtester who does not understand the rule tests nothing useful.
 **Gate.**
 
+## Phase 11 — 600 levels, 74 shapes, oversized boards ✅
+**Objective:** the full library, at the scale and variety the game is meant to ship with.
+**Files:** `tools/shapeArt.ts`, `tools/shapes.ts`, `tools/curriculum.ts`, `tools/generate.ts`, `tools/build-levels.ts`, `src/game/codec.ts`, `src/components/BoardViewport.tsx`, `src/data/levels/pack-*.json`.
+**Deliverables:**
+- **600 levels** in five tiers, every one solver-verified with its solution replayed.
+- **74 silhouettes** — symbols, objects, nature, food, technology, seasonal, abstract — sampled to any board size.
+- **Mixed progression after level 20.** Tier drawn from a weighted mix that shifts across the game, so difficulty climbs on average while any single level is unpredictable.
+- **Pan and zoom** for the 271 boards larger than a phone screen, with camera constraints and touch that stays exact at every zoom level.
+- **Compact encoding**: all 600 levels in 159 KB, shipped as 12 packs rather than 600 modules.
+
+**What made it work:** the generator *repairs* unsolvable boards instead of resampling them. At Extreme densities almost every random board contains a blocking cycle, so resampling is close to hopeless — but reversing a body flips that arrow's exit direction without touching the silhouette, and every cycle must contain a stuck arrow. That change turned a hard build failure at level 157 into all 600 levels in 28 seconds.
+
+**Gate.**
+
 ---
 
-### After v0.1
-Only once 50 levels are tested and approved do we begin additional level packs toward 600, and reconsider deferred features one at a time against the puzzle philosophy.
+### After this
+The library is complete. The next real work is **validating the curve against
+players** — `expectedBlindMistakes` models a random tapper, not a human, so the
+true difficulty sits somewhere below the model. Every level's difficulty is one
+number in `tools/curriculum.ts` and a 28-second rebuild away.
+
+Deferred features stay deferred, and each gets weighed against the puzzle
+philosophy one at a time.

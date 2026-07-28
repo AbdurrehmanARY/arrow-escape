@@ -175,3 +175,48 @@ export function fitCellSize(
     Math.min(maxWidth / (cols + padCells * 2), maxHeight / (rows + padCells * 2)),
   );
 }
+
+export interface BoardLayout {
+  readonly cellSize: number;
+  readonly width: number;
+  readonly height: number;
+  readonly originX: number;
+  readonly originY: number;
+  /** True when the board is larger than the space it was given. */
+  readonly oversized: boolean;
+}
+
+/**
+ * Work out how big to draw a board.
+ *
+ * The `minCellSize` floor is what makes oversized levels playable rather than
+ * merely visible. Fitting a 27x30 board to a phone would give roughly 12dp cells
+ * — too small to read a head, and far too small to tap reliably. Instead the
+ * board is drawn at a usable size and allowed to overflow, and `BoardViewport`
+ * gives the player pan and zoom to reach the rest of it.
+ *
+ * Shared by the board and by whatever sizes its viewport, so there is one answer
+ * to "how big is this board" rather than two that can disagree.
+ */
+export function computeBoardLayout(
+  rows: number,
+  cols: number,
+  padCells: number,
+  maxWidth: number,
+  maxHeight: number,
+  minCellSize: number,
+): BoardLayout {
+  const fitted = fitCellSize(rows, cols, padCells, maxWidth, maxHeight);
+  const cellSize = Math.max(minCellSize, fitted);
+  const width = cellSize * (cols + padCells * 2);
+  const height = cellSize * (rows + padCells * 2);
+
+  return {
+    cellSize,
+    width,
+    height,
+    originX: cellSize * padCells,
+    originY: cellSize * padCells,
+    oversized: width > maxWidth + 0.5 || height > maxHeight + 0.5,
+  };
+}

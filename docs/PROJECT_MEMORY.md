@@ -1,15 +1,16 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 10 — first-run teaching, state-layer tests, and lint. Awaiting device testing, audio assets, and store accounts.
+> **Last updated:** end of Phase 11 — 600 levels, 74 silhouettes, oversized boards with pan and zoom.
 
 ---
 
 ## Status
 
-**Phases 1–9 are code-complete.** The game is playable end to end: 50 generated
-and solver-verified levels, six themes, animation, hearts, hints, persistence,
-navigation, settings, and an ads path that is implemented but switched off.
+**Code-complete at 600 levels.** Playable end to end: 600 generated and
+solver-verified levels across 74 silhouettes and five difficulty tiers, six
+themes, animation, hearts, hints, persistence, navigation, settings, first-run
+teaching, and an ads path that is implemented but switched off.
 
 What is *not* done is everything that needs your accounts or your assets — audio
 files, an app icon, an AdMob account, a Play Console listing. Those are listed in
@@ -59,7 +60,16 @@ wrong *plans*, are the failure mode. Full proof and the difficulty model are in
 23. **`.npmrc` pins `legacy-peer-deps=true`.** Expo 57 ships a `react-dom` whose peer range excludes the pinned React; mixing strict and legacy installs against one tree prunes packages and silently breaks the babel/jest toolchains.
 24. **Metro caches transformed code with the compiling plugin's version baked in.** Any dependency version change needs `npm run start:clear`, or you get an error naming two versions of a package that only exists once. `start:tunnel` clears by default.
 25. **A `require` of a missing asset cannot be caught.** Metro resolves it at build time, so try/catch is wishful thinking and the app ships a broken module-graph entry. Optional assets go in an explicit registry (`services/audioAssets.ts`) that starts empty.
-26. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
+26. **Levels are stored as walks, not coordinate lists.** A body is a head plus one character per step (`"4,7:DDRR"`), which is roughly a quarter the size of `[[r,c],…]`. All 600 levels are 159 KB.
+27. **Levels ship in packs of 50, not one file each.** Metro charges real overhead per module and nothing ever needs a level in isolation. 12 modules instead of 600, decoded on demand and cached.
+28. **Silhouettes are bitmaps, not formulas.** A circle is an inequality; a guitar is not. 74 hand-drawn 16x16 outlines, supersampled to any board size — point sampling loses thin features like a crown's points at small sizes.
+29. **Masks are repaired after sampling.** Isolated cells and regions too small to hold a snake are pruned, so reported capacity is capacity the generator can actually reach. Without it, generation starves for reasons that look mysterious.
+30. **The generator repairs unsolvable boards rather than resampling.** Solvability needs an acyclic blocking graph, and at Extreme densities nearly every random board has a cycle. Reversing a body flips that arrow's exit direction without touching the silhouette, and every cycle contains a stuck arrow — so flipping stuck arrows breaks cycles far more often than it creates them. This turned a hard build failure at level 157 into all 600 levels in 28 seconds.
+31. **Difficulty is mixed, not monotonic, after level 20.** A predictable ramp is what makes a long game feel like a treadmill. Tiers are drawn from a weighted mix that shifts across the game, so the average climbs while any single level is a surprise. The last ten are forced to Extreme so the game does not end on a shrug.
+32. **Oversized boards have a minimum cell size and pan instead of shrinking.** Fitting a 27x30 board to a phone gives ~12dp cells: unreadable and untappable. Cells stay at 26dp and the viewport scrolls.
+33. **Touch stays exact at every zoom level for free**, because the per-cell targets live inside the transformed view. No coordinate conversion by hand, which is where this normally breaks.
+34. **The grid is one tiled SVG pattern, not one node per cell.** An 810-cell board would otherwise cost more in grid nodes than in every arrow combined.
+35. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
 
 ### Reversed along the way
 - The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`.

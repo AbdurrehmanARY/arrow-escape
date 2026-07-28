@@ -1,79 +1,162 @@
 /**
  * app/levels.tsx — level select.
  *
- * Purpose:      Show the whole curve at a glance: what is done, what is next, and
- *               what is still locked.
- * Notes:        Levels unlock in sequence, and the unlock point is *derived* from
- *               the completed set rather than stored, so it cannot drift out of
- *               sync and strand a player (see `progressStore`).
+ * Purpose:      Navigate 600 levels without it feeling like a spreadsheet.
+ * Notes:        Two things change at this scale. The list has to be virtualised
+ *               with a fixed row height, or scrolling 600 tiles stutters — hence
+ *               `getItemLayout`, which lets it jump without measuring. And it has
+ *               to open *where the player is*, because scrolling to level 400 by
+ *               hand every session is nobody's idea of a menu.
  *
- *               A cleared level shows whether it was read cleanly. That is the
- *               only mastery marker in v0.1 and it costs nothing to offer — no
- *               stars, no scores, just "you did this without a wrong tap".
+ *               Tier is shown as a colour stripe rather than a word. At five
+ *               tiles per row a label is unreadable, but a stripe is legible in
+ *               peripheral vision — and it makes the mixed curve visible, which is
+ *               a design point rather than an accident.
+ *
+ *               Unlocking is *derived* from the completed set rather than stored,
+ *               so it cannot drift and strand a player outside a level they have
+ *               already finished.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { IconButton, Screen, useTheme } from '@components';
-import { LEVELS, LEVEL_COUNT } from '@data/levels';
+import { TIER_LABELS, type DifficultyTier } from '@game/codec';
+import { ENCODED_LEVELS, LEVEL_COUNT } from '@data/levels';
 import { highestUnlocked, useProgressStore, type LevelRecord } from '@state/progressStore';
 import { radius, spacing, typography, type Palette } from '@theme';
 
-/** The four bands from GDD §6, used as section headings. */
-function bandFor(id: number): string {
-  if (id <= 10) return 'Onboarding';
-  if (id <= 25) return 'Foundations';
-  if (id <= 40) return 'Tightening';
-  return 'Mastery';
+const COLUMNS = 5;
+const TILE_MARGIN = spacing.sm;
+/** Fixed so the list can lay out 600 rows without measuring any of them. */
+const ROW_HEIGHT = 74;
+
+interface Row {
+  readonly key: string;
+  readonly ids: number[];
+}
+
+/** Tier colour, from the active palette so it reskins with the theme. */
+function tierColor(palette: Palette, tier: DifficultyTier): string {
+  switch (tier) {
+    case 'easy':
+      return palette.success;
+    case 'medium':
+      return palette.accent;
+    case 'hard':
+      return palette.arrowBlocker;
+    case 'superHard':
+      return palette.danger;
+    case 'extremeHard':
+      return palette.text;
+    default:
+      return palette.border;
+  }
 }
 
 export default function LevelSelectScreen() {
   const router = useRouter();
   const { palette } = useTheme();
   const records = useProgressStore((state) => state.records);
+  const listRef = useRef<FlatList<Row>>(null);
 
   const unlocked = useMemo(() => highestUnlocked(records, LEVEL_COUNT), [records]);
+
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = [];
+    for (let i = 0; i < LEVEL_COUNT; i += COLUMNS) {
+      const ids: number[] = [];
+      for (let c = 0; c < COLUMNS && i + c < LEVEL_COUNT; c += 1) ids.push(i + c + 1);
+      out.push({ key: `r${i}`, ids });
+    }
+    return out;
+  }, []);
+
+  // Open a couple of rows above where the player got to, so the next level is
+  // visible with a little context rather than pinned to the very top edge.
+  const initialIndex = Math.max(0, Math.floor((unlocked - 1) / COLUMNS) - 2);
+
+  const getItemLayout = useCallback(
+    (_data: ArrayLike<Row> | null | undefined, index: number) => ({
+      length: ROW_HEIGHT,
+      offset: ROW_HEIGHT * index,
+      index,
+    }),
+    [],
+  );
 
   return (
     <Screen>
       <View style={styles.header}>
         <IconButton palette={palette} glyph="←" label="Back" onPress={() => router.back()} />
-        <Text style={[styles.title, { color: palette.text }]}>Levels</Text>
-        <View style={styles.headerSpacer} />
+        <View style={styles.headerCentre}>
+          <Text style={[styles.title, { color: palette.text }]}>Levels</Text>
+          <Text style={[styles.subtitle, { color: palette.textFaint }]}>
+            {unlocked - 1} of {LEVEL_COUNT} cleared
+          </Text>
+        </View>
+        <IconButton
+          palette={palette}
+          glyph="⌖"
+          label="Jump to current level"
+          onPress={() =>
+            listRef.current?.scrollToIndex({ index: initialIndex, animated: true })
+          }
+        />
+      </View>
+
+      <View style={styles.legend}>
+        {(['easy', 'medium', 'hard', 'superHard', 'extremeHard'] as DifficultyTier[]).map(
+          (tier) => (
+            <View key={tier} style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: tierColor(palette, tier) }]} />
+              <Text style={[styles.legendLabel, { color: palette.textFaint }]}>
+                {TIER_LABELS[tier]}
+              </Text>
+            </View>
+          ),
+        )}
       </View>
 
       <FlatList
-        data={LEVELS}
-        keyExtractor={(level) => String(level.id)}
-        numColumns={4}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.list}
+        ref={listRef}
+        data={rows}
+        keyExtractor={(row) => row.key}
+        getItemLayout={getItemLayout}
+        initialScrollIndex={initialIndex}
+        initialNumToRender={14}
+        windowSize={9}
+        removeClippedSubviews
         showsVerticalScrollIndicator={false}
-        renderItem={({ item, index }) => {
-          const previousBand = index === 0 ? null : bandFor(LEVELS[index - 1]!.id);
-          const band = bandFor(item.id);
-          const record = records[item.id];
-          const locked = item.id > unlocked;
-
-          return (
-            <>
-              {band !== previousBand ? (
-                <Text style={[styles.band, { color: palette.textFaint }]}>{band}</Text>
-              ) : null}
-              <LevelTile
-                palette={palette}
-                id={item.id}
-                name={item.name}
-                record={record}
-                locked={locked}
-                current={item.id === unlocked}
-                onPress={() => router.push(`/play/${item.id}`)}
-              />
-            </>
-          );
+        contentContainerStyle={styles.list}
+        // A failed scroll (list not laid out yet) must not be fatal; retry once
+        // the frames exist rather than leaving the player at the top of 600 rows.
+        onScrollToIndexFailed={(info) => {
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({ index: info.index, animated: false });
+          }, 120);
         }}
+        renderItem={({ item }) => (
+          <View style={styles.row}>
+            {item.ids.map((id) => (
+              <LevelTile
+                key={id}
+                palette={palette}
+                id={id}
+                record={records[id]}
+                locked={id > unlocked}
+                current={id === unlocked}
+                onPress={() => router.push(`/play/${id}`)}
+              />
+            ))}
+            {/* Keep the final row's tiles the same width as every other row. */}
+            {Array.from({ length: COLUMNS - item.ids.length }, (_, i) => (
+              <View key={`pad${i}`} style={styles.tilePad} />
+            ))}
+          </View>
+        )}
       />
     </Screen>
   );
@@ -82,7 +165,6 @@ export default function LevelSelectScreen() {
 function LevelTile({
   palette,
   id,
-  name,
   record,
   locked,
   current,
@@ -90,25 +172,15 @@ function LevelTile({
 }: {
   palette: Palette;
   id: number;
-  name: string;
   record: LevelRecord | undefined;
   locked: boolean;
   current: boolean;
   onPress: () => void;
 }) {
+  const encoded = ENCODED_LEVELS[id - 1];
+  const tier = encoded?.t ?? 'easy';
   const cleared = (record?.timesCleared ?? 0) > 0;
   const perfect = cleared && record?.bestMistakes === 0;
-
-  const background = cleared
-    ? palette.successMuted
-    : current
-      ? palette.accentMuted
-      : palette.surfaceRaised;
-  const borderColor = perfect
-    ? palette.success
-    : current
-      ? palette.accent
-      : palette.border;
 
   return (
     <Pressable
@@ -116,21 +188,27 @@ function LevelTile({
       accessibilityLabel={
         locked
           ? `Level ${id}, locked`
-          : `Level ${id}, ${name}${cleared ? ', cleared' : ''}${perfect ? ', perfect read' : ''}`
+          : `Level ${id}, ${encoded?.n ?? ''}, ${TIER_LABELS[tier]}${cleared ? ', cleared' : ''}${perfect ? ', perfect read' : ''}`
       }
       accessibilityState={{ disabled: locked }}
       disabled={locked}
       onPress={onPress}
       style={({ pressed }) => [
         styles.tile,
-        { backgroundColor: background, borderColor, opacity: locked ? 0.4 : 1 },
+        {
+          backgroundColor: cleared
+            ? palette.successMuted
+            : current
+              ? palette.accentMuted
+              : palette.surfaceRaised,
+          borderColor: current ? palette.accent : palette.border,
+          opacity: locked ? 0.35 : 1,
+        },
         pressed && styles.pressed,
       ]}
     >
+      <View style={[styles.tierStripe, { backgroundColor: tierColor(palette, tier) }]} />
       <Text style={[styles.tileNumber, { color: palette.text }]}>{locked ? '🔒' : id}</Text>
-      <Text numberOfLines={1} style={[styles.tileName, { color: palette.textFaint }]}>
-        {locked ? '' : name}
-      </Text>
       {perfect ? <Text style={[styles.perfect, { color: palette.success }]}>♥</Text> : null}
     </Pressable>
   );
@@ -138,31 +216,37 @@ function LevelTile({
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerSpacer: { width: 44 },
+  headerCentre: { alignItems: 'center' },
   title: { ...typography.title },
+  subtitle: { ...typography.tiny, marginTop: 1 },
 
-  list: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
-  row: { gap: spacing.sm, marginBottom: spacing.sm },
-  band: {
-    ...typography.tiny,
-    letterSpacing: 1.2,
-    width: '100%',
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
   },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendDot: { width: 8, height: 8, borderRadius: 3 },
+  legendLabel: { ...typography.tiny },
+
+  list: { paddingBottom: spacing.xxl },
+  row: { flexDirection: 'row', gap: TILE_MARGIN, height: ROW_HEIGHT, paddingVertical: spacing.xs },
 
   tile: {
     flexGrow: 1,
     flexBasis: 0,
-    aspectRatio: 1,
     borderRadius: radius.md,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    overflow: 'hidden',
   },
+  tilePad: { flexGrow: 1, flexBasis: 0 },
   pressed: { opacity: 0.6 },
-  tileNumber: { ...typography.heading, fontSize: 19, fontVariant: ['tabular-nums'] },
-  tileName: { ...typography.tiny, fontSize: 9, marginTop: 1 },
-  perfect: { position: 'absolute', top: 4, right: 6, fontSize: 10 },
+  tierStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 4 },
+  tileNumber: { ...typography.heading, fontSize: 17, fontVariant: ['tabular-nums'] },
+  perfect: { position: 'absolute', bottom: 3, right: 5, fontSize: 9 },
 });

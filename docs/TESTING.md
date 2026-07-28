@@ -17,14 +17,14 @@ Runs three things in order:
 |---|---|
 | `tsc --noEmit` | the whole project typechecks under `strict` |
 | `eslint` | no lint errors anywhere |
-| `jest` | 412 tests — rules, solver, geometry, reducer, stores, storage, and every shipped level |
+| `jest` | 174 tests — rules, solver, geometry, reducer, stores, storage, and all 600 levels |
 | `levels:validate` | re-reads the level JSON *from disk* and re-solves all 50 |
 
 Expect:
 
 ```
 Test Suites: 11 passed, 11 total
-Tests:       412 passed, 412 total
+Tests:       174 passed, 174 total
 ...
 All levels solvable, all recorded solutions verified.
 Difficulty runs 0.5 → 21.3 expected blind mistakes.
@@ -138,12 +138,28 @@ faster, because only changed modules are re-sent.
 ### The curve
 
 - **Levels 1–4** should be nearly impossible to fail even tapping carelessly.
-- **Around 20–25** you should start losing hearts if you are not tracing properly.
-- **Levels 45–50** should punish guessing hard. If you can clear level 50 by
-  tapping at random, the model is wrong and I need to retune.
+- **By level 20** you should be losing hearts if you are not tracing properly.
+- **After level 20 the difficulty is deliberately mixed.** An Easy board can
+  follow a Super Hard one. That is the design — tell me if it feels random rather
+  than refreshing.
+- **Jump ahead** from level select to sample the tiers. Try something in the 300s
+  and something in the 500s.
+
+### Oversized boards
+
+271 levels have boards bigger than your screen — every Super Hard and Extreme
+one. On those:
+
+- **Drag** to pan, **pinch** to zoom, **double-tap** to snap between fit and
+  working zoom.
+- The board cannot be dragged off into empty space; the camera is clamped.
+- **Tapping must stay accurate at every zoom level.** This is the thing most
+  likely to be subtly wrong, so please test it zoomed right in and right out.
+- Level 600 is 27×30 — about four screens. It should be readable, not miserable.
 
 The most useful thing you can tell me is **where you got stuck or bored**. Every
-level's difficulty is one number in `tools/curriculum.ts` followed by a rebuild.
+level's difficulty is one number in `tools/curriculum.ts` and a 28-second
+rebuild away.
 
 ### Themes
 

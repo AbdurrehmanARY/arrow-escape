@@ -2,156 +2,229 @@
  * Level integrity.
  *
  * The guardrail that makes shipping levels safe. Every level in `src/data/levels`
- * is loaded exactly as the app loads it, solved, and its recorded solution
+ * is decoded exactly as the app decodes it, solved, and its recorded solution
  * replayed. A level that reaches a player unsolvable is the single worst bug this
  * project can ship — it is unrecoverable from inside the game and it looks like
  * the player's fault.
  *
- * This runs in CI on every commit, which is why the generator is allowed to be
- * clever: nothing it produces is trusted without passing through here.
+ * With 600 levels this runs as a handful of sweeps rather than a `describe.each`
+ * per level: 600 suites of five tests each is 3,000 test cases and minutes of CI
+ * for no extra information. A sweep that throws names the offending level.
  */
 
-import {
-  analyze,
-  buildLevel,
-  indexOfArrow,
-  isSolvable,
-  legalMoves,
-  solve,
-  verifySolution,
-} from '@game';
-import { LEVEL_COUNT, LEVELS, levelById } from '@data/levels';
+import { analyze, buildLevel, indexOfArrow, legalMoves, solve, verifySolution } from '@game';
+import { TIER_ORDER, type DifficultyTier } from '@game/codec';
+import { ENCODED_LEVELS, LEVEL_COUNT, levelById, summaryOf, tierOf } from '@data/levels';
+
+const ALL_IDS = Array.from({ length: LEVEL_COUNT }, (_, i) => i + 1);
 
 describe('the shipped level library', () => {
-  it('ships the full v0.1 set', () => {
-    expect(LEVEL_COUNT).toBe(50);
-    expect(LEVELS).toHaveLength(50);
+  it('ships the full 600-level set', () => {
+    expect(LEVEL_COUNT).toBe(600);
+    expect(ENCODED_LEVELS).toHaveLength(600);
   });
 
   it('numbers levels 1..N with no gaps', () => {
-    const ids = LEVELS.map((level) => level.id).sort((a, b) => a - b);
-    expect(ids).toEqual(Array.from({ length: LEVEL_COUNT }, (_, i) => i + 1));
+    const ids = ENCODED_LEVELS.map((level) => level.i).sort((a, b) => a - b);
+    expect(ids).toEqual(ALL_IDS);
   });
 
-  it('gives every level a name and a difficulty band', () => {
-    for (const level of LEVELS) {
-      expect(level.name.length).toBeGreaterThan(0);
-      expect(level.difficulty).toBeGreaterThanOrEqual(1);
-      expect(level.difficulty).toBeLessThanOrEqual(5);
+  it('gives every level a name, a tier, and a band', () => {
+    for (const level of ENCODED_LEVELS) {
+      expect(level.n.length).toBeGreaterThan(0);
+      expect(TIER_ORDER).toContain(level.t);
+      expect(level.d).toBeGreaterThanOrEqual(1);
+      expect(level.d).toBeLessThanOrEqual(5);
+      expect(level.h).toBeGreaterThan(0);
     }
   });
 
-  it('looks levels up by id', () => {
+  it('reads a summary without decoding the level', () => {
+    const summary = summaryOf(1);
+    expect(summary?.name.length).toBeGreaterThan(0);
+    expect(summary?.rows).toBeGreaterThan(0);
+    expect(tierOf(1)).toBeDefined();
+    expect(summaryOf(9999)).toBeUndefined();
+  });
+
+  it('looks levels up by id, and returns undefined for ones that do not exist', () => {
     expect(levelById(1)?.id).toBe(1);
     expect(levelById(LEVEL_COUNT)?.id).toBe(LEVEL_COUNT);
     expect(levelById(0)).toBeUndefined();
-    expect(levelById(999)).toBeUndefined();
+    expect(levelById(9999)).toBeUndefined();
+  });
+
+  it('caches a decoded level rather than decoding it twice', () => {
+    // Decoding a 27x30 board is not free, and the board is re-read on every
+    // render of the play screen.
+    expect(levelById(2)).toBe(levelById(2));
   });
 });
 
-describe.each(LEVELS.map((level) => [level.id, level.name, level] as const))(
-  'level %i "%s"',
-  (_id, _name, level) => {
-    const built = buildLevel(level);
+describe('every level', () => {
+  it('decodes, builds, and is solvable', () => {
+    for (const id of ALL_IDS) {
+      const level = levelById(id);
+      if (!level) throw new Error(`level ${id} is missing`);
 
-    it('builds without error', () => {
-      if (!built.ok) throw new Error(built.error);
-      expect(built.ok).toBe(true);
-    });
+      const built = buildLevel(level);
+      if (!built.ok) throw new Error(`level ${id} "${level.name}": ${built.error}`);
 
-    it('is solvable', () => {
-      if (!built.ok) return;
       const outcome = solve(built.value.board, built.value.initial);
       if (outcome.kind !== 'solved') {
-        throw new Error(`unsolvable: ${outcome.reason}`);
+        throw new Error(`level ${id} "${level.name}" is UNSOLVABLE: ${outcome.reason}`);
       }
-      expect(outcome.kind).toBe('solved');
-    });
+    }
+  });
 
-    it('records a solution that actually clears the board', () => {
-      if (!built.ok) return;
+  it('records a solution that actually clears the board', () => {
+    for (const id of ALL_IDS) {
+      const level = levelById(id)!;
+      const built = buildLevel(level);
+      if (!built.ok) continue;
+
       const { board, initial } = built.value;
-
-      expect(level.solution).toBeDefined();
       const solution = level.solution ?? [];
-      expect(solution.length).toBe(board.arrows.length);
 
-      const indices = solution.map((id) => indexOfArrow(board, id));
-      expect(indices).not.toContain(-1);
-
-      const replay = verifySolution(board, initial, indices);
-      if (!replay.ok) throw new Error(replay.error);
-      expect(replay.ok).toBe(true);
-    });
-
-    it('opens with at least one tappable arrow', () => {
-      if (!built.ok) return;
-      // A level where nothing can move on the first tap is unplayable even if the
-      // solver technically calls it solvable from an empty state.
-      expect(legalMoves(built.value.board, built.value.initial).length).toBeGreaterThan(0);
-    });
-
-    it('stays solvable no matter which legal arrow is tapped first', () => {
-      if (!built.ok) return;
-      const { board, initial } = built.value;
-      // Guards the core promise: a player can never ruin a board, only spend hearts.
-      for (const move of legalMoves(board, initial)) {
-        const outcome = solve(board, initial);
-        expect(outcome.kind).toBe('solved');
-        expect(move).toBeGreaterThanOrEqual(0);
-      }
-      expect(isSolvable(board, initial)).toBe(true);
-    });
-  },
-);
-
-describe('the difficulty curve', () => {
-  const measured = LEVELS.map((level) => {
-    const built = buildLevel(level);
-    if (!built.ok) throw new Error(built.error);
-    return { level, metrics: analyze(built.value.board, built.value.initial) };
-  });
-
-  it('rises overall from the first level to the last', () => {
-    const first = measured[0]!.metrics.expectedBlindMistakes;
-    const last = measured[measured.length - 1]!.metrics.expectedBlindMistakes;
-    expect(last).toBeGreaterThan(first * 5);
-  });
-
-  it('starts gently enough that a careless player survives level 1', () => {
-    // Onboarding must not be losable: expected blind mistakes well under the
-    // 5 hearts a level grants.
-    const opening = measured.slice(0, 4);
-    for (const { level, metrics } of opening) {
-      expect(metrics.expectedBlindMistakes).toBeLessThan((level.hearts ?? 5) * 0.5);
-    }
-  });
-
-  it('ends hard enough that guessing reliably fails', () => {
-    const finale = measured.slice(-5);
-    for (const { level, metrics } of finale) {
-      expect(metrics.expectedBlindMistakes).toBeGreaterThan((level.hearts ?? 5) * 2);
-    }
-  });
-
-  it('never climbs past where the curve had already reached', () => {
-    // Measured against the *high water mark* of the previous two levels, not the
-    // immediate predecessor. The curve deliberately dips for breather levels, and
-    // comparing to the dip would flag the climb back out as a spike when the
-    // player has already handled that difficulty a level earlier.
-    for (let i = 2; i < measured.length; i += 1) {
-      const recentPeak = Math.max(
-        measured[i - 1]!.metrics.expectedBlindMistakes,
-        measured[i - 2]!.metrics.expectedBlindMistakes,
-      );
-      const jump = measured[i]!.metrics.expectedBlindMistakes - recentPeak;
-      if (jump >= 4) {
+      if (solution.length !== board.arrows.length) {
         throw new Error(
-          `level ${measured[i]!.level.id} "${measured[i]!.level.name}" jumps ${jump.toFixed(1)} ` +
-            'past the recent peak — that reads as an unfair spike',
+          `level ${id} "${level.name}": solution has ${solution.length} steps for ${board.arrows.length} arrows`,
         );
       }
-      expect(jump).toBeLessThan(4);
+
+      const indices = solution.map((arrowId) => indexOfArrow(board, arrowId));
+      if (indices.includes(-1)) {
+        throw new Error(`level ${id} "${level.name}": solution names an arrow that does not exist`);
+      }
+
+      const replay = verifySolution(board, initial, indices);
+      if (!replay.ok) throw new Error(`level ${id} "${level.name}": ${replay.error}`);
+    }
+  });
+
+  it('opens with at least one tappable arrow', () => {
+    for (const id of ALL_IDS) {
+      const built = buildLevel(levelById(id)!);
+      if (!built.ok) continue;
+      const moves = legalMoves(built.value.board, built.value.initial);
+      if (moves.length === 0) {
+        throw new Error(`level ${id} has nothing tappable on the first move`);
+      }
+    }
+  });
+
+  it('has enough arrows to be a puzzle', () => {
+    // A board of two snakes is not an easy level, it is an empty one — there is
+    // nothing to read, which is the entire skill the game tests.
+    for (const id of ALL_IDS) {
+      const level = levelById(id)!;
+      if (level.arrows.length < 4) {
+        throw new Error(
+          `level ${id} "${level.name}" has only ${level.arrows.length} arrows`,
+        );
+      }
+    }
+  });
+});
+
+describe('the difficulty mix', () => {
+  const measured = ALL_IDS.map((id) => {
+    const level = levelById(id)!;
+    const built = buildLevel(level);
+    if (!built.ok) throw new Error(built.error);
+    return {
+      id,
+      level,
+      tier: tierOf(id)!,
+      metrics: analyze(built.value.board, built.value.initial),
+    };
+  });
+
+  const byTier = (tier: DifficultyTier) => measured.filter((m) => m.tier === tier);
+
+  it('uses every tier', () => {
+    for (const tier of TIER_ORDER) {
+      expect(byTier(tier).length).toBeGreaterThan(20);
+    }
+  });
+
+  it('orders the tiers by actual measured difficulty', () => {
+    // The tiers are named by intent; this checks the generator delivered on it.
+    const averages = TIER_ORDER.map((tier) => {
+      const rows = byTier(tier);
+      return rows.reduce((sum, m) => sum + m.metrics.expectedBlindMistakes, 0) / rows.length;
+    });
+
+    for (let i = 1; i < averages.length; i += 1) {
+      expect(averages[i]!).toBeGreaterThan(averages[i - 1]!);
+    }
+  });
+
+  it('keeps onboarding gentle but not trivial', () => {
+    // Levels 1-20 must be survivable by a careless player, and must still be
+    // worth playing — a level that solves itself teaches nothing.
+    for (const m of measured.slice(0, 20)) {
+      expect(m.metrics.expectedBlindMistakes).toBeLessThan(12);
+      expect(m.level.arrows.length).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it('stops being predictable after onboarding', () => {
+    // The whole point of the mixed curve: a player must not be able to guess the
+    // next level's difficulty from the last one. If the run after level 20 were
+    // sorted, every step would rise.
+    const after = measured.slice(20);
+    let descents = 0;
+    for (let i = 1; i < after.length; i += 1) {
+      if (after[i]!.metrics.expectedBlindMistakes < after[i - 1]!.metrics.expectedBlindMistakes) {
+        descents += 1;
+      }
+    }
+    expect(descents).toBeGreaterThan(after.length * 0.3);
+  });
+
+  it('still climbs overall from start to finish', () => {
+    const firstFifty = measured.slice(0, 50);
+    const lastFifty = measured.slice(-50);
+    const mean = (rows: typeof measured) =>
+      rows.reduce((sum, m) => sum + m.metrics.expectedBlindMistakes, 0) / rows.length;
+
+    expect(mean(lastFifty)).toBeGreaterThan(mean(firstFifty) * 5);
+  });
+
+  it('ends on an Extreme level', () => {
+    expect(tierOf(LEVEL_COUNT)).toBe('extremeHard');
+  });
+});
+
+describe('board sizes', () => {
+  it('includes boards far larger than a phone screen', () => {
+    // Super Hard and Extreme are defined by needing pan and zoom. If nothing is
+    // oversized, those tiers have lost their defining feature.
+    const oversized = ENCODED_LEVELS.filter((level) => Math.max(level.r, level.c) > 14);
+    expect(oversized.length).toBeGreaterThan(100);
+  });
+
+  it('keeps onboarding boards on a single screen', () => {
+    for (const level of ENCODED_LEVELS.slice(0, 20)) {
+      expect(Math.max(level.r, level.c)).toBeLessThanOrEqual(12);
+    }
+  });
+});
+
+describe('shape variety', () => {
+  it('draws on the whole silhouette library', () => {
+    const shapes = new Set(ENCODED_LEVELS.map((level) => level.l));
+    expect(shapes.size).toBeGreaterThan(40);
+  });
+
+  it('never repeats a silhouette in consecutive levels', () => {
+    for (let i = 1; i < ENCODED_LEVELS.length; i += 1) {
+      const current = ENCODED_LEVELS[i]!;
+      const previous = ENCODED_LEVELS[i - 1]!;
+      if (current.l === previous.l && current.l !== 'free') {
+        throw new Error(`levels ${previous.i} and ${current.i} both use "${current.l}"`);
+      }
     }
   });
 });

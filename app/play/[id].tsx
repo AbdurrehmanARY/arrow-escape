@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 
 import {
   BoardCanvas,
+  BoardViewport,
   CoachCard,
   ConfirmDialog,
   FailOverlay,
@@ -27,6 +28,7 @@ import {
   PillButton,
   Screen,
   WinOverlay,
+  computeBoardLayout,
   useTheme,
 } from '@components';
 import { buildLevel, findAllSafeMoves, findSafeMove } from '@game';
@@ -41,7 +43,17 @@ import { useSettingsStore } from '@state/settingsStore';
 import { radius, spacing, typography } from '@theme';
 
 /** Chrome above and below the board that the board must not overlap. */
-const CHROME_HEIGHT = 250;
+const CHROME_HEIGHT = 270;
+
+/**
+ * Smallest a cell may be drawn.
+ *
+ * Below roughly this an arrowhead stops being readable and a tap stops being
+ * reliable, so an oversized board is drawn at this size and panned rather than
+ * squeezed onto the screen. It is the number that turns "the board does not fit"
+ * from a rendering problem into a gameplay feature.
+ */
+const MIN_CELL_SIZE = 26;
 
 export default function PlayScreen() {
   const router = useRouter();
@@ -251,8 +263,16 @@ export default function PlayScreen() {
     );
   }
 
-  const boardWidth = width - spacing.lg * 2;
-  const boardHeight = Math.max(220, height - CHROME_HEIGHT);
+  const viewportWidth = width - spacing.lg * 2;
+  const viewportHeight = Math.max(220, height - CHROME_HEIGHT);
+  const layout = computeBoardLayout(
+    built.value.board.rows,
+    built.value.board.cols,
+    boardStyle.padCells,
+    viewportWidth,
+    viewportHeight,
+    MIN_CELL_SIZE,
+  );
   const adReady = availability() === 'ready';
 
   return (
@@ -278,24 +298,41 @@ export default function PlayScreen() {
       />
 
       <View style={styles.boardWrap}>
-        <BoardCanvas
-          board={built.value.board}
-          state={state.session.state}
-          maxWidth={boardWidth}
-          maxHeight={boardHeight}
-          palette={palette}
-          arrowStyle={arrowStyle}
-          boardStyle={boardStyle}
-          safeArrows={safeArrows}
-          blockedArrow={state.highlight?.blocked}
-          blockerArrow={state.highlight?.blocker}
-          shakeNonce={state.highlight?.nonce ?? 0}
-          departingArrow={state.departing}
-          onDepartComplete={() => dispatch({ type: 'departed' })}
-          reducedMotion={reducedMotion}
-          onTapArrow={onTapArrow}
-          disabled={status !== 'playing'}
-        />
+        <BoardViewport
+          contentWidth={layout.width}
+          contentHeight={layout.height}
+          viewportWidth={viewportWidth}
+          viewportHeight={viewportHeight}
+        >
+          <BoardCanvas
+            board={built.value.board}
+            state={state.session.state}
+            cellSize={layout.cellSize}
+            width={layout.width}
+            height={layout.height}
+            originX={layout.originX}
+            originY={layout.originY}
+            palette={palette}
+            arrowStyle={arrowStyle}
+            boardStyle={boardStyle}
+            safeArrows={safeArrows}
+            blockedArrow={state.highlight?.blocked}
+            blockerArrow={state.highlight?.blocker}
+            shakeNonce={state.highlight?.nonce ?? 0}
+            departingArrow={state.departing}
+            onDepartComplete={() => dispatch({ type: 'departed' })}
+            reducedMotion={reducedMotion}
+            onTapArrow={onTapArrow}
+            disabled={status !== 'playing'}
+          />
+        </BoardViewport>
+
+        {layout.oversized ? (
+          <Text style={[styles.panHint, { color: palette.textFaint }]}>
+            {built.value.board.rows}x{built.value.board.cols} — drag to pan, pinch to zoom,
+            double-tap to fit
+          </Text>
+        ) : null}
       </View>
 
       {coach ? (
@@ -380,6 +417,7 @@ const styles = StyleSheet.create({
   hintCount: { ...typography.heading },
 
   boardWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  panHint: { ...typography.tiny, marginTop: spacing.xs, textAlign: 'center' },
 
   message: {
     ...typography.small,

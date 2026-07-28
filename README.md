@@ -5,9 +5,10 @@ snaking bodies with an arrowhead at one end. Tap one and it threads out through
 its head, but only if the straight line from that head to the board edge is clear.
 Misread it and it costs a heart. Five wrong reads and the level is over.
 
-**Status:** code-complete — 50 solver-verified levels, six themes, animation,
-hearts, hints, persistence, first-run teaching, and settings. What remains needs
-accounts and assets: audio files, an app icon, AdMob, and a Play listing. See
+**Status:** code-complete — **600 solver-verified levels** across 74 silhouettes
+and five difficulty tiers, six themes, animation, hearts, hints, persistence,
+first-run teaching, and settings. What remains needs accounts and assets: audio
+files, an app icon, AdMob, and a Play listing. See
 [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
@@ -16,7 +17,7 @@ accounts and assets: audio files, an app icon, AdMob, and a Play listing. See
 
 ```bash
 npm install
-npm run verify        # typecheck + lint + 412 tests + level validation
+npm run verify        # typecheck + lint + 174 tests + all 600 levels validated
 npm run start:tunnel  # then scan the QR code with Expo Go
 ```
 
@@ -50,9 +51,9 @@ src/components/  SVG renderer + pure drawing geometry + overlays
 src/state/       game reducer + persisted Zustand stores
 src/services/    storage, audio, ads — all fail quietly by design
 src/theme/       six themes, each a single data entry
-src/data/levels/ 50 generated, solver-verified levels
+src/data/levels/ 600 levels in 12 packs, compactly encoded
 tools/           generator, validator, curriculum, theme preview
-__tests__/       412 tests
+__tests__/       174 tests
 docs/            design docs, roadmap, project memory
 ```
 
@@ -69,14 +70,32 @@ CI, and again from disk.
 
 ```bash
 npm run levels:check     # prove every plan fits its shape before generating
-npm run levels:build     # regenerate all 50 (deterministic — same output every time)
-npm run levels:validate  # re-verify the JSON on disk
+npm run levels:build     # regenerate all 600 (deterministic, ~28s)
+npm run levels:validate  # re-verify the packs on disk
+npm run shapes:inspect   # print every silhouette at a real board size
 ```
+
+All 600 levels occupy **159 KB**, because a body is stored as a head plus one
+character per step (`"4,7:DDRR"`) rather than a list of coordinate pairs.
 
 Difficulty is measured, not guessed. The primary dial is `expectedBlindMistakes`:
 how many hearts a player tapping at random would burn. Against the 5 a level
-grants, that grades a board directly — the curve runs from **0.5 at level 1 to
-21.3 at level 50**.
+grants, that grades a board directly:
+
+| Tier | Levels | Board | Blind mistakes (avg) |
+|---|---|---|---|
+| Easy | 141 | 8–10 | 3.8 |
+| Medium | 146 | 10–13 | 9.5 |
+| Hard | 154 | 13–16 | 20.1 |
+| Super Hard | 100 | 17–21 | 39.1 |
+| Extreme | 59 | 22–27 | 84.2 |
+
+Levels 1–20 are onboarding and climb steadily. **After that the curve is
+deliberately mixed rather than monotonic** — a predictable ramp is what makes a
+long game feel like a treadmill, so tiers are drawn from a weighted mix that
+shifts across the game. The average climbs; any individual level is a surprise.
+
+271 boards are larger than a phone screen and are played with pan and zoom.
 
 ## Theming
 

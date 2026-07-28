@@ -7,26 +7,33 @@
  *               - Grow self-avoiding snakes inside a shape mask.
  *               - Reject anything the rules engine says is unsolvable.
  *               - Score candidates and keep the best fit for a target.
- * Notes:        This is the "generate" half of the pipeline; `validate.ts` is the
- *               guarantee that what ships is sound. Generation is cheap precisely
- *               because solvability is a graph property here rather than a search:
- *               `isSolvable` is microseconds, so the generator can afford to throw
- *               away thousands of candidates to find one that feels right.
+ * Notes:        Generation is cheap precisely because solvability is a graph
+ *               property here rather than a search — `isSolvable` is microseconds,
+ *               so the generator can afford to throw away thousands of candidates
+ *               to find one that feels right.
  *
  *               Growing rather than placing matters. A body must be a connected,
- *               non-self-touching path, and the easiest way to guarantee that is a
- *               self-avoiding walk that refuses any step which would touch its own
- *               body twice.
+ *               non-self-touching path, and the only reliable way to guarantee
+ *               that is a walk that refuses any step touching its own body twice.
+ *
+ *               Scaled for boards up to ~700 cells. The naive version rescanned
+ *               every cell to find a free start for each snake, which is fine at
+ *               49 cells and quadratic misery at 700 across 90 snakes. Free cells
+ *               are now a shuffled list walked by a cursor, so placement is linear
+ *               in the board rather than in board x arrows.
  */
 
 import {
   analyze,
+  applyOutcome,
   buildLevel,
   type ArrowSpec,
   type DifficultyMetrics,
   type LevelDefinition,
   isSolvable,
+  legalMoves,
   renderAscii,
+  resolveTap,
 } from '../src/game';
 import { maskCapacity, maskFor, type ShapeName } from './shapes';
 
@@ -51,7 +58,7 @@ export interface GenerateOptions {
   readonly maxBodyLength: number;
   /** Expected hearts a blind player would spend. The main difficulty dial. */
   readonly targetBlindMistakes: number;
-  /** How many random boards to try before giving up. */
+  /** How many random boards to try before settling for the best so far. */
   readonly attempts: number;
   readonly hearts: number;
 }
@@ -62,58 +69,68 @@ export interface Candidate {
   readonly score: number;
 }
 
+/** Fisher-Yates over a scratch array, using the seeded generator. */
+function shuffle(items: number[], rng: () => number): void {
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    [items[i], items[j]] = [items[j]!, items[i]!];
+  }
+}
+
 /**
  * Grow one board of snakes inside a mask.
  *
- * Returns `undefined` if the mask could not accommodate enough arrows, which is a
+ * Returns `undefined` when the mask could not take enough arrows, which is a
  * normal outcome rather than an error — the caller simply tries another seed.
  */
 function growBoard(
   rng: () => number,
   options: GenerateOptions,
+  maskCells: readonly number[],
+  owner: Int32Array,
 ): readonly ArrowSpec[] | undefined {
-  const { rows, cols, shape, arrowCount, minBodyLength, maxBodyLength } = options;
-  const mask = maskFor(shape, rows, cols);
-  const owner = new Int32Array(rows * cols).fill(-1);
+  const { rows, cols, arrowCount, minBodyLength, maxBodyLength } = options;
 
-  // Cells outside the shape are permanently unavailable.
-  for (let cell = 0; cell < owner.length; cell += 1) {
-    if (!mask[cell]) owner[cell] = -2;
-  }
+  owner.fill(-2); // -2 = outside the shape
+  for (const cell of maskCells) owner[cell] = -1; // -1 = inside and free
+
+  // One shuffled pass over the shape's cells. Each snake starts at the next
+  // still-free cell, so total placement work is linear in the mask.
+  const starts = [...maskCells];
+  shuffle(starts, rng);
+  let cursor = 0;
 
   const arrows: ArrowSpec[] = [];
-
-  /** Steps that stay in bounds, stay in the mask, and are still free. */
-  const openNeighbours = (cell: number): number[] => {
-    const r = Math.floor(cell / cols);
-    const c = cell % cols;
-    const out: number[] = [];
-    if (r > 0) out.push(cell - cols);
-    if (r + 1 < rows) out.push(cell + cols);
-    if (c > 0) out.push(cell - 1);
-    if (c + 1 < cols) out.push(cell + 1);
-    return out.filter((n) => owner[n] === -1);
-  };
+  const scratch: number[] = [];
 
   for (let index = 0; index < arrowCount; index += 1) {
-    const free: number[] = [];
-    for (let cell = 0; cell < owner.length; cell += 1) {
-      if (owner[cell] === -1) free.push(cell);
-    }
-    if (free.length === 0) break;
+    while (cursor < starts.length && owner[starts[cursor]!] !== -1) cursor += 1;
+    if (cursor >= starts.length) break;
 
-    const start = free[Math.floor(rng() * free.length)]!;
+    const start = starts[cursor]!;
     const body: number[] = [start];
     owner[start] = index;
 
     const target =
       minBodyLength + Math.floor(rng() * Math.max(1, maxBodyLength - minBodyLength + 1));
 
-    let cursor = start;
+    let head = start;
     while (body.length < target) {
+      const r = Math.floor(head / cols);
+      const c = head % cols;
+
+      scratch.length = 0;
+      if (r > 0 && owner[head - cols] === -1) scratch.push(head - cols);
+      if (r + 1 < rows && owner[head + cols] === -1) scratch.push(head + cols);
+      if (c > 0 && owner[head - 1] === -1) scratch.push(head - 1);
+      if (c + 1 < cols && owner[head + 1] === -1) scratch.push(head + 1);
+      if (scratch.length === 0) break;
+
       // A step is only legal if it touches this body exactly once — otherwise the
       // shape closes into a loop and stops being a simple path.
-      const legal = openNeighbours(cursor).filter((next) => {
+      let chosen = -1;
+      let seen = 0;
+      for (const next of scratch) {
         const nr = Math.floor(next / cols);
         const nc = next % cols;
         let touches = 0;
@@ -121,18 +138,20 @@ function growBoard(
         if (nr + 1 < rows && owner[next + cols] === index) touches += 1;
         if (nc > 0 && owner[next - 1] === index) touches += 1;
         if (nc + 1 < cols && owner[next + 1] === index) touches += 1;
-        return touches === 1;
-      });
-      if (legal.length === 0) break;
+        if (touches !== 1) continue;
 
-      const next = legal[Math.floor(rng() * legal.length)]!;
-      owner[next] = index;
-      body.push(next);
-      cursor = next;
+        // Reservoir sample, so one pass picks uniformly among the legal steps.
+        seen += 1;
+        if (Math.floor(rng() * seen) === 0) chosen = next;
+      }
+      if (chosen === -1) break;
+
+      owner[chosen] = index;
+      body.push(chosen);
+      head = chosen;
     }
 
     if (body.length < minBodyLength) {
-      // Too cramped to be a real snake — release the cells and move on.
       for (const cell of body) owner[cell] = -1;
       continue;
     }
@@ -140,8 +159,8 @@ function growBoard(
     // Grown tail-first, so the far end is the head.
     body.reverse();
     arrows.push({
-      id: String.fromCharCode(97 + arrows.length),
-      body: body.map((cell) => [Math.floor(cell / cols), cell % cols] as const),
+      id: `a${arrows.length}`,
+      body: body.map((cell) => [Math.floor(cell / cols), cell % cols]),
     });
   }
 
@@ -149,19 +168,84 @@ function growBoard(
 }
 
 /**
- * How well a candidate matches what was asked for.
+ * How well a candidate matches what was asked for. Lower is better.
  *
- * Lower is better. Blind-mistake distance dominates because that is what decides
- * whether five hearts is enough, which is the difference between a level that
- * teaches and one that frustrates.
+ * Blind-mistake distance is scaled against the target rather than absolute: being
+ * 4 out on a target of 6 is a different level entirely, while being 4 out on a
+ * target of 80 is noise.
  */
 function scoreCandidate(metrics: DifficultyMetrics, options: GenerateOptions): number {
-  const mistakeGap = Math.abs(metrics.expectedBlindMistakes - options.targetBlindMistakes);
-  const arrowGap = Math.abs(metrics.arrowCount - options.arrowCount);
-  // Prefer boards with some genuine bends; a board of straight lines is dull to
-  // look at and trivial to trace regardless of how many arrows are on it.
-  const bendBonus = Math.max(0, 1.2 - metrics.avgTurns) * 2;
-  return mistakeGap + arrowGap * 0.8 + bendBonus;
+  const target = Math.max(1, options.targetBlindMistakes);
+  const mistakeGap = Math.abs(metrics.expectedBlindMistakes - target) / target;
+  const arrowGap = Math.abs(metrics.arrowCount - options.arrowCount) / Math.max(1, options.arrowCount);
+  // Prefer boards with genuine bends; a field of straight lines is dull to look at
+  // and trivial to trace however many arrows are on it.
+  const bendPenalty = Math.max(0, 1.1 - metrics.avgTurns);
+  return mistakeGap * 2 + arrowGap + bendPenalty;
+}
+
+/**
+ * Arrows that can never leave: whatever survives greedy peeling.
+ *
+ * Cheap and exact. Since removing a snake can only ever free others, repeatedly
+ * taking every currently-free arrow either empties the board or leaves precisely
+ * the knot that makes it unsolvable.
+ */
+function stuckArrows(level: LevelDefinition): number[] {
+  const built = buildLevel(level);
+  if (!built.ok) return [];
+
+  const { board, initial } = built.value;
+  let state = initial;
+
+  for (;;) {
+    const moves = legalMoves(board, state);
+    if (moves.length === 0) break;
+    for (const move of moves) {
+      state = applyOutcome(state, resolveTap(board, state, move));
+    }
+  }
+
+  const stuck: number[] = [];
+  for (let i = 0; i < board.arrows.length; i += 1) {
+    if (state.alive[i] === 1) stuck.push(i);
+  }
+  return stuck;
+}
+
+/**
+ * Try to make an unsolvable board solvable by flipping arrows in the knot.
+ *
+ * The yield problem this solves is severe. Solvability requires the blocking
+ * graph to be acyclic, and as density rises the chance a *random* board is
+ * acyclic collapses — at the fills the Extreme tier uses, nearly every candidate
+ * is unsolvable, so resampling from scratch is close to hopeless.
+ *
+ * Reversing a body swaps which end carries the arrowhead, which flips that
+ * arrow's exit direction and leaves the silhouette untouched. Since every cycle
+ * must contain at least one stuck arrow, flipping one repeatedly breaks cycles
+ * far more often than it makes new ones — turning a near-zero hit rate into a
+ * usable one, at a fraction of the cost of growing another board.
+ */
+function repairBoard(
+  rng: () => number,
+  level: LevelDefinition,
+  budget: number,
+): LevelDefinition | undefined {
+  let current = level;
+
+  for (let attempt = 0; attempt < budget; attempt += 1) {
+    const stuck = stuckArrows(current);
+    if (stuck.length === 0) return current;
+
+    const victim = stuck[Math.floor(rng() * stuck.length)]!;
+    const arrows = current.arrows.map((arrow, index) =>
+      index === victim ? { ...arrow, body: [...arrow.body].reverse() } : arrow,
+    );
+    current = { ...current, arrows };
+  }
+
+  return stuckArrows(current).length === 0 ? current : undefined;
 }
 
 /** Generate one level, returning the best-scoring candidate found. */
@@ -173,11 +257,17 @@ export function generateLevel(
   const mask = maskFor(options.shape, options.rows, options.cols);
   if (maskCapacity(mask) < options.arrowCount * options.minBodyLength) return undefined;
 
+  const maskCells: number[] = [];
+  for (let cell = 0; cell < mask.length; cell += 1) {
+    if (mask[cell]) maskCells.push(cell);
+  }
+
+  const owner = new Int32Array(options.rows * options.cols);
   const rng = mulberry32(seed);
   let best: Candidate | undefined;
 
   for (let attempt = 0; attempt < options.attempts; attempt += 1) {
-    const arrows = growBoard(rng, options);
+    const arrows = growBoard(rng, options, maskCells, owner);
     if (!arrows) continue;
 
     const level: LevelDefinition = {
@@ -191,7 +281,17 @@ export function generateLevel(
       arrows,
     };
 
-    const built = buildLevel(level);
+    let playable = level;
+    if (!buildLevel(playable).ok) continue;
+
+    // Dense boards are almost never solvable as grown, so repair rather than
+    // discard — flipping an arrow inside the knot is far cheaper than another
+    // full board, and keeps the silhouette exactly as it was.
+    const repaired = repairBoard(rng, playable, 40);
+    if (!repaired) continue;
+    playable = repaired;
+
+    const built = buildLevel(playable);
     if (!built.ok) continue;
 
     const { board, initial } = built.value;
@@ -201,9 +301,9 @@ export function generateLevel(
     const score = scoreCandidate(metrics, options);
 
     if (!best || score < best.score) {
-      best = { level: { ...level, difficulty: metrics.suggestedDifficulty }, metrics, score };
+      best = { level: playable, metrics, score };
       // Close enough to the target that more searching would be noise.
-      if (score < 0.6) break;
+      if (score < 0.18) break;
     }
   }
 
@@ -222,7 +322,7 @@ export function describeCandidate(candidate: Candidate): string {
       `${candidate.level.rows}x${candidate.level.cols}`,
     `  arrows=${m.arrowCount} avgLen=${m.avgBodyLength.toFixed(1)} turns=${m.avgTurns.toFixed(1)} ` +
       `crowd=${m.crowding.toFixed(1)} blind=${m.expectedBlindMistakes.toFixed(1)} ` +
-      `depth=${m.dependencyDepth} band=${candidate.level.difficulty}`,
+      `depth=${m.dependencyDepth}`,
     renderAscii(board, initial)
       .split('\n')
       .map((line) => `  ${line}`)

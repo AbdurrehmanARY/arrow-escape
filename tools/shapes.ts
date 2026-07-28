@@ -1,79 +1,59 @@
 /**
- * shapes.ts — the outlines snakes are grown inside.
+ * shapes.ts — turning a silhouette into a set of usable cells.
  *
  * Purpose:      Decide which cells of a grid a level may use, so a board reads as
- *               a heart or a diamond rather than a rectangle of noise.
+ *               a heart or a guitar rather than a rectangle of noise.
  * Responsibilities:
- *               - One mask function per shape family (GDD §5).
- *               - `maskFor` to look one up by name.
+ *               - Analytic shapes (perfect at any size) and bitmap shapes.
+ *               - Scaling, pruning, and connectivity repair.
  * Notes:        Shapes are not purely cosmetic. Growing bodies inside a
- *               constrained outline forces them to bend and double back, and
- *               bends are the main thing that makes a snake hard to trace. Shape
- *               and difficulty reinforce each other.
+ *               constrained outline forces them to bend and double back, and bends
+ *               are the main thing that makes a snake hard to trace. Shape and
+ *               difficulty reinforce each other.
  *
- *               Masks are defined as normalised functions of (u, v) in 0..1 so a
- *               shape works at any board size without a hand-drawn bitmap per size.
+ *               Two kinds of shape, because they fail differently. A circle or
+ *               diamond is a tidy inequality that is exact at every resolution.
+ *               A guitar is not expressible that way, so it is drawn once as a
+ *               bitmap and *sampled* — with supersampling, because nearest-
+ *               neighbour scaling turns a thin neck or a crown's points into
+ *               dashed rubble.
+ *
+ *               Two repairs run after every mask, and both exist because the
+ *               generator silently starves without them: cells no snake could use
+ *               are pruned, and disconnected islands are dropped so the reported
+ *               capacity is capacity the generator can actually reach.
  */
 
-export type ShapeName =
-  | 'free'
-  | 'diamond'
-  | 'circle'
-  | 'cross'
-  | 'heart'
-  | 'spiral'
-  | 'ring'
-  | 'butterfly';
+import { SHAPE_ART_IDS, shapeArtById, type ShapeCategory } from './shapeArt';
+
+/** Shapes defined by a formula. Exact at any board size. */
+export const ANALYTIC_SHAPES = ['free', 'diamond', 'circle', 'cross', 'ring', 'spiral'] as const;
+export type AnalyticShape = (typeof ANALYTIC_SHAPES)[number];
+
+/** Any shape name the generator accepts: analytic or a bitmap id. */
+export type ShapeName = AnalyticShape | string;
 
 /** A grid of booleans: true where a snake may be placed. */
 export type ShapeMask = boolean[];
 
 type Field = (u: number, v: number) => boolean;
 
-/** Whole board. */
 const free: Field = () => true;
-
-/** |x| + |y| <= 1 — a rotated square. */
 const diamond: Field = (u, v) => Math.abs(u) + Math.abs(v) <= 1.02;
-
 const circle: Field = (u, v) => u * u + v * v <= 1.04;
-
-/** A thick plus sign. */
 const cross: Field = (u, v) => Math.abs(u) <= 0.42 || Math.abs(v) <= 0.42;
 
-/** A filled circle with the middle taken out. */
 const ring: Field = (u, v) => {
   const d = u * u + v * v;
   return d <= 1.04 && d >= 0.2;
 };
 
 /**
- * The classic implicit heart, squashed to sit nicely in a square grid.
- *
- * `v` is flipped because grid rows run downward while the curve is written for a
- * y-up axis.
- */
-const heart: Field = (u, v) => {
-  const x = u * 1.25;
-  const y = -v * 1.25 + 0.35;
-  const t = x * x + y * y - 1;
-  return t * t * t - x * x * y * y * y <= 0;
-};
-
-/**
  * An Archimedean spiral, thickened into a usable corridor.
  *
- * A true spiral is `r = θ / (2π·turns)`, so at any angle the arm sits at a known
- * radius — and at that angle it recurs once per completed turn. A cell is in the
- * mask when it is within half a corridor-width of *any* of those arms.
- *
- * The angle must be normalised to 0..2π first: `atan2` returns -π..π, and feeding
- * that in directly puts half the arm at a negative radius, which is what turns a
+ * The angle must be normalised to 0..2pi first: `atan2` returns -pi..pi, and
+ * feeding that in directly puts half the arm at a negative radius, which turns a
  * spiral into scattered noise.
- *
- * The corridor is deliberately narrow. Snakes grown inside it have nowhere to go
- * but along the arm, which produces exactly the long curling bodies the shape is
- * chosen for.
  */
 const spiral: Field = (u, v) => {
   const r = Math.sqrt(u * u + v * v);
@@ -81,7 +61,6 @@ const spiral: Field = (u, v) => {
 
   const turns = 2;
   const halfWidth = 0.2;
-  // Solid core, so the innermost arm has somewhere to begin.
   if (r <= halfWidth) return true;
 
   const raw = Math.atan2(v, u);
@@ -94,36 +73,56 @@ const spiral: Field = (u, v) => {
   return false;
 };
 
-/** Four wings around a slim body. */
-const butterfly: Field = (u, v) => {
-  const wing = (cx: number, cy: number, rx: number, ry: number) => {
-    const dx = (u - cx) / rx;
-    const dy = (v - cy) / ry;
-    return dx * dx + dy * dy <= 1;
-  };
-  const body = Math.abs(u) <= 0.13 && Math.abs(v) <= 0.92;
-  return (
-    body ||
-    wing(-0.48, -0.38, 0.5, 0.55) ||
-    wing(0.48, -0.38, 0.5, 0.55) ||
-    wing(-0.42, 0.46, 0.42, 0.46) ||
-    wing(0.42, 0.46, 0.42, 0.46)
-  );
-};
+const FIELDS: Record<AnalyticShape, Field> = { free, diamond, circle, cross, ring, spiral };
 
-const FIELDS: Record<ShapeName, Field> = {
-  free,
-  diamond,
-  circle,
-  cross,
-  ring,
-  heart,
-  spiral,
-  butterfly,
-};
+/** Every shape name available, analytic first. */
+export const SHAPE_NAMES: readonly ShapeName[] = [...ANALYTIC_SHAPES, ...SHAPE_ART_IDS];
 
-/** Every shape a level may declare. */
-export const SHAPE_NAMES = Object.keys(FIELDS) as ShapeName[];
+/** Category for a shape, for build reports and level metadata. */
+export function categoryOf(shape: ShapeName): ShapeCategory | 'geometric' {
+  if ((ANALYTIC_SHAPES as readonly string[]).includes(shape)) return 'geometric';
+  return shapeArtById(shape)?.category ?? 'geometric';
+}
+
+const index = (row: number, col: number, cols: number): number => row * cols + col;
+
+/**
+ * Sample a bitmap silhouette onto a target grid.
+ *
+ * Supersampled 3x3 per cell with a majority vote. Point sampling is much simpler
+ * and much worse: at small board sizes it drops any feature thinner than one
+ * target cell, so a crown loses its points and a guitar loses its neck. Voting
+ * over a patch keeps thin features as long as they cover a reasonable share of
+ * the cell they land in.
+ */
+function sampleArt(rows: number, cols: number, artRows: readonly string[]): ShapeMask {
+  const mask: ShapeMask = new Array<boolean>(rows * cols).fill(false);
+  const artHeight = artRows.length;
+  const artWidth = artRows[0]?.length ?? 0;
+  if (artHeight === 0 || artWidth === 0) return mask;
+
+  const SUB = 3;
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      let hits = 0;
+      for (let sr = 0; sr < SUB; sr += 1) {
+        for (let sc = 0; sc < SUB; sc += 1) {
+          const v = (row + (sr + 0.5) / SUB) / rows;
+          const u = (col + (sc + 0.5) / SUB) / cols;
+          const ar = Math.min(artHeight - 1, Math.floor(v * artHeight));
+          const ac = Math.min(artWidth - 1, Math.floor(u * artWidth));
+          if (artRows[ar]![ac] === '#') hits += 1;
+        }
+      }
+      // Slightly under half, so thin strokes survive being straddled by a cell
+      // boundary rather than disappearing on a tie.
+      mask[index(row, col, cols)] = hits >= 4;
+    }
+  }
+
+  return mask;
+}
 
 /**
  * Drop cells no snake could ever use.
@@ -131,14 +130,14 @@ export const SHAPE_NAMES = Object.keys(FIELDS) as ShapeName[];
  * A body is at least two cells long, so a masked cell with no masked neighbour is
  * dead space — it inflates the apparent capacity and starves the generator, which
  * then fails to place its last few arrows for reasons that look mysterious.
- * Pruning repeats until stable, because removing one cell can strand another.
+ * Repeats until stable, because removing one cell can strand another.
  */
 function pruneIsolated(mask: ShapeMask, rows: number, cols: number): void {
   for (;;) {
     let removed = 0;
     for (let row = 0; row < rows; row += 1) {
       for (let col = 0; col < cols; col += 1) {
-        const cell = row * cols + col;
+        const cell = index(row, col, cols);
         if (!mask[cell]) continue;
 
         let neighbours = 0;
@@ -158,28 +157,103 @@ function pruneIsolated(mask: ShapeMask, rows: number, cols: number): void {
 }
 
 /**
+ * Keep only regions big enough to hold a snake.
+ *
+ * A silhouette often scatters two- or three-cell specks — the tip of a flame, a
+ * snowflake's outer arm. They pass the isolation prune but still cannot hold a
+ * body of the length the level wants, so they count toward capacity while being
+ * unusable. Dropping them makes reported capacity honest, which is what the
+ * feasibility check in `check-curriculum` depends on.
+ */
+function pruneSmallRegions(mask: ShapeMask, rows: number, cols: number, minRegion: number): void {
+  const seen = new Uint8Array(rows * cols);
+
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || seen[start]) continue;
+
+    const region: number[] = [];
+    const stack = [start];
+    seen[start] = 1;
+
+    while (stack.length > 0) {
+      const cell = stack.pop()!;
+      region.push(cell);
+      const row = Math.floor(cell / cols);
+      const col = cell % cols;
+
+      if (row > 0 && mask[cell - cols] && !seen[cell - cols]) {
+        seen[cell - cols] = 1;
+        stack.push(cell - cols);
+      }
+      if (row + 1 < rows && mask[cell + cols] && !seen[cell + cols]) {
+        seen[cell + cols] = 1;
+        stack.push(cell + cols);
+      }
+      if (col > 0 && mask[cell - 1] && !seen[cell - 1]) {
+        seen[cell - 1] = 1;
+        stack.push(cell - 1);
+      }
+      if (col + 1 < cols && mask[cell + 1] && !seen[cell + 1]) {
+        seen[cell + 1] = 1;
+        stack.push(cell + 1);
+      }
+    }
+
+    if (region.length < minRegion) {
+      for (const cell of region) mask[cell] = false;
+    }
+  }
+}
+
+export interface MaskOptions {
+  /** Regions smaller than this are dropped. Defaults to 4 cells. */
+  readonly minRegion?: number;
+}
+
+/**
  * Build the mask for a shape at a given board size.
  *
- * Cells are sampled at their centres and mapped to -1..1 on each axis, so the
- * same field function produces a sensible outline on a 5x5 board and a 10x10 one.
+ * Analytic shapes are evaluated on cell centres mapped to -1..1; bitmap shapes
+ * are supersampled. Both then go through the same two repairs, so every mask this
+ * returns is made only of regions a snake can actually occupy.
  */
-export function maskFor(shape: ShapeName, rows: number, cols: number): ShapeMask {
-  const field = FIELDS[shape] ?? free;
-  const mask: ShapeMask = new Array<boolean>(rows * cols).fill(false);
+export function maskFor(
+  shape: ShapeName,
+  rows: number,
+  cols: number,
+  options: MaskOptions = {},
+): ShapeMask {
+  let mask: ShapeMask;
 
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      const u = ((col + 0.5) / cols) * 2 - 1;
-      const v = ((row + 0.5) / rows) * 2 - 1;
-      mask[row * cols + col] = field(u, v);
+  const analytic = FIELDS[shape as AnalyticShape];
+  if (analytic) {
+    mask = new Array<boolean>(rows * cols).fill(false);
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        const u = ((col + 0.5) / cols) * 2 - 1;
+        const v = ((row + 0.5) / rows) * 2 - 1;
+        mask[index(row, col, cols)] = analytic(u, v);
+      }
+    }
+  } else {
+    const artwork = shapeArtById(shape);
+    if (!artwork) {
+      // An unknown shape falls back to the whole board rather than failing the
+      // build: a level with the wrong outline is still playable, and the build
+      // report names it so the typo is obvious.
+      mask = new Array<boolean>(rows * cols).fill(true);
+    } else {
+      mask = sampleArt(rows, cols, artwork.art);
     }
   }
 
   pruneIsolated(mask, rows, cols);
+  pruneSmallRegions(mask, rows, cols, options.minRegion ?? 4);
+  pruneIsolated(mask, rows, cols);
   return mask;
 }
 
-/** How many cells a shape leaves usable. Guards against masks too small to fill. */
+/** How many cells a shape leaves usable. */
 export function maskCapacity(mask: ShapeMask): number {
   return mask.reduce((total, allowed) => total + (allowed ? 1 : 0), 0);
 }
@@ -189,7 +263,7 @@ export function renderMask(mask: ShapeMask, rows: number, cols: number): string 
   const lines: string[] = [];
   for (let row = 0; row < rows; row += 1) {
     let line = '';
-    for (let col = 0; col < cols; col += 1) line += mask[row * cols + col] ? '#' : '.';
+    for (let col = 0; col < cols; col += 1) line += mask[index(row, col, cols)] ? '#' : '.';
     lines.push(line);
   }
   return lines.join('\n');
