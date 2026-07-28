@@ -46,45 +46,67 @@ npm run levels:preview   # render every theme to preview.html
 
 ## 2. On your phone
 
-**Use the tunnel on this machine.** Windows Firewall is blocking inbound Node on
-your only working adapter, so Expo Go cannot reach the LAN dev server:
+### Fix the network first — one command
+
+Two things on this PC stop Expo Go connecting, and the dev bundle is **~10 MB**,
+which is why the tunnel alone is not reliable here. Run this **once**, in
+PowerShell:
+
+```powershell
+Start-Process powershell -Verb RunAs -ArgumentList '-ExecutionPolicy','Bypass','-File','D:\arrow-escape-game\scripts\fix-dev-network.ps1'
+```
+
+It opens a UAC prompt, then removes the firewall Block rules for Node, opens
+Metro's ports, and moves your network off the Public profile. It prints the
+address your phone needs to be able to reach.
+
+Then:
 
 ```bash
-npm run start:tunnel
+npm start
 ```
 
 Scan the QR with **Expo Go** from the Play Store.
 
 <details>
-<summary>Optional: fix the LAN path instead (faster, needs admin)</summary>
+<summary>What it is fixing, and why the tunnel was not enough</summary>
 
-Two separate problems were found on this PC:
+**Problem 1 — the firewall is actively refusing connections.** There are two
+*enabled Block rules* for inbound `node.exe`. These get created when someone
+clicks "Cancel" on the "Allow Node.js to communicate on these networks?" popup.
+Once a Block rule exists, Windows never asks again — it silently refuses every
+connection, forever.
 
-1. Two **enabled Block rules** for `node.exe` inbound on the Public firewall
-   profile, and your Ethernet adapter is categorised Public.
-2. Your Wi-Fi adapter has no DHCP lease — it sits on `169.254.29.96`, an APIPA
-   address, so the PC is not really on Wi-Fi. Only Ethernet
-   (`192.168.10.253`, gateway `192.168.10.1`) works.
+**Problem 2 — your Wi-Fi adapter has no DHCP lease.** It sits on `169.254.29.96`,
+an APIPA address, which means the PC is not really on Wi-Fi at all. Only Ethernet
+works (`192.168.10.253`, gateway `192.168.10.1`). That adapter is also categorised
+Public, where Windows applies its strictest inbound defaults.
 
-In an **Administrator** PowerShell:
+**Why not just use the tunnel.** It does work, but the development bundle is about
+10 MB. Over the local network that is instant; over ngrok it is slow enough that
+Expo Go frequently gives up mid-download — which surfaces as exactly the
+`java.io.IOException: Failed to download remote update` error.
 
-```powershell
-Remove-NetFirewallRule -DisplayName "Node.js JavaScript Runtime"
-New-NetFirewallRule -DisplayName "Expo Metro 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow -Profile Any
-Set-NetConnectionProfile -InterfaceAlias Ethernet -NetworkCategory Private
-```
+Verified on this machine: Metro binds to `0.0.0.0` and answers `HTTP 200` on
+`192.168.10.253`. The server is fine. Only inbound traffic from your phone is
+blocked.
 
-Then pin the address so Expo cannot advertise the dead Wi-Fi adapter:
-
-```powershell
-$env:REACT_NATIVE_PACKAGER_HOSTNAME='192.168.10.253'
-npm start
-```
-
-Only works if your phone is on the same router — check it gets a `192.168.10.x`
-address. The Wi-Fi adapter failing DHCP is worth looking at separately; it is a
-real problem independent of this project.
+**Your phone must be on the same network.** Check Settings → Wi-Fi → your network
+→ IP address. If it is not `192.168.10.x`, the phone and PC are on different
+networks and no firewall change will help — use the tunnel and be patient, or
+connect the phone to the same router.
 </details>
+
+### Fallback: tunnel
+
+If the network fix is not possible, this still works — just slowly on first load:
+
+```bash
+npm run start:tunnel
+```
+
+Give it a full minute before deciding it has failed. Later reloads are much
+faster, because only changed modules are re-sent.
 
 > Expo Go covers everything **except ads**, which need a native module it cannot
 > load. See [ADS_SETUP.md](ADS_SETUP.md).
@@ -166,7 +188,7 @@ None of these block playing or testing the game.
 
 | Symptom | Fix |
 |---|---|
-| Expo Go: "Failed to download remote update" | The phone can't reach the dev server. Use `npm run start:tunnel` |
+| Expo Go: "Failed to download remote update" | The phone cannot reach the dev server, or the 10 MB bundle timed out. Run `scripts/fix-dev-network.ps1` as admin, then `npm start` |
 | Metro can't resolve `@game` / `@components` | `npx expo start --clear` to reset the cache |
 | Red screen mentioning worklets or Reanimated | `rm -rf node_modules && npm install`, then `npx expo start --clear` |
 | Red screen, anything else | Screenshot it — the stack trace names the file |
