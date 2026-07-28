@@ -186,13 +186,45 @@ None of these block playing or testing the game.
 
 ## 5. If something goes wrong
 
+### Clear the cache after any dependency change
+
+**Metro caches transformed code, and a package's version gets baked into that
+output.** Change a dependency version and the cache keeps serving code compiled by
+the old one — which is how you end up with an error naming two versions of the
+same package at once:
+
+```
+[Worklets] Mismatch between JavaScript code version and
+Worklets Babel plugin version (0.10.0 vs. 0.10.3).
+```
+
+Nothing is actually wrong with the install there. `0.10.0` is what is on disk;
+`0.10.3` is what compiled the cached bundle. So after **any** version change:
+
+```bash
+npm run start:clear
+```
+
+If that is not enough, purge every layer:
+
+```powershell
+Remove-Item "$env:TEMP\metro-cache" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:TEMP\metro-file-map-*" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item .expo -Recurse -Force -ErrorAction SilentlyContinue
+npm run start:clear
+```
+
+### Symptom table
+
+
 | Symptom | Fix |
 |---|---|
 | Expo Go: "Failed to download remote update" | The phone cannot reach the dev server, or the 10 MB bundle timed out. Run `scripts/fix-dev-network.ps1` as admin, then `npm start` |
 | Metro can't resolve `@game` / `@components` | `npx expo start --clear` to reset the cache |
 | **Expo Go closes outright, no error screen** | A *native* crash — almost always a package version Expo Go was not built against. Run `npx expo install --check`, then `npx expo install --fix` |
 | A dark "Something broke" screen with a stack trace | A *JavaScript* error, and the message names the file. Send me the text |
-| Red screen mentioning worklets or Reanimated | `npx expo install --fix`, then `rm -rf node_modules && npm install` and `npx expo start --clear` |
+| `[Worklets] Mismatch between JavaScript code version and Worklets Babel plugin version` | A stale Metro cache — see below. `npm run start:clear` |
+| Any error naming two different versions of the same package | Same cause. `npm run start:clear` |
 | Red screen, anything else | Screenshot it — the stack trace names the file |
 | Board looks cramped on a small phone | Expected on 12×12 mastery levels; tell me and I'll cap the cell size |
 | Expo Go says the SDK is unsupported | Update Expo Go; this project is on SDK 57 |
