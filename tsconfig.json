@@ -1,0 +1,25 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["jest", "node", "react"],
+    "paths": {
+      "@game": ["./src/game/index.ts"],
+      "@game/*": ["./src/game/*"],
+      "@state/*": ["./src/state/*"],
+      "@screens/*": ["./src/screens/*"],
+      "@components/*": ["./src/components/*"],
+      "@services/*": ["./src/services/*"],
+      "@data/*": ["./src/data/*"],
+      "@theme/*": ["./src/theme/*"],
+      "@config/*": ["./src/config/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "dist", ".expo"]
+}
