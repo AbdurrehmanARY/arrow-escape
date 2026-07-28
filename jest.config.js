@@ -1,8 +1,8 @@
 /**
  * Jest configuration.
  *
- * The `jest-expo` preset is used so the same runner covers both the pure domain
- * tests today and React component tests in later phases, with no second config.
+ * The `jest-expo` preset is used so the same runner covers the pure domain tests,
+ * the drawing geometry, and the level library, with no second config.
  *
  * Coverage is collected only from `src/game` because that is the layer the
  * project's correctness guarantee rests on — the thresholds below are a gate, not
@@ -18,11 +18,14 @@ module.exports = {
     '^@theme/(.*)$': '<rootDir>/src/theme/$1',
     '^@components$': '<rootDir>/src/components',
     '^@components/(.*)$': '<rootDir>/src/components/$1',
+    '^@state$': '<rootDir>/src/state',
     '^@state/(.*)$': '<rootDir>/src/state/$1',
-    '^@screens/(.*)$': '<rootDir>/src/screens/$1',
+    '^@services$': '<rootDir>/src/services',
     '^@services/(.*)$': '<rootDir>/src/services/$1',
-    '^@data/(.*)$': '<rootDir>/src/data/$1',
+    '^@config$': '<rootDir>/src/config',
     '^@config/(.*)$': '<rootDir>/src/config/$1',
+    '^@screens/(.*)$': '<rootDir>/src/screens/$1',
+    '^@data/(.*)$': '<rootDir>/src/data/$1',
   },
   // `index.ts` is a pure re-export barrel with no logic of its own; counting it
   // only ever drags the number down without telling us anything.

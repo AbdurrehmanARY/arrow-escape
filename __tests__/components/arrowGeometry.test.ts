@@ -8,7 +8,15 @@
  */
 
 import { buildLevel, parseAscii, type Board } from '@game';
-import { buildArrowGeometry, cellCentre, fitCellSize, toPointsAttr } from '@components';
+// Imported from the module directly, not through the `@components` barrel: the
+// barrel also exports the renderer, which pulls in Reanimated and its native
+// runtime. This file is about pure maths and should not need any of that.
+import {
+  buildArrowGeometry,
+  cellCentre,
+  fitCellSize,
+  toPointsAttr,
+} from '@components/arrowGeometry';
 import { THEMES, themeById } from '@theme';
 
 const CELL = 40;

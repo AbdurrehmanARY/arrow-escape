@@ -41,10 +41,17 @@ export const EMPTY = -1;
 export interface ArrowSpec {
   readonly id: ArrowId;
   /**
-   * The arrow's cells, **head first**. Consecutive entries must be orthogonally
-   * adjacent — the body is a connected, non-self-touching path.
+   * The arrow's cells as `[row, col]` pairs, **head first**. Consecutive entries
+   * must be orthogonally adjacent — the body is a connected, non-self-touching
+   * path.
+   *
+   * Typed as a loose array rather than a `[number, number]` tuple because these
+   * arrive from `import`ed JSON, which TypeScript always widens to `number[][]`.
+   * Insisting on the tuple here would only force an unchecked cast at every level
+   * file. The pair-ness is enforced where it can actually be trusted — at build
+   * time in `resolveArrow`, which sees the real runtime value.
    */
-  readonly body: readonly (readonly [row: number, col: number])[];
+  readonly body: readonly (readonly number[])[];
   /**
    * Which way the arrowhead points.
    *

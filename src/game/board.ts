@@ -159,7 +159,14 @@ function resolveArrow(
     if (!Array.isArray(point) || point.length !== 2) {
       return err(`arrow "${spec.id}" has a malformed body cell`);
     }
-    const [row, col] = point;
+    // Read the pair explicitly rather than destructuring: the element type is a
+    // loose array (see `ArrowSpec.body`), so this is the point where its shape is
+    // actually established.
+    const row = point[0];
+    const col = point[1];
+    if (typeof row !== 'number' || typeof col !== 'number') {
+      return err(`arrow "${spec.id}" has a non-numeric body cell`);
+    }
     if (!Number.isInteger(row) || row < 0 || row >= rows) {
       return err(`arrow "${spec.id}" has row ${row}, outside 0..${rows - 1}`);
     }

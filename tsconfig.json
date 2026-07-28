@@ -7,21 +7,63 @@
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["jest", "node", "react"],
+    "types": [
+      "jest",
+      "node",
+      "react"
+    ],
     "paths": {
-      "@game": ["./src/game/index.ts"],
-      "@game/*": ["./src/game/*"],
-      "@theme": ["./src/theme/index.ts"],
-      "@theme/*": ["./src/theme/*"],
-      "@components": ["./src/components/index.ts"],
-      "@components/*": ["./src/components/*"],
-      "@state/*": ["./src/state/*"],
-      "@screens/*": ["./src/screens/*"],
-      "@services/*": ["./src/services/*"],
-      "@data/*": ["./src/data/*"],
-      "@config/*": ["./src/config/*"]
+      "@game": [
+        "./src/game/index.ts"
+      ],
+      "@game/*": [
+        "./src/game/*"
+      ],
+      "@theme": [
+        "./src/theme/index.ts"
+      ],
+      "@theme/*": [
+        "./src/theme/*"
+      ],
+      "@components": [
+        "./src/components/index.ts"
+      ],
+      "@components/*": [
+        "./src/components/*"
+      ],
+      "@state/*": [
+        "./src/state/*"
+      ],
+      "@screens/*": [
+        "./src/screens/*"
+      ],
+      "@services/*": [
+        "./src/services/*"
+      ],
+      "@data/*": [
+        "./src/data/*"
+      ],
+      "@config/*": [
+        "./src/config/*"
+      ],
+      "@state": [
+        "./src/state/index.ts"
+      ],
+      "@services": [
+        "./src/services/index.ts"
+      ],
+      "@config": [
+        "./src/config/index.ts"
+      ]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "dist", ".expo"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".expo"
+  ]
 }

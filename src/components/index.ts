@@ -9,3 +9,5 @@ export * from './arrowGeometry';
 export * from './ArrowSnake';
 export * from './BoardCanvas';
 export * from './Hud';
+export * from './Overlays';
+export * from './Screen';
