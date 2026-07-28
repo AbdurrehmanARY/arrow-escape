@@ -23,43 +23,14 @@
 
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 
-export type SfxName = 'release' | 'blocked' | 'win' | 'fail' | 'tap';
+import { MUSIC_ASSET, SFX_ASSETS, type SfxName } from './audioAssets';
 
-/**
- * Where each sound lives.
- *
- * Deliberately a function rather than a static map: Metro resolves `require` at
- * build time and throws if the file is absent, so each one is wrapped and allowed
- * to fail. Add the files and they start working with no other change.
- */
-function sfxSource(name: SfxName): number | undefined {
-  try {
-    switch (name) {
-      case 'release':
-        return require('../../assets/audio/release.m4a') as number;
-      case 'blocked':
-        return require('../../assets/audio/blocked.m4a') as number;
-      case 'win':
-        return require('../../assets/audio/win.m4a') as number;
-      case 'fail':
-        return require('../../assets/audio/fail.m4a') as number;
-      case 'tap':
-        return require('../../assets/audio/tap.m4a') as number;
-      default:
-        return undefined;
-    }
-  } catch {
-    return undefined;
-  }
-}
+export type { SfxName };
 
-function musicSource(): number | undefined {
-  try {
-    return require('../../assets/audio/ambient.m4a') as number;
-  } catch {
-    return undefined;
-  }
-}
+/** Where a sound lives, or `undefined` if that file has not been added yet. */
+const sfxSource = (name: SfxName): number | undefined => SFX_ASSETS[name];
+
+const musicSource = (): number | undefined => MUSIC_ASSET;
 
 const players = new Map<SfxName, AudioPlayer>();
 let musicPlayer: AudioPlayer | undefined;

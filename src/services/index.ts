@@ -7,5 +7,6 @@
  */
 
 export * from './storage';
+export * from './audioAssets';
 export * from './audio';
 export * from './ads';

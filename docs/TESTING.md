@@ -190,7 +190,9 @@ None of these block playing or testing the game.
 |---|---|
 | Expo Go: "Failed to download remote update" | The phone cannot reach the dev server, or the 10 MB bundle timed out. Run `scripts/fix-dev-network.ps1` as admin, then `npm start` |
 | Metro can't resolve `@game` / `@components` | `npx expo start --clear` to reset the cache |
-| Red screen mentioning worklets or Reanimated | `rm -rf node_modules && npm install`, then `npx expo start --clear` |
+| **Expo Go closes outright, no error screen** | A *native* crash — almost always a package version Expo Go was not built against. Run `npx expo install --check`, then `npx expo install --fix` |
+| A dark "Something broke" screen with a stack trace | A *JavaScript* error, and the message names the file. Send me the text |
+| Red screen mentioning worklets or Reanimated | `npx expo install --fix`, then `rm -rf node_modules && npm install` and `npx expo start --clear` |
 | Red screen, anything else | Screenshot it — the stack trace names the file |
 | Board looks cramped on a small phone | Expected on 12×12 mastery levels; tell me and I'll cap the cell size |
 | Expo Go says the SDK is unsupported | Update Expo Go; this project is on SDK 57 |

@@ -16,7 +16,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { initAds } from '@services/ads';
@@ -24,6 +25,30 @@ import { applyAudioSettings, initAudio, startMusic } from '@services/audio';
 import { useHintStore } from '@state/hintStore';
 import { useProgressStore } from '@state/progressStore';
 import { useSettingsStore } from '@state/settingsStore';
+
+/**
+ * Catches any JavaScript error thrown while rendering and shows it.
+ *
+ * Worth having for its diagnostic value as much as its UX: if the app dies and
+ * you see *this* screen, the fault is in JS and the message names it. If the app
+ * dies and Expo Go closes outright with no screen at all, the fault is native —
+ * usually a package version that disagrees with the one Expo Go was built
+ * against. `npx expo install --check` is the tool for that case.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return (
+    <View style={styles.errorRoot}>
+      <ScrollView contentContainerStyle={styles.errorBody}>
+        <Text style={styles.errorTitle}>Something broke</Text>
+        <Text style={styles.errorMessage}>{error.message}</Text>
+        {error.stack ? <Text style={styles.errorStack}>{error.stack}</Text> : null}
+        <Text style={styles.errorRetry} onPress={retry}>
+          Tap here to try again
+        </Text>
+      </ScrollView>
+    </View>
+  );
+}
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -74,3 +99,12 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  errorRoot: { flex: 1, backgroundColor: '#11141b' },
+  errorBody: { padding: 24, paddingTop: 72, gap: 12 },
+  errorTitle: { color: '#eef2f9', fontSize: 22, fontWeight: '800' },
+  errorMessage: { color: '#e2606a', fontSize: 15, lineHeight: 21 },
+  errorStack: { color: '#647084', fontSize: 11, lineHeight: 16, fontFamily: 'monospace' },
+  errorRetry: { color: '#5b8dee', fontSize: 15, fontWeight: '700', marginTop: 12 },
+});
