@@ -17,14 +17,14 @@ Runs three things in order:
 |---|---|
 | `tsc --noEmit` | the whole project typechecks under `strict` |
 | `eslint` | no lint errors anywhere |
-| `jest` | 174 tests — rules, solver, geometry, reducer, stores, storage, and all 600 levels |
+| `jest` | 190 tests — rules, solver, geometry, camera, reducer, stores, storage, and all 600 levels |
 | `levels:validate` | re-reads the level JSON *from disk* and re-solves all 50 |
 
 Expect:
 
 ```
-Test Suites: 11 passed, 11 total
-Tests:       174 passed, 174 total
+Test Suites: 12 passed, 12 total
+Tests:       190 passed, 190 total
 ...
 All levels solvable, all recorded solutions verified.
 Difficulty runs 0.5 → 21.3 expected blind mistakes.
@@ -130,9 +130,14 @@ faster, because only changed modules are re-sent.
 4. **Spend all five hearts.** The fail screen appears and says the board was still
    winnable — because it always is. Check that reads as fair rather than as the
    game cheating.
-5. **Clear a level.** Win screen shows hearts left and whether it was a clean
-   read. Next takes you to the following level.
-6. **Force-quit and reopen.** You should land back where you were with progress
+5. **Clear a level.** The board empties, confetti fires, and *then* the win
+   screen arrives a beat later — you should see the last snake leave. Clear one
+   without a single wrong tap and the burst is bigger and gold-flecked.
+6. **Clear two in a row cleanly** — the win screen starts showing a perfect-read
+   streak from two upward.
+7. **Open the record screen** (★ on the menu, or tap the stat tiles) to see how
+   the 600 are going.
+8. **Force-quit and reopen.** You should land back where you were with progress
    and hints intact.
 
 ### The curve

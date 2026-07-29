@@ -32,6 +32,9 @@ export interface LevelRecord {
 interface PersistedProgress {
   readonly records: Record<number, LevelRecord>;
   readonly lastPlayed: number;
+  /** Consecutive levels cleared without a wrong tap. Broken by any mistake. */
+  readonly perfectStreak: number;
+  readonly bestPerfectStreak: number;
 }
 
 interface ProgressState extends PersistedProgress {
@@ -42,7 +45,12 @@ interface ProgressState extends PersistedProgress {
   resetProgress: () => void;
 }
 
-const EMPTY: PersistedProgress = { records: {}, lastPlayed: 1 };
+const EMPTY: PersistedProgress = {
+  records: {},
+  lastPlayed: 1,
+  perfectStreak: 0,
+  bestPerfectStreak: 0,
+};
 
 /** Persist without blocking the caller — saves are not on the critical path. */
 function persist(state: PersistedProgress): void {
@@ -55,7 +63,15 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
 
   hydrate: async () => {
     const data = await loadSlice<PersistedProgress>(STORAGE_KEYS.progress, EMPTY);
-    set({ ...data, hydrated: true });
+    set({
+      records: data.records ?? {},
+      lastPlayed: data.lastPlayed ?? 1,
+      // Defaulted rather than trusted: a save written before streaks existed has
+      // neither field, and `undefined + 1` would quietly become NaN forever.
+      perfectStreak: data.perfectStreak ?? 0,
+      bestPerfectStreak: data.bestPerfectStreak ?? 0,
+      hydrated: true,
+    });
   },
 
   completeLevel: (id, mistakes, heartsLeft) => {
@@ -68,16 +84,29 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
       timesCleared: (previous?.timesCleared ?? 0) + 1,
     };
 
+    // A clean read extends the streak; any wrong tap ends it. Replays count, so
+    // the streak is a statement about how you are playing *now* rather than a
+    // permanent record — which is what makes it worth chasing.
+    const perfect = mistakes === 0;
+    const perfectStreak = perfect ? get().perfectStreak + 1 : 0;
+
     const updated: PersistedProgress = {
       records: { ...records, [id]: next },
       lastPlayed: Math.max(get().lastPlayed, id),
+      perfectStreak,
+      bestPerfectStreak: Math.max(get().bestPerfectStreak, perfectStreak),
     };
     set(updated);
     persist(updated);
   },
 
   setLastPlayed: (id) => {
-    const updated: PersistedProgress = { records: get().records, lastPlayed: id };
+    const updated: PersistedProgress = {
+      records: get().records,
+      lastPlayed: id,
+      perfectStreak: get().perfectStreak,
+      bestPerfectStreak: get().bestPerfectStreak,
+    };
     set(updated);
     persist(updated);
   },
@@ -127,4 +156,32 @@ export function perfectCount(records: Record<number, LevelRecord>): number {
   return Object.values(records).filter(
     (record) => record.timesCleared > 0 && record.bestMistakes === 0,
   ).length;
+}
+
+/** Levels cleared, split by how well. Drives the stats screen. */
+export function clearedByQuality(records: Record<number, LevelRecord>): {
+  perfect: number;
+  clean: number;
+  scraped: number;
+} {
+  let perfect = 0;
+  let clean = 0;
+  let scraped = 0;
+
+  for (const record of Object.values(records)) {
+    if (record.timesCleared === 0) continue;
+    if (record.bestMistakes === 0) perfect += 1;
+    else if (record.bestMistakes <= 2) clean += 1;
+    else scraped += 1;
+  }
+
+  return { perfect, clean, scraped };
+}
+
+/** Total wrong taps ever made across best runs. An honest measure of the journey. */
+export function totalMistakes(records: Record<number, LevelRecord>): number {
+  return Object.values(records).reduce(
+    (sum, record) => sum + (record.timesCleared > 0 ? record.bestMistakes : 0),
+    0,
+  );
 }

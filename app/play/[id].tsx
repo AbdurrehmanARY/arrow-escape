@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import {
   BoardCanvas,
   BoardViewport,
+  Celebration,
   CoachCard,
   ConfirmDialog,
   FailOverlay,
@@ -33,6 +34,7 @@ import {
 } from '@components';
 import { buildLevel, findAllSafeMoves, findSafeMove } from '@game';
 import { LEVEL_COUNT, levelById } from '@data/levels';
+import { WIN_OVERLAY_DELAY_MS } from '@config';
 import { availability, preload, showRewarded } from '@services/ads';
 import { playSfx } from '@services/audio';
 import { gameReducer, initGameState } from '@state/gameReducer';
@@ -73,6 +75,7 @@ export default function PlayScreen() {
   const grantHints = useHintStore((state) => state.grantHints);
 
   const completeLevel = useProgressStore((state) => state.completeLevel);
+  const perfectStreak = useProgressStore((state) => state.perfectStreak);
   const setLastPlayed = useProgressStore((state) => state.setLastPlayed);
 
   const level = levelById(levelId);
@@ -89,6 +92,13 @@ export default function PlayScreen() {
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [hintNotice, setHintNotice] = useState<string | undefined>(undefined);
   const [earning, setEarning] = useState(false);
+  /**
+   * The overlay waits a beat after the win so the board clearing is visible.
+   *
+   * This is the only piece of win presentation that needs its own state — the
+   * celebration is simply "has this level been won", derived below.
+   */
+  const [overlayVisible, setOverlayVisible] = useState(false);
 
   const status = state.session.status;
 
@@ -147,9 +157,15 @@ export default function PlayScreen() {
   // otherwise a player who closes the app on the win screen loses the level.
   useEffect(() => {
     if (status !== 'won') return;
+
     completeLevel(levelId, state.session.mistakes, state.session.heartsLeft);
     playSfx('win');
     if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // The celebration fires from the win itself. Only the overlay is delayed, so
+    // the board clearing is visible before anything covers it.
+    const timer = setTimeout(() => setOverlayVisible(true), WIN_OVERLAY_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [status, levelId, completeLevel, state.session.mistakes, state.session.heartsLeft, haptics]);
 
   useEffect(() => {
@@ -200,6 +216,7 @@ export default function PlayScreen() {
     setShowRestartConfirm(false);
     setHintedArrow(undefined);
     setHintNotice(undefined);
+    setOverlayVisible(false);
     dispatch({ type: 'restart', initial: built.value.initial, hearts });
   }, [built, hearts]);
 
@@ -372,13 +389,21 @@ export default function PlayScreen() {
         </Pressable>
       ) : null}
 
+      <Celebration
+        active={status === 'won'}
+        intensity={state.session.mistakes === 0 ? 'perfect' : 'normal'}
+        palette={palette}
+        reducedMotion={reducedMotion}
+      />
+
       <WinOverlay
         palette={palette}
-        visible={status === 'won'}
+        visible={status === 'won' && overlayVisible}
         levelName={level.name}
         heartsLeft={state.session.heartsLeft}
         maxHearts={state.session.maxHearts}
         mistakes={state.session.mistakes}
+        perfectStreak={perfectStreak}
         onNext={levelId < LEVEL_COUNT ? () => router.replace(`/play/${levelId + 1}`) : undefined}
         onReplay={doRestart}
         onLevels={() => router.replace('/levels')}

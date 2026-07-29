@@ -83,6 +83,8 @@ export interface WinOverlayProps {
   heartsLeft: number;
   maxHearts: number;
   mistakes: number;
+  /** Consecutive perfect reads including this one. Shown only once it is a run. */
+  perfectStreak?: number;
   /** Undefined on the last level, which turns Next into Level select. */
   onNext: (() => void) | undefined;
   onReplay: () => void;
@@ -96,11 +98,15 @@ export const WinOverlay = memo(function WinOverlay({
   heartsLeft,
   maxHearts,
   mistakes,
+  perfectStreak = 0,
   onNext,
   onReplay,
   onLevels,
 }: WinOverlayProps) {
   const perfect = mistakes === 0;
+  // Only once it is genuinely a run. Announcing "streak: 1" on every clean level
+  // cheapens the thing it is meant to reward.
+  const showStreak = perfect && perfectStreak >= 2;
 
   return (
     <Sheet palette={palette} visible={visible}>
@@ -123,6 +129,14 @@ export const WinOverlay = memo(function WinOverlay({
           ? 'A clean read — not a single wrong tap.'
           : `${mistakes} wrong tap${mistakes === 1 ? '' : 's'}. Clear it without any to read it perfectly.`}
       </Text>
+
+      {showStreak ? (
+        <View style={[styles.streak, { borderColor: palette.success }]}>
+          <Text style={[styles.streakText, { color: palette.success }]}>
+            {perfectStreak} perfect in a row
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.actions}>
         <Action palette={palette} label="Replay" onPress={onReplay} />
@@ -239,6 +253,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     lineHeight: 18,
   },
+  streak: {
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  streakText: { ...typography.small, fontWeight: '700' },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl, alignSelf: 'stretch' },
   action: {
     flexGrow: 1,

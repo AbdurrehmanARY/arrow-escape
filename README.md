@@ -7,7 +7,7 @@ Misread it and it costs a heart. Five wrong reads and the level is over.
 
 **Status:** code-complete — **600 solver-verified levels** across 74 silhouettes
 and five difficulty tiers, six themes, animation, hearts, hints, persistence,
-first-run teaching, chapters, and settings. What remains needs accounts and
+first-run teaching, chapters, celebrations, streaks, and a record screen. What remains needs accounts and
 assets: audio files, AdMob, and a Play listing. See
 [docs/RELEASE.md](docs/RELEASE.md).
 
@@ -17,7 +17,7 @@ assets: audio files, AdMob, and a Play listing. See
 
 ```bash
 npm install
-npm run verify        # typecheck + lint + 187 tests + all 600 levels validated
+npm run verify        # typecheck + lint + 190 tests + all 600 levels validated
 npm run start:tunnel  # then scan the QR code with Expo Go
 ```
 
@@ -45,7 +45,7 @@ follows are in **[docs/MECHANIC_ANALYSIS.md](docs/MECHANIC_ANALYSIS.md)**.
 ## Layout
 
 ```
-app/             expo-router routes: menu, levels, play/[id], settings
+app/             expo-router routes: menu, levels, play/[id], stats, settings
 src/game/        pure TypeScript rules engine — no React, no I/O
 src/components/  SVG renderer + pure drawing geometry + overlays
 src/state/       game reducer + persisted Zustand stores
@@ -53,7 +53,7 @@ src/services/    storage, audio, ads — all fail quietly by design
 src/theme/       six themes, each a single data entry
 src/data/levels/ 600 levels in 12 packs, compactly encoded
 tools/           generator, validator, curriculum, theme preview
-__tests__/       187 tests
+__tests__/       190 tests
 docs/            design docs, roadmap, project memory
 ```
 

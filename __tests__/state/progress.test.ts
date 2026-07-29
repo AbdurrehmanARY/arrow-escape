@@ -10,11 +10,13 @@
  */
 
 import {
+  clearedByQuality,
   clearedCount,
   highestUnlocked,
   isCleared,
   nextLevel,
   perfectCount,
+  totalMistakes,
   type LevelRecord,
 } from '@state/progressStore';
 
@@ -101,5 +103,35 @@ describe('counters', () => {
       1: { bestMistakes: 0, bestHeartsLeft: 5, timesCleared: 0 },
     };
     expect(perfectCount(touched)).toBe(0);
+  });
+});
+
+describe('quality breakdown', () => {
+  it('splits cleared levels by how cleanly they were read', () => {
+    const mixed: Record<number, LevelRecord> = {
+      1: { bestMistakes: 0, bestHeartsLeft: 5, timesCleared: 1 },
+      2: { bestMistakes: 2, bestHeartsLeft: 3, timesCleared: 1 },
+      3: { bestMistakes: 4, bestHeartsLeft: 1, timesCleared: 2 },
+      4: { bestMistakes: 0, bestHeartsLeft: 5, timesCleared: 0 },
+    };
+
+    expect(clearedByQuality(mixed)).toEqual({ perfect: 1, clean: 1, scraped: 1 });
+  });
+
+  it('ignores levels that were opened but never cleared', () => {
+    const touched: Record<number, LevelRecord> = {
+      1: { bestMistakes: 0, bestHeartsLeft: 5, timesCleared: 0 },
+    };
+    expect(clearedByQuality(touched)).toEqual({ perfect: 0, clean: 0, scraped: 0 });
+    expect(totalMistakes(touched)).toBe(0);
+  });
+
+  it('sums wrong taps only across levels actually finished', () => {
+    const records: Record<number, LevelRecord> = {
+      1: { bestMistakes: 3, bestHeartsLeft: 2, timesCleared: 1 },
+      2: { bestMistakes: 1, bestHeartsLeft: 4, timesCleared: 1 },
+      3: { bestMistakes: 9, bestHeartsLeft: 0, timesCleared: 0 },
+    };
+    expect(totalMistakes(records)).toBe(4);
   });
 });

@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 12 — chapters, generated app icons, camera tests.
+> **Last updated:** end of Phase 13 — celebration, perfect-read streaks, the record screen.
 
 ---
 
@@ -73,7 +73,11 @@ wrong *plans*, are the failure mode. Full proof and the difficulty model are in
 36. **Chapter names are fixed, not derived.** Contents shift whenever the curriculum is retuned; a chapter a player remembers finishing must not silently rename itself between builds.
 37. **The app icon is generated from the game's own arrow geometry** (`tools/make-icons.ts`), rasterised with `pngjs` — a thick rounded line is a distance test, a head is three half-plane tests, and 4x4 supersampling handles the edges. It is centred on its *drawn* bounds rather than its path coordinates, because the stroke radius and arrowhead overhang by different amounts per axis.
 38. **The pan/zoom camera maths is a pure module** (`components/camera.ts`), because it runs as a worklet where a debugger is little help, and an off-by-one in the overhang lets a player lose a 27x30 board off-screen.
-39. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
+39. **The win overlay waits 900ms.** The last snake threading out is the most satisfying moment in the game, and covering it instantly threw that away. The celebration fires immediately; the overlay follows.
+40. **Confetti is one shared value read by sixty derived styles**, not sixty animations. Each piece's path is projectile motion — launch angle, speed, gravity — on constants fixed at spawn, because linear fades read as a screensaver.
+41. **The celebration is derived from the win, not mirrored into state.** An `active` prop that goes false and true again on replay re-fires it; a separate nonce would have been a second signal meaning the same thing, and a second thing to get out of step.
+42. **Perfect-read streaks count replays.** The streak is a statement about how someone is playing *now* rather than a permanent record, which is what makes it worth chasing. It is only shown from two upward — announcing "streak: 1" on every clean level cheapens it.
+43. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
 
 ### Reversed along the way
 - The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`.

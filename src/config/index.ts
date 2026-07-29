@@ -36,5 +36,12 @@ export const AD_UNIT_IDS = {
 /** Board sizes above this get a smaller minimum cell, so 12x12 still fits a phone. */
 export const LARGE_BOARD_THRESHOLD = 10;
 
-/** Milliseconds the win overlay waits before it can be dismissed, so it registers. */
-export const WIN_OVERLAY_DELAY_MS = 260;
+/**
+ * How long the win overlay waits before covering the board.
+ *
+ * The last snake threading out is the most satisfying moment in the game, and
+ * slapping a modal over it instantly throws that away. This is long enough for
+ * the exit animation to finish and the celebration to reach its peak, short
+ * enough that it never feels like waiting.
+ */
+export const WIN_OVERLAY_DELAY_MS = 900;

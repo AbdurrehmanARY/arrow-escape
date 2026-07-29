@@ -37,12 +37,20 @@ export default function MenuScreen() {
           <Text style={[styles.hintGlyph, { color: palette.accent }]}>💡</Text>
           <Text style={[styles.hintCount, { color: palette.text }]}>{hints}</Text>
         </View>
-        <IconButton
-          palette={palette}
-          glyph="⚙"
-          label="Settings"
-          onPress={() => router.push('/settings')}
-        />
+        <View style={styles.headerActions}>
+          <IconButton
+            palette={palette}
+            glyph="★"
+            label="Your record"
+            onPress={() => router.push('/stats')}
+          />
+          <IconButton
+            palette={palette}
+            glyph="⚙"
+            label="Settings"
+            onPress={() => router.push('/settings')}
+          />
+        </View>
       </View>
 
       <View style={styles.hero}>
@@ -80,10 +88,15 @@ export default function MenuScreen() {
         <Text style={[styles.secondaryLabel, { color: palette.text }]}>All levels</Text>
       </Pressable>
 
-      <View style={styles.stats}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Your record"
+        onPress={() => router.push('/stats')}
+        style={({ pressed }) => [styles.stats, pressed && styles.pressed]}
+      >
         <Stat palette={palette} value={`${cleared}/${LEVEL_COUNT}`} label="cleared" />
         <Stat palette={palette} value={String(perfect)} label="perfect reads" />
-      </View>
+      </Pressable>
 
       <Text style={[styles.footnote, { color: palette.textFaint }]}>
         Tap an arrow whose head has a clear straight run to the edge. Misread it and it costs a
@@ -112,6 +125,7 @@ function Stat({
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', gap: spacing.sm },
   hintChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   hintGlyph: { fontSize: 16 },
   hintCount: { ...typography.heading },
