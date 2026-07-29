@@ -32,6 +32,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { clampScale, clampTranslation, fitScale as computeFitScale } from './camera';
+
 export interface BoardViewportProps {
   /** Natural, unscaled size of the board content. */
   contentWidth: number;
@@ -62,10 +64,10 @@ export function BoardViewport({
    * Scale at which the whole board is visible. This is the floor: zooming out
    * past it would only add empty space and lose the board in the middle of it.
    */
-  const fitScale = useMemo(() => {
-    if (contentWidth <= 0 || contentHeight <= 0) return 1;
-    return Math.min(viewportWidth / contentWidth, viewportHeight / contentHeight, 1);
-  }, [contentWidth, contentHeight, viewportWidth, viewportHeight]);
+  const fitScale = useMemo(
+    () => computeFitScale(contentWidth, contentHeight, viewportWidth, viewportHeight),
+    [contentWidth, contentHeight, viewportWidth, viewportHeight],
+  );
 
   const scale = useSharedValue(fitScale);
   const savedScale = useSharedValue(fitScale);
@@ -81,36 +83,17 @@ export function BoardViewport({
     [onZoomChange],
   );
 
-  /**
-   * How far the board may be dragged at a given scale.
-   *
-   * When the scaled board is smaller than the viewport it is centred and cannot
-   * move at all; when it is larger, it may move exactly as far as its overhang.
-   * That is what stops a player flicking the board into empty space and having to
-   * hunt for it.
-   */
-  const clamp = useCallback(
-    (value: number, contentSize: number, viewportSize: number, atScale: number) => {
-      'worklet';
-      const scaled = contentSize * atScale;
-      if (scaled <= viewportSize) return 0;
-      const limit = (scaled - viewportSize) / 2;
-      return Math.min(limit, Math.max(-limit, value));
-    },
-    [],
-  );
-
   const pinch = Gesture.Pinch()
     .onStart(() => {
       savedScale.value = scale.value;
     })
     .onUpdate((event) => {
-      const next = Math.min(fitScale * maxZoom, Math.max(fitScale, savedScale.value * event.scale));
+      const next = clampScale(savedScale.value * event.scale, fitScale, maxZoom);
       scale.value = next;
       // Re-clamp as we zoom: shrinking the board can leave the current pan
       // outside the new limits, which would show a band of empty space.
-      translateX.value = clamp(translateX.value, contentWidth, viewportWidth, next);
-      translateY.value = clamp(translateY.value, contentHeight, viewportHeight, next);
+      translateX.value = clampTranslation(translateX.value, contentWidth, viewportWidth, next);
+      translateY.value = clampTranslation(translateY.value, contentHeight, viewportHeight, next);
     })
     .onEnd(() => {
       runOnJS(report)(scale.value / fitScale);
@@ -123,13 +106,13 @@ export function BoardViewport({
       savedY.value = translateY.value;
     })
     .onUpdate((event) => {
-      translateX.value = clamp(
+      translateX.value = clampTranslation(
         savedX.value + event.translationX,
         contentWidth,
         viewportWidth,
         scale.value,
       );
-      translateY.value = clamp(
+      translateY.value = clampTranslation(
         savedY.value + event.translationY,
         contentHeight,
         viewportHeight,
@@ -147,10 +130,10 @@ export function BoardViewport({
       const next = fitted ? fitScale * DOUBLE_TAP_ZOOM : fitScale;
 
       scale.value = withTiming(next, { duration: 200 });
-      translateX.value = withTiming(clamp(translateX.value, contentWidth, viewportWidth, next), {
+      translateX.value = withTiming(clampTranslation(translateX.value, contentWidth, viewportWidth, next), {
         duration: 200,
       });
-      translateY.value = withTiming(clamp(translateY.value, contentHeight, viewportHeight, next), {
+      translateY.value = withTiming(clampTranslation(translateY.value, contentHeight, viewportHeight, next), {
         duration: 200,
       });
       runOnJS(report)(next / fitScale);

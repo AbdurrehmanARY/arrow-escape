@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 11 — 600 levels, 74 silhouettes, oversized boards with pan and zoom.
+> **Last updated:** end of Phase 12 — chapters, generated app icons, camera tests.
 
 ---
 
@@ -69,7 +69,11 @@ wrong *plans*, are the failure mode. Full proof and the difficulty model are in
 32. **Oversized boards have a minimum cell size and pan instead of shrinking.** Fitting a 27x30 board to a phone gives ~12dp cells: unreadable and untappable. Cells stay at 26dp and the viewport scrolls.
 33. **Touch stays exact at every zoom level for free**, because the per-cell targets live inside the transformed view. No coordinate conversion by hand, which is where this normally breaks.
 34. **The grid is one tiled SVG pattern, not one node per cell.** An 810-cell board would otherwise cost more in grid nodes than in every arrow combined.
-35. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
+35. **600 levels are grouped into 12 chapters**, matching the pack layout exactly so a chapter is also the unit of data loaded. A chapter opens once the previous one has been *started*, not finished — gating on completion would strand a player stuck on one board behind 550 levels they cannot touch.
+36. **Chapter names are fixed, not derived.** Contents shift whenever the curriculum is retuned; a chapter a player remembers finishing must not silently rename itself between builds.
+37. **The app icon is generated from the game's own arrow geometry** (`tools/make-icons.ts`), rasterised with `pngjs` — a thick rounded line is a distance test, a head is three half-plane tests, and 4x4 supersampling handles the edges. It is centred on its *drawn* bounds rather than its path coordinates, because the stroke radius and arrowhead overhang by different amounts per axis.
+38. **The pan/zoom camera maths is a pure module** (`components/camera.ts`), because it runs as a worklet where a debugger is little help, and an off-by-one in the overhang lets a player lose a 27x30 board off-screen.
+39. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
 
 ### Reversed along the way
 - The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`.
@@ -94,7 +98,7 @@ cannot reach the LAN dev server. The Wi-Fi adapter also has no DHCP lease
 
 ## Pending work
 - **You:** play through on device; report anything that feels wrong about pacing, board size, or the 5-heart budget.
-- **Assets:** audio files (`assets/audio/README.md`), app icon and splash.
+- **Assets:** audio files (`assets/audio/README.md`). Icons and splash are generated — rerun `npm run icons:build` after any brand change.
 - **Accounts:** AdMob ([ADS_SETUP.md](ADS_SETUP.md)), Play Console ([RELEASE.md](RELEASE.md)).
 - **Then:** validate the curve against real players before extending past 50 levels.
 

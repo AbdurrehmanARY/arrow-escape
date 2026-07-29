@@ -7,8 +7,8 @@ Misread it and it costs a heart. Five wrong reads and the level is over.
 
 **Status:** code-complete — **600 solver-verified levels** across 74 silhouettes
 and five difficulty tiers, six themes, animation, hearts, hints, persistence,
-first-run teaching, and settings. What remains needs accounts and assets: audio
-files, an app icon, AdMob, and a Play listing. See
+first-run teaching, chapters, and settings. What remains needs accounts and
+assets: audio files, AdMob, and a Play listing. See
 [docs/RELEASE.md](docs/RELEASE.md).
 
 ---
@@ -17,7 +17,7 @@ files, an app icon, AdMob, and a Play listing. See
 
 ```bash
 npm install
-npm run verify        # typecheck + lint + 174 tests + all 600 levels validated
+npm run verify        # typecheck + lint + 187 tests + all 600 levels validated
 npm run start:tunnel  # then scan the QR code with Expo Go
 ```
 
@@ -53,7 +53,7 @@ src/services/    storage, audio, ads — all fail quietly by design
 src/theme/       six themes, each a single data entry
 src/data/levels/ 600 levels in 12 packs, compactly encoded
 tools/           generator, validator, curriculum, theme preview
-__tests__/       174 tests
+__tests__/       187 tests
 docs/            design docs, roadmap, project memory
 ```
 
@@ -126,6 +126,7 @@ geometry module — so the preview cannot disagree with what ships.
 | `npm run test:coverage` | coverage, thresholds enforced on `src/game` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint, zero warnings tolerated |
+| `npm run icons:build` | regenerate the app icons from the game's own art |
 | `npm run format` | Prettier |
 
 ## Docs

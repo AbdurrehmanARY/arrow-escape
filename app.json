@@ -26,9 +26,25 @@
     },
     "plugins": [
       "expo-router",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#EEEBE4",
+          "dark": {
+            "backgroundColor": "#0E1120"
+          }
+        }
+      ]
     ],
     "scheme": "arrowpath",
-    "newArchEnabled": true
+    "newArchEnabled": true,
+    "androidStatusBar": {
+      "backgroundColor": "#EEEBE4",
+      "barStyle": "dark-content"
+    }
   }
 }

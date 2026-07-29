@@ -8,6 +8,7 @@
 export * from './arrowGeometry';
 export * from './ArrowSnake';
 export * from './BoardCanvas';
+export * from './camera';
 export * from './BoardViewport';
 export * from './Hud';
 export * from './CoachCard';
