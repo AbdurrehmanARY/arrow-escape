@@ -18,7 +18,7 @@ Runs three things in order:
 | `tsc --noEmit` | the whole project typechecks under `strict` |
 | `eslint` | no lint errors anywhere |
 | `jest` | 190 tests — rules, solver, geometry, camera, reducer, stores, storage, and all 600 levels |
-| `levels:validate` | re-reads the level JSON *from disk* and re-solves all 50 |
+| `levels:validate` | re-reads the packs *from disk* and re-solves all 600 |
 
 Expect:
 
@@ -26,11 +26,15 @@ Expect:
 Test Suites: 12 passed, 12 total
 Tests:       190 passed, 190 total
 ...
-All levels solvable, all recorded solutions verified.
-Difficulty runs 0.5 → 21.3 expected blind mistakes.
+All levels decode, all are solvable, all recorded solutions verified.
+
+  tier          count   blind mistakes: min / avg / max
+  easy           141      1.5 /    3.8 /    6.5
+  ...
+  extremeHard     59     52.3 /   84.2 /  158.8
 ```
 
-The level check runs against the files on disk rather than the generator's memory,
+The level check runs against the packs on disk rather than the generator's memory,
 on purpose. The generator could be perfect and a level still be broken by a bad
 merge or a partial write.
 
@@ -39,8 +43,10 @@ Other useful commands:
 ```bash
 npm run test:coverage    # coverage, thresholds enforced on src/game
 npm run levels:check     # prove every curriculum plan fits its shape
-npm run levels:build     # regenerate all 50 levels (deterministic)
+npm run levels:build     # regenerate all 600 levels (deterministic, ~30s)
 npm run levels:preview   # render every theme to preview.html
+npm run shapes:inspect   # print every silhouette at a real board size
+npm run icons:build      # regenerate the app icons
 ```
 
 ---
