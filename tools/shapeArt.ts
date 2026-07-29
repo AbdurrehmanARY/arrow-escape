@@ -24,13 +24,7 @@
  */
 
 export type ShapeCategory =
-  | 'symbol'
-  | 'object'
-  | 'nature'
-  | 'food'
-  | 'technology'
-  | 'seasonal'
-  | 'abstract';
+  'symbol' | 'object' | 'nature' | 'food' | 'technology' | 'seasonal' | 'abstract';
 
 export interface ShapeArt {
   readonly id: string;

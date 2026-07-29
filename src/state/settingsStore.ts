@@ -37,7 +37,9 @@ interface SettingsState extends PersistedSettings {
   readonly hydrated: boolean;
   hydrate: () => Promise<void>;
   set: <K extends keyof PersistedSettings>(key: K, value: PersistedSettings[K]) => void;
-  toggle: (key: 'music' | 'sfx' | 'haptics' | 'reducedMotion' | 'confirmRestart' | 'assist') => void;
+  toggle: (
+    key: 'music' | 'sfx' | 'haptics' | 'reducedMotion' | 'confirmRestart' | 'assist',
+  ) => void;
   resetSettings: () => void;
 }
 
@@ -79,7 +81,14 @@ export const useSettingsStore = create<SettingsState>((setState, get) => ({
 
   set: (key, value) => {
     setState({ [key]: value } as Pick<PersistedSettings, typeof key>);
-    const { hydrated: _hydrated, hydrate: _h, set: _s, toggle: _t, resetSettings: _r, ...rest } = get();
+    const {
+      hydrated: _hydrated,
+      hydrate: _h,
+      set: _s,
+      toggle: _t,
+      resetSettings: _r,
+      ...rest
+    } = get();
     persist({ ...rest, [key]: value });
   },
 

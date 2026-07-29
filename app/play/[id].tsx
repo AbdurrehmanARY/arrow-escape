@@ -128,6 +128,16 @@ export default function PlayScreen() {
   const coach: CoachMoment | undefined = useMemo(() => {
     if (!onboardingHydrated || status !== 'playing') return undefined;
     if (levelId === 1 && state.taps === 0 && shouldShowCoach('welcome')) return 'welcome';
+
+    // The two gate cards come before the block and low-heart ones, and fire before
+    // the first tap rather than after a mistake. Every other card explains
+    // something that has already happened; these have to arrive first, because the
+    // mistake they prevent is one the player would have no way to see coming.
+    if (built?.ok && state.taps === 0) {
+      if (built.value.board.hasShutters && shouldShowCoach('firstShutter')) return 'firstShutter';
+      if (built.value.board.hasObstacles && shouldShowCoach('firstGate')) return 'firstGate';
+    }
+
     if (state.session.mistakes > 0 && shouldShowCoach('firstBlock')) return 'firstBlock';
     if (state.session.heartsLeft <= 2 && shouldShowCoach('lowHearts')) return 'lowHearts';
     return undefined;
@@ -135,6 +145,7 @@ export default function PlayScreen() {
     onboardingHydrated,
     status,
     levelId,
+    built,
     state.taps,
     state.session.mistakes,
     state.session.heartsLeft,
@@ -156,6 +167,16 @@ export default function PlayScreen() {
       title: 'The board is still fine',
       body: 'A blocked tap never changes anything, so this level is exactly as winnable as when you started. Only your hearts are running out — restart any time, it costs nothing.',
       dismiss: 'Keep going',
+    },
+    firstGate: {
+      title: 'The coloured squares are doors',
+      body: 'A filled one is shut, and nothing can pass through it. It opens by itself the moment every arrow of that colour has left the board — so clear the colour first, then the way through is free.',
+      dismiss: 'Got it',
+    },
+    firstShutter: {
+      title: 'This one works backwards',
+      body: 'The doors on this board are open now and close for good once their colour is gone. Send anything that needs to cross one out first. Get the order wrong and the level is lost with every heart still in your hand.',
+      dismiss: 'Careful, then',
     },
   };
 

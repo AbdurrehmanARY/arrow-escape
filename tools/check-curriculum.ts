@@ -59,7 +59,9 @@ for (const plan of CURRICULUM) {
 
 console.log('');
 console.log(`${CURRICULUM.length} levels planned.`);
-console.log(`  tier mix        : ${[...tierCounts.entries()].map(([t, n]) => `${t} ${n}`).join(', ')}`);
+console.log(
+  `  tier mix        : ${[...tierCounts.entries()].map(([t, n]) => `${t} ${n}`).join(', ')}`,
+);
 console.log(`  distinct shapes : ${shapeCounts.size}`);
 console.log(`  oversized boards: ${oversized} (need zoom and pan)`);
 console.log(`  largest board   : ${biggest} cells`);

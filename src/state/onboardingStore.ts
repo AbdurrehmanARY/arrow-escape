@@ -31,7 +31,24 @@ export type CoachMoment =
   /** The first time a tap is blocked: why it failed and what it cost. */
   | 'firstBlock'
   /** The first time hearts run low: that the board is still fine. */
-  | 'lowHearts';
+  | 'lowHearts'
+  /**
+   * The first board carrying a gate: that the coloured squares are doors and the
+   * matching arrows are the keys.
+   *
+   * A gate is the one thing on the board that a player genuinely cannot infer by
+   * watching. Everything else about this game rewards looking harder; a closed
+   * gate just looks like a wall until the moment it stops being one.
+   */
+  | 'firstGate'
+  /**
+   * The first board where clearing a colour *shuts* a gate.
+   *
+   * The single most important card in the set, because it is the only rule in the
+   * game that can cost a player the level without costing them a heart. Meeting
+   * that unannounced reads as a bug.
+   */
+  | 'firstShutter';
 
 interface PersistedOnboarding {
   readonly seen: Partial<Record<CoachMoment, boolean>>;

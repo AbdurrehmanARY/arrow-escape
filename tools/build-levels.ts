@@ -26,8 +26,8 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { buildLevel, solve, verifySolution } from '../src/game';
-import { encodeLevel, type DifficultyTier, type EncodedLevel } from '../src/game/codec';
-import { CURRICULUM, isOversized, bandOf } from './curriculum';
+import { encodeLevel, TIER_ORDER, type DifficultyTier, type EncodedLevel } from '../src/game/codec';
+import { CURRICULUM, isOversized, isPlanningLevel, bandOf } from './curriculum';
 import { generateLevel } from './generate';
 
 const OUT_DIR = join(process.cwd(), 'src', 'data', 'levels');
@@ -58,6 +58,10 @@ interface BuildResult {
   readonly arrows: number;
   readonly cells: number;
   readonly oversized: boolean;
+  /** Gate modes actually present on the finished board, not merely requested. */
+  readonly gateModes: readonly string[];
+  /** Share of legal taps that lose the level. Non-zero only on shutter boards. */
+  readonly blunderRate: number;
 }
 
 function buildOne(planIndex: number): BuildResult {
@@ -79,6 +83,12 @@ function buildOne(planIndex: number): BuildResult {
         targetBlindMistakes: plan.targetBlindMistakes,
         attempts: attemptsFor(cells),
         hearts: plan.hearts,
+        // Only the last relaxation pass drops the gate. A planning level without a
+        // shutter is a different level wearing the wrong name, so it is worth
+        // several attempts before giving up on it — but not worth failing the whole
+        // build over, because "no board of this shape can take a gate" is a fact
+        // about the shape, not a bug.
+        ...(plan.gate && relax < 3 ? { gate: plan.gate } : {}),
       },
       { id: plan.id, name: plan.name },
     );
@@ -109,6 +119,8 @@ function buildOne(planIndex: number): BuildResult {
       arrows: candidate.metrics.arrowCount,
       cells,
       oversized: isOversized(plan),
+      gateModes: (candidate.level.gates ?? []).map((gate) => gate.mode),
+      blunderRate: candidate.metrics.blunderRate,
     };
   }
 
@@ -166,7 +178,9 @@ for (let p = 0; p < packCount; p += 1) {
 const imports = packNames
   .map((name) => `import ${name.replace('-', '')} from './${name}.json';`)
   .join('\n');
-const list = packNames.map((name) => `  ${name.replace('-', '')} as unknown as LevelPack,`).join('\n');
+const list = packNames
+  .map((name) => `  ${name.replace('-', '')} as unknown as LevelPack,`)
+  .join('\n');
 
 writeFileSync(
   join(OUT_DIR, 'index.ts'),
@@ -250,7 +264,7 @@ for (const r of results) {
 
 console.log('  tier          count   arrows(avg)   cells(avg)   blind: min / avg / max');
 console.log('  ' + '-'.repeat(74));
-for (const tier of ['easy', 'medium', 'hard', 'superHard', 'extremeHard'] as DifficultyTier[]) {
+for (const tier of TIER_ORDER) {
   const rows = byTier.get(tier) ?? [];
   if (rows.length === 0) continue;
   const avg = (pick: (r: BuildResult) => number) =>
@@ -258,20 +272,47 @@ for (const tier of ['easy', 'medium', 'hard', 'superHard', 'extremeHard'] as Dif
   const blinds = rows.map((r) => r.blind);
   console.log(
     `  ${tier.padEnd(13)} ${String(rows.length).padStart(4)}   ` +
-      `${avg((r) => r.arrows).toFixed(1).padStart(10)}   ` +
-      `${avg((r) => r.cells).toFixed(0).padStart(9)}   ` +
-      `${Math.min(...blinds).toFixed(1).padStart(6)} / ${avg((r) => r.blind).toFixed(1).padStart(6)} / ${Math.max(...blinds).toFixed(1).padStart(6)}`,
+      `${avg((r) => r.arrows)
+        .toFixed(1)
+        .padStart(10)}   ` +
+      `${avg((r) => r.cells)
+        .toFixed(0)
+        .padStart(9)}   ` +
+      `${Math.min(...blinds)
+        .toFixed(1)
+        .padStart(6)} / ${avg((r) => r.blind)
+        .toFixed(1)
+        .padStart(6)} / ${Math.max(...blinds)
+        .toFixed(1)
+        .padStart(6)}`,
   );
 }
 
-const offTarget = results.filter(
-  (r) => Math.abs(r.blind - r.target) > Math.max(3, r.target * 0.5),
-);
+const offTarget = results.filter((r) => Math.abs(r.blind - r.target) > Math.max(3, r.target * 0.5));
 const oversized = results.filter((r) => r.oversized).length;
 const totalArrows = results.reduce((sum, r) => sum + r.arrows, 0);
 
+const opensLevels = results.filter((r) => r.gateModes.includes('opens')).length;
+const shutsLevels = results.filter((r) => r.gateModes.includes('shuts'));
+const plannedShutters = CURRICULUM.filter((plan) => isPlanningLevel(plan.id)).length;
+
 console.log('');
-console.log(`  ${results.length - offTarget.length}/${results.length} levels landed in their target band.`);
+console.log(
+  `  ${results.length - offTarget.length}/${results.length} levels landed in their target band.`,
+);
 console.log(`  ${oversized} boards are oversized and need zoom and pan.`);
 console.log(`  ${totalArrows} arrows across the library.`);
 console.log(`  largest board: ${Math.max(...results.map((r) => r.cells))} cells.`);
+console.log('');
+console.log(`  ${opensLevels} levels carry an opening gate.`);
+// Reported against what was planned, not just as a count. A shutter that could
+// not be placed silently downgrades a planning level to an ordinary one, and that
+// is exactly the kind of quiet shortfall a build log exists to surface.
+console.log(
+  `  ${shutsLevels.length} of ${plannedShutters} planned shutter levels got one` +
+    (shutsLevels.length > 0
+      ? `, blunder rate avg ${(
+          shutsLevels.reduce((sum, r) => sum + r.blunderRate, 0) / shutsLevels.length
+        ).toFixed(2)}.`
+      : '.'),
+);

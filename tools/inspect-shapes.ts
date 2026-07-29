@@ -18,9 +18,7 @@ const rows = Number(process.argv[2] ?? 14);
 const cols = Number(process.argv[3] ?? 14);
 const filter = process.argv[4]?.toLowerCase();
 
-const shapes = filter
-  ? SHAPE_NAMES.filter((s) => s.toLowerCase().includes(filter))
-  : SHAPE_NAMES;
+const shapes = filter ? SHAPE_NAMES.filter((s) => s.toLowerCase().includes(filter)) : SHAPE_NAMES;
 
 let thin = 0;
 
@@ -34,7 +32,9 @@ for (const shape of shapes) {
   const warning = capacity < rows * cols * 0.18 ? '  <-- very thin' : '';
   if (warning) thin += 1;
 
-  console.log(`${shape}  [${categoryOf(shape)}]  ${capacity}/${rows * cols} cells (${fill}%)${warning}`);
+  console.log(
+    `${shape}  [${categoryOf(shape)}]  ${capacity}/${rows * cols} cells (${fill}%)${warning}`,
+  );
   console.log(renderMask(mask, rows, cols));
   console.log('');
 }

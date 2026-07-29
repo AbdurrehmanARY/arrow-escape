@@ -21,15 +21,9 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fr
 import { useRouter } from 'expo-router';
 
 import { IconButton, Screen, useTheme } from '@components';
-import { TIER_LABELS, type DifficultyTier } from '@game/codec';
+import { TIER_BANDS, TIER_LABELS, type DifficultyTier } from '@game/codec';
 import { ENCODED_LEVELS, LEVEL_COUNT } from '@data/levels';
-import {
-  CHAPTERS,
-  chapterOf,
-  chapterProgress,
-  isChapterOpen,
-  type Chapter,
-} from '@data/chapters';
+import { CHAPTERS, chapterOf, chapterProgress, isChapterOpen, type Chapter } from '@data/chapters';
 import {
   clearedCount,
   highestUnlocked,
@@ -50,23 +44,47 @@ interface Row {
   readonly ids: number[];
 }
 
-/** Tier colour, from the active palette so it reskins with the theme. */
+/**
+ * Tier colour, from the active palette so it reskins with the theme.
+ *
+ * Ten tiers share five colours, in pairs. That is not a shortcut: ten
+ * distinguishable dot colours do not exist in a palette that also has to stay
+ * legible for colour-blind players, and a strip of ten near-identical swatches
+ * conveys less than five clear ones. The pair is separated by the tier *name*,
+ * which is on the card anyway.
+ */
 function tierColor(palette: Palette, tier: DifficultyTier): string {
-  switch (tier) {
-    case 'easy':
+  switch (TIER_BANDS[tier]) {
+    case 1:
       return palette.success;
-    case 'medium':
+    case 2:
       return palette.accent;
-    case 'hard':
+    case 3:
       return palette.arrowBlocker;
-    case 'superHard':
+    case 4:
       return palette.danger;
-    case 'extremeHard':
+    case 5:
       return palette.text;
     default:
       return palette.border;
   }
 }
+
+/**
+ * The tiers shown in the legend.
+ *
+ * One per colour band rather than all ten, because a legend is a key to the dots
+ * and there are only five of those. The names shown are the *lower* of each pair,
+ * so the legend reads as a floor — "Hard and up is orange" — rather than
+ * pretending Tricky and Hard look different.
+ */
+const LEGEND_TIERS: readonly DifficultyTier[] = [
+  'tutorial',
+  'casual',
+  'tricky',
+  'superHard',
+  'brutal',
+];
 
 export default function LevelSelectScreen() {
   const router = useRouter();
@@ -98,9 +116,7 @@ export default function LevelSelectScreen() {
             {openChapter ? openChapter.name : 'Levels'}
           </Text>
           <Text style={[styles.subtitle, { color: palette.textFaint }]}>
-            {openChapter
-              ? openChapter.tagline
-              : `${clearedTotal} of ${LEVEL_COUNT} cleared`}
+            {openChapter ? openChapter.tagline : `${clearedTotal} of ${LEVEL_COUNT} cleared`}
           </Text>
         </View>
         <View style={styles.headerSpacer} />
@@ -139,19 +155,18 @@ export default function LevelSelectScreen() {
  * chapters is fine for a player working forward and miserable for someone
  * checking one specific board.
  */
-function JumpToLevel({
-  palette,
-  onJump,
-}: {
-  palette: Palette;
-  onJump: (id: number) => void;
-}) {
+function JumpToLevel({ palette, onJump }: { palette: Palette; onJump: (id: number) => void }) {
   const [text, setText] = useState('');
   const parsed = Number(text);
   const valid = Number.isInteger(parsed) && parsed >= 1 && parsed <= LEVEL_COUNT;
 
   return (
-    <View style={[styles.testingBar, { backgroundColor: palette.accentMuted, borderColor: palette.accent }]}>
+    <View
+      style={[
+        styles.testingBar,
+        { backgroundColor: palette.accentMuted, borderColor: palette.accent },
+      ]}
+    >
       <Text style={[styles.testingLabel, { color: palette.text }]}>TESTING · all levels open</Text>
       <View style={styles.jumpRow}>
         <TextInput
@@ -165,7 +180,11 @@ function JumpToLevel({
           onSubmitEditing={() => valid && onJump(parsed)}
           style={[
             styles.jumpInput,
-            { backgroundColor: palette.surfaceRaised, borderColor: palette.border, color: palette.text },
+            {
+              backgroundColor: palette.surfaceRaised,
+              borderColor: palette.border,
+              color: palette.text,
+            },
           ]}
         />
         <Pressable
@@ -217,9 +236,7 @@ function ChapterList({
             key={chapter.index}
             accessibilityRole="button"
             accessibilityLabel={
-              open
-                ? `${chapter.name}, ${cleared} of ${total} cleared`
-                : `${chapter.name}, locked`
+              open ? `${chapter.name}, ${cleared} of ${total} cleared` : `${chapter.name}, locked`
             }
             accessibilityState={{ disabled: !open }}
             disabled={!open}
@@ -314,16 +331,14 @@ function ChapterGrid({
   return (
     <>
       <View style={styles.legend}>
-        {(['easy', 'medium', 'hard', 'superHard', 'extremeHard'] as DifficultyTier[]).map(
-          (tier) => (
-            <View key={tier} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: tierColor(palette, tier) }]} />
-              <Text style={[styles.legendLabel, { color: palette.textFaint }]}>
-                {TIER_LABELS[tier]}
-              </Text>
-            </View>
-          ),
-        )}
+        {LEGEND_TIERS.map((tier) => (
+          <View key={tier} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: tierColor(palette, tier) }]} />
+            <Text style={[styles.legendLabel, { color: palette.textFaint }]}>
+              {TIER_LABELS[tier]}+
+            </Text>
+          </View>
+        ))}
       </View>
 
       <FlatList

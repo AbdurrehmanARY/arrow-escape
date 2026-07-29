@@ -65,7 +65,11 @@ export const useHintStore = create<HintState>((set, get) => ({
     const { available, spent } = get();
     if (available <= 0) return false;
 
-    const next: PersistedHints = { available: available - 1, spent: spent + 1, earned: get().earned };
+    const next: PersistedHints = {
+      available: available - 1,
+      spent: spent + 1,
+      earned: get().earned,
+    };
     set(next);
     persist(next);
     return true;

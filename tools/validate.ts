@@ -143,7 +143,11 @@ for (const tier of TIER_ORDER) {
   const avg = rows.reduce((sum, v) => sum + v, 0) / rows.length;
   console.log(
     `  ${tier.padEnd(13)} ${String(rows.length).padStart(4)}   ` +
-      `${Math.min(...rows).toFixed(1).padStart(6)} / ${avg.toFixed(1).padStart(6)} / ${Math.max(...rows).toFixed(1).padStart(6)}`,
+      `${Math.min(...rows)
+        .toFixed(1)
+        .padStart(6)} / ${avg.toFixed(1).padStart(6)} / ${Math.max(...rows)
+        .toFixed(1)
+        .padStart(6)}`,
   );
 }
 console.log('');

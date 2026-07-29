@@ -4,10 +4,11 @@
  * Purpose:      Decide what every level is, so the curve is designed rather than
  *               emergent, and so no two levels feel like the same puzzle.
  * Responsibilities:
- *               - Tier definitions (Easy through Extreme).
+ *               - Tier definitions (Tutorial through Nightmare).
  *               - The mixed, non-linear progression after level 20.
  *               - Shape rotation, so silhouettes rarely repeat close together.
- * Notes:        Two rules shape everything here.
+ *               - Which levels carry gates, and which carry shutters.
+ * Notes:        Three rules shape everything here.
  *
  *               **Arrow counts are derived, never declared.** A snake occupies
  *               several cells, so "40 arrows" is a wish until you know the mask's
@@ -22,11 +23,19 @@
  *               any individual level is a surprise. A player who just failed an
  *               Extreme board might get an Easy one next, and that is the point.
  *
+ *               **A gate is an intent, not a fact.** Whether a given board can
+ *               take one and stay solvable is not knowable until the board exists,
+ *               so a plan asks and the generator reports what it managed. The build
+ *               log prints shutters-placed against shutters-planned for exactly
+ *               that reason — a planning level that quietly failed to get its
+ *               shutter is an ordinary level wearing the wrong name.
+ *
  *               Everything is seeded and deterministic: the same 600 levels are
  *               produced on every machine, on every build.
  */
 
 import type { DifficultyTier } from '../src/game/codec';
+import type { GateMode } from '../src/game';
 import { maskCapacity, maskFor, SHAPE_NAMES, type ShapeName } from './shapes';
 import { shapeArtById } from './shapeArt';
 
@@ -42,6 +51,23 @@ export interface LevelPlan {
   readonly maxBodyLength: number;
   readonly targetBlindMistakes: number;
   readonly hearts: number;
+  /**
+   * A gate for the generator to try to place, if any.
+   *
+   * "Try" is the operative word. Whether a gate can be added to a given board and
+   * leave it solvable — and, for a shutter, leave it genuinely order-dependent —
+   * is not knowable until the board exists. The plan states an intent; the
+   * generator reports what it managed.
+   */
+  readonly gate?: GatePlan;
+}
+
+export interface GatePlan {
+  readonly mode: GateMode;
+  /** How many distinct colours to use. More colours, more to keep track of. */
+  readonly groupCount: number;
+  /** Gate cells per colour. */
+  readonly cellsPerGroup: number;
 }
 
 /**
@@ -65,49 +91,189 @@ interface TierSpec {
   readonly hearts: number;
   /** Curated 1–5 band shown in level select. */
   readonly band: number;
+  /** Probability that a level in this tier attempts an `opens` gate. */
+  readonly gateChance: number;
 }
 
+/**
+ * The ten tiers.
+ *
+ * Two things changed with Phase 16 and they pull against each other, which is why
+ * the numbers below are not a smooth interpolation of the old five.
+ *
+ * **Bodies got much longer** — from 2–6 cells to 2–14. That is the single biggest
+ * lever on tracing difficulty, because following a fourteen-cell snake through a
+ * tangle is a genuinely different task from following a four-cell one. But a
+ * longer snake covers more cells, so the *same* fill yields far fewer arrows, and
+ * fewer arrows means a smaller frontier ratio and therefore a *lower*
+ * `expectedBlindMistakes`. Fill had to rise across the board to compensate.
+ *
+ * **Gates arrived**, so the upper tiers have a second difficulty axis that is not
+ * reading at all. `gateChance` is how often an `opens` gate is worth attempting;
+ * shutter levels are placed deliberately rather than sampled — see `PLANNING_STEP`.
+ */
 const TIERS: Record<DifficultyTier, TierSpec> = {
+  tutorial: {
+    // Small and open on purpose. The only tier where a careless player should be
+    // able to finish without losing a heart.
+    minSize: 6,
+    maxSize: 8,
+    minFill: 0.34,
+    maxFill: 0.46,
+    minLen: 2,
+    maxLen: 4,
+    minBlind: 1,
+    maxBlind: 3,
+    hearts: 5,
+    band: 1,
+    gateChance: 0,
+  },
   easy: {
     // Sized so even a narrow silhouette still carries 6+ snakes. An "easy" board
     // of three arrows is not easy, it is empty -- there is nothing to read.
-    minSize: 8, maxSize: 10,
-    minFill: 0.44, maxFill: 0.56,
-    minLen: 2, maxLen: 3,
-    minBlind: 2, maxBlind: 6,
-    hearts: 5, band: 1,
+    minSize: 8,
+    maxSize: 10,
+    minFill: 0.48,
+    maxFill: 0.58,
+    minLen: 2,
+    maxLen: 5,
+    minBlind: 3,
+    maxBlind: 7,
+    hearts: 5,
+    band: 1,
+    gateChance: 0,
+  },
+  casual: {
+    minSize: 9,
+    maxSize: 12,
+    minFill: 0.52,
+    maxFill: 0.62,
+    minLen: 2,
+    maxLen: 6,
+    minBlind: 6,
+    maxBlind: 12,
+    hearts: 5,
+    band: 2,
+    gateChance: 0,
   },
   medium: {
-    minSize: 10, maxSize: 13,
-    minFill: 0.5, maxFill: 0.6,
-    minLen: 3, maxLen: 4,
-    minBlind: 6, maxBlind: 14,
-    hearts: 5, band: 2,
+    minSize: 11,
+    maxSize: 14,
+    minFill: 0.56,
+    maxFill: 0.66,
+    minLen: 3,
+    maxLen: 7,
+    minBlind: 11,
+    maxBlind: 19,
+    hearts: 5,
+    band: 2,
+    gateChance: 0.15,
+  },
+  tricky: {
+    minSize: 13,
+    maxSize: 16,
+    minFill: 0.58,
+    maxFill: 0.68,
+    minLen: 3,
+    maxLen: 8,
+    minBlind: 18,
+    maxBlind: 30,
+    hearts: 5,
+    band: 3,
+    gateChance: 0.25,
   },
   hard: {
-    minSize: 13, maxSize: 16,
-    minFill: 0.54, maxFill: 0.64,
-    minLen: 3, maxLen: 5,
-    minBlind: 14, maxBlind: 26,
-    hearts: 5, band: 3,
+    minSize: 15,
+    maxSize: 18,
+    minFill: 0.6,
+    maxFill: 0.7,
+    minLen: 3,
+    maxLen: 9,
+    minBlind: 28,
+    maxBlind: 46,
+    hearts: 5,
+    band: 3,
+    gateChance: 0.35,
   },
   superHard: {
     // Past this size the board no longer fits a phone screen, and inspecting it
     // means panning and zooming. That is the tier's defining feature.
-    minSize: 17, maxSize: 21,
-    minFill: 0.58, maxFill: 0.68,
-    minLen: 3, maxLen: 6,
-    minBlind: 26, maxBlind: 48,
-    hearts: 5, band: 4,
+    minSize: 17,
+    maxSize: 21,
+    minFill: 0.62,
+    maxFill: 0.72,
+    minLen: 4,
+    maxLen: 11,
+    minBlind: 42,
+    maxBlind: 70,
+    hearts: 5,
+    band: 4,
+    gateChance: 0.4,
   },
   extremeHard: {
-    minSize: 22, maxSize: 27,
-    minFill: 0.62, maxFill: 0.72,
-    minLen: 3, maxLen: 6,
-    minBlind: 48, maxBlind: 95,
-    hearts: 5, band: 5,
+    minSize: 21,
+    maxSize: 25,
+    minFill: 0.64,
+    maxFill: 0.74,
+    minLen: 4,
+    maxLen: 12,
+    minBlind: 65,
+    maxBlind: 110,
+    hearts: 5,
+    band: 4,
+    gateChance: 0.45,
+  },
+  brutal: {
+    minSize: 24,
+    maxSize: 28,
+    minFill: 0.66,
+    maxFill: 0.76,
+    minLen: 4,
+    maxLen: 13,
+    minBlind: 95,
+    maxBlind: 155,
+    hearts: 5,
+    band: 5,
+    gateChance: 0.5,
+  },
+  nightmare: {
+    minSize: 26,
+    maxSize: 30,
+    minFill: 0.68,
+    maxFill: 0.78,
+    minLen: 5,
+    maxLen: 14,
+    minBlind: 135,
+    maxBlind: 230,
+    hearts: 5,
+    band: 5,
+    gateChance: 0.55,
   },
 };
+
+/**
+ * Every Nth level from `PLANNING_FROM` is a planning level: it carries a `shuts`
+ * gate, so tap order can lose it.
+ *
+ * Placed on a fixed cadence rather than sampled from the mix for two reasons. A
+ * mechanic that can lose you a level without spending a heart needs to arrive
+ * predictably enough to be learned, and proving a shutter board solvable is a
+ * search rather than a graph peel — affordable forty times in a build, not six
+ * hundred. They start well after the tutorial so the base rule is solid first.
+ */
+const PLANNING_STEP = 12;
+const PLANNING_FROM = 120;
+
+/**
+ * True if this level id is one of the planning levels.
+ *
+ * The last ten are excluded. They are the endgame, they are the biggest boards in
+ * the game, and a shutter would force them down to a size that undoes the point of
+ * finishing there.
+ */
+export function isPlanningLevel(id: number): boolean {
+  return id >= PLANNING_FROM && id <= 590 && id % PLANNING_STEP === 0;
+}
 
 /**
  * How the tier mix shifts across the game.
@@ -122,10 +288,81 @@ interface MixBand {
 }
 
 const MIX: readonly MixBand[] = [
-  { upTo: 150, weights: { easy: 38, medium: 34, hard: 21, superHard: 6, extremeHard: 1 } },
-  { upTo: 300, weights: { easy: 24, medium: 31, hard: 28, superHard: 13, extremeHard: 4 } },
-  { upTo: 450, weights: { easy: 15, medium: 24, hard: 30, superHard: 22, extremeHard: 9 } },
-  { upTo: 600, weights: { easy: 9, medium: 17, hard: 27, superHard: 29, extremeHard: 18 } },
+  {
+    upTo: 120,
+    weights: {
+      tutorial: 14,
+      easy: 30,
+      casual: 26,
+      medium: 18,
+      tricky: 8,
+      hard: 3,
+      superHard: 1,
+      extremeHard: 0,
+      brutal: 0,
+      nightmare: 0,
+    },
+  },
+  {
+    upTo: 240,
+    weights: {
+      tutorial: 4,
+      easy: 17,
+      casual: 23,
+      medium: 24,
+      tricky: 17,
+      hard: 10,
+      superHard: 4,
+      extremeHard: 1,
+      brutal: 0,
+      nightmare: 0,
+    },
+  },
+  {
+    upTo: 360,
+    weights: {
+      tutorial: 1,
+      easy: 9,
+      casual: 15,
+      medium: 21,
+      tricky: 20,
+      hard: 17,
+      superHard: 11,
+      extremeHard: 5,
+      brutal: 1,
+      nightmare: 0,
+    },
+  },
+  {
+    upTo: 480,
+    weights: {
+      tutorial: 0,
+      easy: 4,
+      casual: 9,
+      medium: 15,
+      tricky: 18,
+      hard: 20,
+      superHard: 17,
+      extremeHard: 11,
+      brutal: 5,
+      nightmare: 1,
+    },
+  },
+  {
+    upTo: 600,
+    weights: {
+      tutorial: 0,
+      easy: 2,
+      casual: 5,
+      medium: 9,
+      tricky: 13,
+      hard: 17,
+      superHard: 19,
+      extremeHard: 17,
+      brutal: 12,
+      nightmare: 6,
+    },
+  },
 ];
 
 /** Deterministic PRNG, so the library rebuilds identically every time. */
@@ -151,17 +388,92 @@ const lerp = (rng: () => number, lo: number, hi: number): number => lo + rng() *
  * Easy and lower Medium so nobody bounces off before the game has shown itself.
  */
 const ONBOARDING_SHAPES: ShapeName[] = [
-  'free', 'free', 'diamond', 'free', 'cross',
-  'circle', 'free', 'triangle', 'hexagon', 'free',
-  'star', 'heart', 'free', 'ring', 'diamond',
-  'cloud', 'free', 'shield', 'circle', 'crown',
+  'free',
+  'free',
+  'diamond',
+  'free',
+  'cross',
+  'circle',
+  'free',
+  'triangle',
+  'hexagon',
+  'free',
+  'star',
+  'heart',
+  'free',
+  'ring',
+  'diamond',
+  'cloud',
+  'free',
+  'shield',
+  'circle',
+  'crown',
 ];
 
 /** Adjectives that vary a level's name when its shape recurs. */
 const QUALIFIERS: readonly string[] = [
-  'First', 'Quiet', 'Little', 'Open', 'Broken', 'Tangled', 'Twisted', 'Dense',
-  'Deep', 'Hidden', 'Silent', 'Woven', 'Crooked', 'Endless', 'Grand', 'Vast',
-  'Iron', 'Golden', 'Midnight', 'Crimson', 'Frozen', 'Burning', 'Ancient', 'Final',
+  'First',
+  'Quiet',
+  'Little',
+  'Open',
+  'Broken',
+  'Tangled',
+  'Twisted',
+  'Dense',
+  'Deep',
+  'Hidden',
+  'Silent',
+  'Woven',
+  'Crooked',
+  'Endless',
+  'Grand',
+  'Vast',
+  'Iron',
+  'Golden',
+  'Midnight',
+  'Crimson',
+  'Frozen',
+  'Burning',
+  'Ancient',
+  'Final',
+];
+
+/**
+ * Names for levels where tap order can lose you the board.
+ *
+ * Deliberately ominous and deliberately consistent. These are the only levels in
+ * the game where a mistake costs more than a heart, and the name is the one place
+ * that difference can be signalled before the player finds out the hard way.
+ */
+const PLANNING_QUALIFIERS: readonly string[] = [
+  'Sealed',
+  'One-Way',
+  'Closing',
+  'Shuttered',
+  'Falling',
+  'Last-Chance',
+  'Narrowing',
+  'Vanishing',
+  'Fading',
+  'Collapsing',
+  'Receding',
+  'Final-Door',
+];
+
+/** Names for levels carrying an ordinary (opening) gate. */
+const GATED_QUALIFIERS: readonly string[] = [
+  'Locked',
+  'Keyed',
+  'Barred',
+  'Gated',
+  'Sworn',
+  'Guarded',
+  'Bolted',
+  'Warded',
+  'Chained',
+  'Bound',
+  'Held',
+  'Watched',
 ];
 
 /** Readable label for a shape, for level names. */
@@ -172,10 +484,26 @@ function shapeLabel(shape: ShapeName): string {
 }
 
 /**
+ * Fraction of a mask a random self-avoiding fill can realistically use.
+ *
+ * Must match `check-curriculum.ts`, which is the thing that fails the build when a
+ * plan overshoots. Growth paints itself into corners and abandons pockets too
+ * small to hold another body, so raw capacity is always an overestimate.
+ */
+const USABLE_FRACTION = 0.6;
+
+/**
  * Turn a fill fraction into an arrow count the shape can actually hold.
  *
  * Sized off the mid-point of the length range, since growth lands between the
  * bounds and sizing off the minimum consistently overshoots.
+ *
+ * The hard cap on the second line is what stops long bodies from quietly breaking
+ * the plan. With bodies of 2–6 the fill term was almost always the binding
+ * constraint; at 7–14 it stops being one, and a nightmare board would happily ask
+ * for forty twelve-cell snakes on a silhouette that can hold twenty. The cap is
+ * stated in terms of the *minimum* length because that is the floor below which
+ * `growBoard` throws a snake away and tries again.
  */
 function arrowsFor(
   shape: ShapeName,
@@ -188,7 +516,9 @@ function arrowsFor(
 ): number {
   const capacity = maskCapacity(maskFor(shape, rows, cols));
   const averageLength = (minLen + maxLen) / 2;
-  return Math.max(floor, Math.floor((capacity * fill) / averageLength));
+  const byFill = Math.floor((capacity * fill) / averageLength);
+  const byCapacity = Math.floor((capacity * USABLE_FRACTION) / minLen);
+  return Math.max(1, Math.min(Math.max(floor, byFill), byCapacity));
 }
 
 /** Which mix band a level falls in. */
@@ -200,7 +530,10 @@ function weightsFor(id: number): Readonly<Record<DifficultyTier, number>> {
 }
 
 /** Draw a tier from a weighted mix. */
-function pickTier(rng: () => number, weights: Readonly<Record<DifficultyTier, number>>): DifficultyTier {
+function pickTier(
+  rng: () => number,
+  weights: Readonly<Record<DifficultyTier, number>>,
+): DifficultyTier {
   const entries = Object.entries(weights) as [DifficultyTier, number][];
   const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
   let roll = rng() * total;
@@ -228,18 +561,21 @@ function buildOnboarding(): LevelPlan[] {
 
   for (let id = 1; id <= 20; id += 1) {
     const progress = (id - 1) / 19;
-    const size = Math.round(6 + progress * 4); // 6x6 up to 10x10
+    const size = Math.round(6 + progress * 5); // 6x6 up to 11x11
     const shape = ONBOARDING_SHAPES[id - 1] ?? 'free';
-    const fill = 0.3 + progress * 0.18;
-    const minLen = id <= 6 ? 2 : 3;
-    const maxLen = id <= 10 ? 4 : 5;
-    // Rises from a gentle 1.5 to about 9 — by the end, careless play costs hearts.
-    const blind = 1.5 + progress * progress * 7.5;
+    const fill = 0.32 + progress * 0.2;
+    // Bodies lengthen across the twenty as well as everything else: the first few
+    // boards are readable at a glance precisely because their snakes are short,
+    // and that is the thing being taken away.
+    const minLen = id <= 6 ? 2 : id <= 13 ? 3 : 4;
+    const maxLen = id <= 6 ? 4 : id <= 13 ? 5 : 6;
+    // Rises from a gentle 1.5 to about 10 — by the end, careless play costs hearts.
+    const blind = 1.5 + progress * progress * 8.5;
 
     plans.push({
       id,
       name: id === 1 ? 'First Light' : `${QUALIFIERS[id % QUALIFIERS.length]} ${shapeLabel(shape)}`,
-      tier: blind < 6 ? 'easy' : 'medium',
+      tier: blind < 3 ? 'tutorial' : blind < 7 ? 'easy' : 'casual',
       shape,
       rows: size,
       cols: size,
@@ -263,13 +599,23 @@ function buildMainRun(): LevelPlan[] {
   let shapeCursor = 0;
 
   for (let id = 21; id <= 600; id += 1) {
+    const planning = isPlanningLevel(id);
+
     // The last ten are the endgame. A mixed curve is right everywhere else, but
     // finishing 600 levels on a random Medium is a flat note to end on.
-    const tier: DifficultyTier = id > 590 ? 'extremeHard' : pickTier(rng, weightsFor(id));
+    const tier: DifficultyTier = id > 590 ? 'nightmare' : pickTier(rng, weightsFor(id));
     const spec = TIERS[tier];
 
     // Level 600 is the largest board in the game.
-    const size = id === 600 ? spec.maxSize : Math.round(lerp(rng, spec.minSize, spec.maxSize));
+    let size = id === 600 ? spec.maxSize : Math.round(lerp(rng, spec.minSize, spec.maxSize));
+
+    // Planning levels are capped well below their tier's usual size. Proving a
+    // shutter board solvable is a search rather than a graph peel, and the cost of
+    // that search is what decides whether the library builds in half a minute or
+    // half an hour. It costs these levels nothing worth having: a shutter is about
+    // sequence, and sequence is legible on a board you can see all at once.
+    if (planning) size = Math.min(size, 15);
+
     const pool = shapePoolFor(size);
     const shape = pool[shapeCursor % pool.length]!;
     shapeCursor += 1;
@@ -285,22 +631,53 @@ function buildMainRun(): LevelPlan[] {
     const rows = size;
     const cols = size + stretch;
 
+    // Bodies are capped on planning levels too, for the same reason — and because
+    // a level asking two hard questions at once usually asks neither well.
+    const maxLen = planning ? Math.min(spec.maxLen, 7) : spec.maxLen;
+    const minLen = Math.min(spec.minLen, maxLen);
+
+    const gate: GatePlan | undefined = planning
+      ? { mode: 'shuts', groupCount: 1, cellsPerGroup: 1 + Math.floor(rng() * 2) }
+      : rng() < spec.gateChance
+        ? {
+            mode: 'opens',
+            groupCount: rng() < 0.3 ? 2 : 1,
+            cellsPerGroup: 1 + Math.floor(rng() * 3),
+          }
+        : undefined;
+
     plans.push({
       id,
-      name: id === 600 ? 'Last Word' : `${QUALIFIERS[(id * 7) % QUALIFIERS.length]} ${shapeLabel(shape)}`,
+      name: nameFor(id, shape, planning, gate !== undefined),
       tier,
       shape,
       rows,
       cols,
-      arrowCount: arrowsFor(shape, rows, cols, fill, spec.minLen, spec.maxLen),
-      minBodyLength: spec.minLen,
-      maxBodyLength: spec.maxLen,
+      arrowCount: arrowsFor(shape, rows, cols, fill, minLen, maxLen),
+      minBodyLength: minLen,
+      maxBodyLength: maxLen,
       targetBlindMistakes: Number(blind.toFixed(1)),
       hearts: spec.hearts,
+      ...(gate ? { gate } : {}),
     });
   }
 
   return plans;
+}
+
+/**
+ * A level's name.
+ *
+ * Planning levels get their own vocabulary. It is the only signal in the game that
+ * a board plays by a different rule, and a player who has just lost one without
+ * spending a heart deserves to have been warned by something.
+ */
+function nameFor(id: number, shape: ShapeName, planning: boolean, gated: boolean): string {
+  if (id === 600) return 'Last Word';
+  if (planning)
+    return `${PLANNING_QUALIFIERS[id % PLANNING_QUALIFIERS.length]} ${shapeLabel(shape)}`;
+  if (gated) return `${GATED_QUALIFIERS[id % GATED_QUALIFIERS.length]} ${shapeLabel(shape)}`;
+  return `${QUALIFIERS[(id * 7) % QUALIFIERS.length]} ${shapeLabel(shape)}`;
 }
 
 /** The full 600-level curriculum, in play order. */
@@ -312,7 +689,7 @@ export function bandOf(tier: DifficultyTier): number {
 }
 
 /** Board sizes above this no longer fit a phone screen and need zoom and pan. */
-export const OVERSIZED_BOARD_THRESHOLD = 14;
+export const OVERSIZED_BOARD_THRESHOLD = 15;
 
 /** True when a level's board is bigger than a comfortable single screen. */
 export function isOversized(plan: LevelPlan): boolean {

@@ -27,8 +27,29 @@
 
 import type { ArrowSpec, GateMode, LevelDefinition } from './types';
 
-/** Difficulty tiers, as authored in the curriculum. */
-export type DifficultyTier = 'easy' | 'medium' | 'hard' | 'superHard' | 'extremeHard';
+/**
+ * Difficulty tiers, as authored in the curriculum.
+ *
+ * Ten rather than five. Five was enough when a level could only vary in how hard
+ * it was to read, but with 600 of them each tier had to cover a range wide enough
+ * that "Hard" meant almost nothing — the easiest Hard board and the hardest one
+ * were a different game. Ten bands are narrow enough that the label is a promise.
+ *
+ * The names are player-facing and are the reason they are not `t1`…`t10`: a tier
+ * is shown in level select, and a player deciding whether to attempt a level is
+ * better served by "Brutal" than by a number they have to calibrate themselves.
+ */
+export type DifficultyTier =
+  | 'tutorial'
+  | 'easy'
+  | 'casual'
+  | 'medium'
+  | 'tricky'
+  | 'hard'
+  | 'superHard'
+  | 'extremeHard'
+  | 'brutal'
+  | 'nightmare';
 
 /** A level in its stored form. Field names are short because there are 600 of them. */
 export interface EncodedLevel {
@@ -239,18 +260,48 @@ export function decodeLevel(encoded: EncodedLevel): LevelDefinition {
 
 /** Human-readable tier label, for level select and build reports. */
 export const TIER_LABELS: Record<DifficultyTier, string> = {
+  tutorial: 'Tutorial',
   easy: 'Easy',
+  casual: 'Casual',
   medium: 'Medium',
+  tricky: 'Tricky',
   hard: 'Hard',
   superHard: 'Super Hard',
   extremeHard: 'Extreme',
+  brutal: 'Brutal',
+  nightmare: 'Nightmare',
 };
 
 /** Tier order, low to high. Used for sorting and for the level-select legend. */
 export const TIER_ORDER: readonly DifficultyTier[] = [
+  'tutorial',
   'easy',
+  'casual',
   'medium',
+  'tricky',
   'hard',
   'superHard',
   'extremeHard',
+  'brutal',
+  'nightmare',
 ];
+
+/**
+ * Curated 1–5 band for a tier, shown as pips in level select.
+ *
+ * Ten tiers still collapse to five pips because a pip strip is a glanceable
+ * signal, not a scale — eight pips of ten is not information anyone reads at
+ * speed. The tier name carries the precision; the pips carry the shape.
+ */
+export const TIER_BANDS: Record<DifficultyTier, number> = {
+  tutorial: 1,
+  easy: 1,
+  casual: 2,
+  medium: 2,
+  tricky: 3,
+  hard: 3,
+  superHard: 4,
+  extremeHard: 4,
+  brutal: 5,
+  nightmare: 5,
+};
