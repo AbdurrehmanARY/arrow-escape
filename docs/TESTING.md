@@ -17,14 +17,14 @@ Runs three things in order:
 |---|---|
 | `tsc --noEmit` | the whole project typechecks under `strict` |
 | `eslint` | no lint errors anywhere |
-| `jest` | 190 tests — rules, solver, geometry, camera, reducer, stores, storage, and all 600 levels |
+| `jest` | 203 tests — rules, solver, geometry, camera, reducer, stores, storage, and all 600 levels |
 | `levels:validate` | re-reads the packs *from disk* and re-solves all 600 |
 
 Expect:
 
 ```
-Test Suites: 12 passed, 12 total
-Tests:       190 passed, 190 total
+Test Suites: 13 passed, 13 total
+Tests:       203 passed, 203 total
 ...
 All levels decode, all are solvable, all recorded solutions verified.
 
@@ -146,6 +146,12 @@ faster, because only changed modules are re-sent.
 8. **Force-quit and reopen.** You should land back where you were with progress
    and hints intact.
 
+### Jumping around
+
+Every level is open in this build. Level select has a **jump-to-number box** at
+the top — type 106, hit Go. Both the menu and level select carry a TESTING badge
+while that flag is on.
+
 ### The curve
 
 - **Levels 1–4** should be nearly impossible to fail even tapping carelessly.
@@ -161,8 +167,9 @@ faster, because only changed modules are re-sent.
 271 levels have boards bigger than your screen — every Super Hard and Extreme
 one. On those:
 
-- **Drag** to pan, **pinch** to zoom, **double-tap** to snap between fit and
-  working zoom.
+- **Drag** to pan, **pinch** to zoom, **Fit** button to snap back to the whole
+  board. There is deliberately no double-tap: on a board covered in tap targets it
+  is indistinguishable from two taps on an arrow, and it was costing two hearts.
 - The board cannot be dragged off into empty space; the camera is clamped.
 - **Tapping must stay accurate at every zoom level.** This is the thing most
   likely to be subtly wrong, so please test it zoomed right in and right out.

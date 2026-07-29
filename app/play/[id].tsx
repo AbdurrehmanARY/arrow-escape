@@ -12,7 +12,7 @@
  *               the board is fitted into whatever is left after the fixed chrome.
  */
 
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -32,7 +32,7 @@ import {
   computeBoardLayout,
   useTheme,
 } from '@components';
-import { buildLevel, findAllSafeMoves, findSafeMove } from '@game';
+import { buildLevel, findAllSafeMoves, findSafeMove, resolveTap } from '@game';
 import { LEVEL_COUNT, levelById } from '@data/levels';
 import { WIN_OVERLAY_DELAY_MS } from '@config';
 import { availability, preload, showRewarded } from '@services/ads';
@@ -99,6 +99,8 @@ export default function PlayScreen() {
    * celebration is simply "has this level been won", derived below.
    */
   const [overlayVisible, setOverlayVisible] = useState(false);
+  /** Bumped to send the board back to fit-to-screen. */
+  const [fitNonce, setFitNonce] = useState(0);
 
   const status = state.session.status;
 
@@ -183,32 +185,46 @@ export default function PlayScreen() {
     return hintedArrow !== undefined ? [hintedArrow] : [];
   }, [assist, coach, built, hintedArrow, state.session.state, status]);
 
+  /**
+   * Rejects a second delivery of the same tap.
+   *
+   * Belt and braces alongside removing the double-tap gesture: a wrong tap costs
+   * a heart, so any duplicate delivery from any source is a heart the player did
+   * not spend. Short enough that a deliberate re-tap still registers.
+   */
+  const lastTapAt = useRef(0);
+
   const onTapArrow = useCallback(
     (index: number) => {
       if (!built?.ok) return;
+
+      const now = Date.now();
+      if (now - lastTapAt.current < 120) return;
+      lastTapAt.current = now;
+
       setHintedArrow(undefined);
       setHintNotice(undefined);
 
+      // Ask the rules what this tap does, rather than guessing from the safe-move
+      // set. `findAllSafeMoves` answers a different question (is this move safe,
+      // not is it legal), returns nothing at all on an unsolvable board, and costs
+      // a solve per tap for information `resolveTap` already has.
       const board = built.value.board;
-      const willBlock =
-        state.session.status === 'playing' &&
-        findAllSafeMoves(board, state.session.state).indexOf(index) === -1 &&
-        !safeArrows.includes(index);
+      const outcome = resolveTap(board, state.session.state, index);
 
       dispatch({ type: 'tap', board, arrowIndex: index });
 
-      // Feedback fires from the tap, not from a state effect: an effect would also
-      // fire on restart and on mount, which reads as phantom noise.
-      const outcome = state.departing === undefined ? willBlock : false;
-      if (outcome) {
+      // Fired here rather than from an effect, because an effect would also fire
+      // on mount and on restart, which reads as phantom noise.
+      if (outcome.kind === 'blocked') {
         playSfx('blocked');
         if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      } else {
+      } else if (outcome.kind === 'escaped') {
         playSfx('release');
         if (haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     },
-    [built, state.session, state.departing, safeArrows, haptics],
+    [built, state.session.state, haptics],
   );
 
   const doRestart = useCallback(() => {
@@ -320,6 +336,7 @@ export default function PlayScreen() {
           contentHeight={layout.height}
           viewportWidth={viewportWidth}
           viewportHeight={viewportHeight}
+          fitNonce={fitNonce}
         >
           <BoardCanvas
             board={built.value.board}
@@ -345,10 +362,23 @@ export default function PlayScreen() {
         </BoardViewport>
 
         {layout.oversized ? (
-          <Text style={[styles.panHint, { color: palette.textFaint }]}>
-            {built.value.board.rows}x{built.value.board.cols} — drag to pan, pinch to zoom,
-            double-tap to fit
-          </Text>
+          <View style={styles.panRow}>
+            <Text style={[styles.panHint, { color: palette.textFaint }]}>
+              {built.value.board.rows}×{built.value.board.cols} — drag to pan, pinch to zoom
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Fit board to screen"
+              onPress={() => setFitNonce((n) => n + 1)}
+              style={({ pressed }) => [
+                styles.fitButton,
+                { borderColor: palette.border, backgroundColor: palette.surfaceRaised },
+                pressed && styles.fitPressed,
+              ]}
+            >
+              <Text style={[styles.fitLabel, { color: palette.textMuted }]}>Fit</Text>
+            </Pressable>
+          </View>
         ) : null}
       </View>
 
@@ -442,7 +472,22 @@ const styles = StyleSheet.create({
   hintCount: { ...typography.heading },
 
   boardWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  panHint: { ...typography.tiny, marginTop: spacing.xs, textAlign: 'center' },
+  panRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  panHint: { ...typography.tiny, textAlign: 'center' },
+  fitButton: {
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+  },
+  fitPressed: { opacity: 0.6 },
+  fitLabel: { ...typography.tiny, fontWeight: '700' },
 
   message: {
     ...typography.small,

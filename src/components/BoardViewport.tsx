@@ -6,7 +6,7 @@
  * Responsibilities:
  *               - Pinch to zoom and drag to pan, on the UI thread.
  *               - Clamp scale and translation so the board cannot be lost.
- *               - Double-tap to snap between fit-to-screen and a working zoom.
+ *               - Snap back to fit on request.
  * Notes:        Extreme levels reach 27x30, which is roughly four screens of
  *               board. Zoom is not a convenience there — reading a head at the
  *               far corner and tracing its ray across the board is the puzzle.
@@ -20,9 +20,15 @@
  *               Clamping happens on the worklet thread during the gesture, not
  *               after it. Correcting afterwards produces a visible snap-back;
  *               correcting live means the board simply refuses to go too far.
+ *
+ *               There is deliberately **no double-tap gesture**. The board is
+ *               covered edge to edge in tap targets, and a double-tap is
+ *               indistinguishable from two deliberate taps on an arrow — which,
+ *               since a wrong tap costs a heart, was charging two hearts for one
+ *               gesture. Fit-to-screen is a button instead.
  */
 
-import { type ReactNode, useCallback, useMemo } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -43,13 +49,12 @@ export interface BoardViewportProps {
   viewportHeight: number;
   /** How far in the player may zoom, relative to fit-to-screen. */
   maxZoom?: number;
+  /** Bump this to animate the board back to fit-to-screen. */
+  fitNonce?: number;
   /** Called when the gesture state settles, so the HUD can show the zoom level. */
   onZoomChange?: (scale: number) => void;
   children: ReactNode;
 }
-
-/** Zoom applied by a double-tap when the board is currently fitted. */
-const DOUBLE_TAP_ZOOM = 2.2;
 
 export function BoardViewport({
   contentWidth,
@@ -57,6 +62,7 @@ export function BoardViewport({
   viewportWidth,
   viewportHeight,
   maxZoom = 3.5,
+  fitNonce = 0,
   onZoomChange,
   children,
 }: BoardViewportProps) {
@@ -120,28 +126,26 @@ export function BoardViewport({
       );
     });
 
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    // Give up quickly if the second tap does not arrive, so a normal tap on an
-    // arrow is not delayed waiting to see whether it becomes a double.
-    .maxDelay(220)
-    .onEnd(() => {
-      const fitted = scale.value <= fitScale * 1.05;
-      const next = fitted ? fitScale * DOUBLE_TAP_ZOOM : fitScale;
+  /**
+   * Snap back to fit-to-screen.
+   *
+   * Driven by a prop rather than a double-tap. A double-tap on a board that is
+   * wall-to-wall tap targets cannot be told apart from two deliberate taps on an
+   * arrow — and since a wrong tap costs a heart, that ambiguity was charging
+   * players two hearts for a single gesture. A button is unambiguous, and more
+   * discoverable than a hidden gesture besides.
+   */
+  useEffect(() => {
+    if (fitNonce === 0) return;
+    scale.value = withTiming(fitScale, { duration: 220 });
+    translateX.value = withTiming(0, { duration: 220 });
+    translateY.value = withTiming(0, { duration: 220 });
+    report(1);
+  }, [fitNonce, fitScale, scale, translateX, translateY, report]);
 
-      scale.value = withTiming(next, { duration: 200 });
-      translateX.value = withTiming(clampTranslation(translateX.value, contentWidth, viewportWidth, next), {
-        duration: 200,
-      });
-      translateY.value = withTiming(clampTranslation(translateY.value, contentHeight, viewportHeight, next), {
-        duration: 200,
-      });
-      runOnJS(report)(next / fitScale);
-    });
-
-  // Pinch and pan run together so a two-finger gesture can do both at once.
-  // The double-tap is exclusive to it, and both yield to a plain tap on an arrow.
-  const gesture = Gesture.Race(doubleTap, Gesture.Simultaneous(pinch, pan));
+  // Pinch and pan run together so a two-finger gesture does both at once. Neither
+  // is a tap, so neither can be confused with tapping an arrow.
+  const gesture = Gesture.Simultaneous(pinch, pan);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [

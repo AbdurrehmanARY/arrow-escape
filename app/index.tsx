@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 
 import { IconButton, Screen, useTheme } from '@components';
 import { LEVEL_COUNT } from '@data/levels';
+import { UNLOCK_ALL_LEVELS } from '@config';
 import { clearedCount, nextLevel, perfectCount, useProgressStore } from '@state/progressStore';
 import { useHintStore } from '@state/hintStore';
 import { MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme';
@@ -52,6 +53,14 @@ export default function MenuScreen() {
           />
         </View>
       </View>
+
+      {UNLOCK_ALL_LEVELS ? (
+        <View style={[styles.testingBadge, { borderColor: palette.accent }]}>
+          <Text style={[styles.testingBadgeText, { color: palette.accent }]}>
+            TESTING BUILD · every level unlocked
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.hero}>
         <Text style={[styles.wordmark, { color: palette.text }]}>ArrowPath</Text>
@@ -130,7 +139,17 @@ const styles = StyleSheet.create({
   hintGlyph: { fontSize: 16 },
   hintCount: { ...typography.heading },
 
-  hero: { marginTop: spacing.xxl, marginBottom: spacing.xxl },
+  testingBadge: {
+    marginTop: spacing.lg,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 3,
+  },
+  testingBadgeText: { ...typography.tiny, letterSpacing: 0.6 },
+
+  hero: { marginTop: spacing.xl, marginBottom: spacing.xxl },
   wordmark: { ...typography.display, letterSpacing: -0.8 },
   tagline: { ...typography.body, marginTop: spacing.xs, lineHeight: 21 },
 

@@ -17,7 +17,7 @@ assets: audio files, AdMob, and a Play listing. See
 
 ```bash
 npm install
-npm run verify        # typecheck + lint + 190 tests + all 600 levels validated
+npm run verify        # typecheck + lint + 203 tests + all 600 levels validated
 npm run start:tunnel  # then scan the QR code with Expo Go
 ```
 
@@ -53,7 +53,7 @@ src/services/    storage, audio, ads — all fail quietly by design
 src/theme/       six themes, each a single data entry
 src/data/levels/ 600 levels in 12 packs, compactly encoded
 tools/           generator, validator, curriculum, theme preview
-__tests__/       190 tests
+__tests__/       203 tests
 docs/            design docs, roadmap, project memory
 ```
 
@@ -96,6 +96,14 @@ long game feel like a treadmill, so tiers are drawn from a weighted mix that
 shifts across the game. The average climbs; any individual level is a surprise.
 
 271 boards are larger than a phone screen and are played with pan and zoom.
+
+## Testing build
+
+`UNLOCK_ALL_LEVELS` in [src/config/index.ts](src/config/index.ts) is currently
+**true**: every level is open, level select has a jump-to-number box, and both the
+menu and level select show a TESTING badge so it cannot ship unnoticed. Set it to
+`false` to restore normal progression — it is read in one place, and real progress
+is tracked independently of it.
 
 ## Theming
 

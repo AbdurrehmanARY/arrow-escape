@@ -9,6 +9,7 @@
  * *derived*, never stored, so it has nothing to drift out of sync with.
  */
 
+import { UNLOCK_ALL_LEVELS } from '@config';
 import {
   clearedByQuality,
   clearedCount,
@@ -16,6 +17,7 @@ import {
   isCleared,
   nextLevel,
   perfectCount,
+  playableUpTo,
   totalMistakes,
   type LevelRecord,
 } from '@state/progressStore';
@@ -133,5 +135,25 @@ describe('quality breakdown', () => {
       3: { bestMistakes: 9, bestHeartsLeft: 0, timesCleared: 0 },
     };
     expect(totalMistakes(records)).toBe(4);
+  });
+});
+
+describe('the unlock-all testing flag', () => {
+  it('opens everything while it is on, without touching real progress', () => {
+    // The flag must change only what the UI *offers*. If it leaked into
+    // `highestUnlocked`, turning it off would leave saved progress claiming a
+    // player had reached level 600.
+    const fresh: Record<number, LevelRecord> = {};
+
+    expect(playableUpTo(fresh, 600)).toBe(UNLOCK_ALL_LEVELS ? 600 : 1);
+    expect(highestUnlocked(fresh, 600)).toBe(1);
+    expect(clearedCount(fresh)).toBe(0);
+  });
+
+  it('leaves the continue target on genuine progress', () => {
+    // "Continue" must go where the player actually is, not to the last level.
+    const partway = records([1, 2, 3]);
+    expect(nextLevel(partway, 600)).toBe(4);
+    expect(highestUnlocked(partway, 600)).toBe(4);
   });
 });

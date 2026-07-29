@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 13 — celebration, perfect-read streaks, the record screen.
+> **Last updated:** end of Phase 14 — heart-deduction fix, unlock-all testing flag.
 
 ---
 
@@ -77,7 +77,10 @@ wrong *plans*, are the failure mode. Full proof and the difficulty model are in
 40. **Confetti is one shared value read by sixty derived styles**, not sixty animations. Each piece's path is projectile motion — launch angle, speed, gravity — on constants fixed at spawn, because linear fades read as a screensaver.
 41. **The celebration is derived from the win, not mirrored into state.** An `active` prop that goes false and true again on replay re-fires it; a separate nonce would have been a second signal meaning the same thing, and a second thing to get out of step.
 42. **Perfect-read streaks count replays.** The streak is a statement about how someone is playing *now* rather than a permanent record, which is what makes it worth chasing. It is only shown from two upward — announcing "streak: 1" on every clean level cheapens it.
-43. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
+43. **No double-tap gesture on the board, ever.** The board is covered edge to edge in tap targets, so a double-tap cannot be told apart from two deliberate taps on an arrow — and since a wrong tap costs a heart, that ambiguity was charging two hearts for one gesture. Fit-to-screen is a button. Any future board gesture must survive the same question.
+44. **Tap feedback comes from `resolveTap`, never from the safe-move set.** They answer different questions, and `findAllSafeMoves` returns nothing at all on an unsolvable board, so every tap would have played the collision sound.
+45. **`UNLOCK_ALL_LEVELS` is read in exactly one place** (`playableUpTo`). `highestUnlocked` stays pure and honest about real progress, so the flag cannot corrupt a save and turning it off needs no migration. While on, the menu and level select both show a TESTING badge — a build flag that looks like production is how one ships by accident.
+46. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
 
 ### Reversed along the way
 - The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`.
@@ -99,6 +102,12 @@ on the Public profile, and the Ethernet adapter is categorised Public — so Exp
 cannot reach the LAN dev server. The Wi-Fi adapter also has no DHCP lease
 (`169.254.x.x`). **Use `npm run start:tunnel`.** Admin fix in
 [TESTING.md](TESTING.md).
+
+## Testing build
+`UNLOCK_ALL_LEVELS` in `src/config/index.ts` is currently **true**. Every level is
+open, level select carries a jump-to-number box, and both the menu and level
+select show a TESTING badge. Set it to `false` for production; nothing else needs
+changing.
 
 ## Pending work
 - **You:** play through on device; report anything that feels wrong about pacing, board size, or the 5-heart budget.

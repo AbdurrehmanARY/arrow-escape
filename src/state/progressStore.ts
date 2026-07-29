@@ -18,6 +18,7 @@
 
 import { create } from 'zustand';
 
+import { UNLOCK_ALL_LEVELS } from '@config';
 import { loadSlice, saveSlice, STORAGE_KEYS } from '@services/storage';
 
 /** What the player achieved on a level, kept for the level-select badges. */
@@ -136,6 +137,19 @@ export function highestUnlocked(records: Record<number, LevelRecord>, total: num
   let unlocked = 1;
   while (unlocked < total && isCleared(records, unlocked)) unlocked += 1;
   return unlocked;
+}
+
+/**
+ * The highest level the player may actually open right now.
+ *
+ * The single place `UNLOCK_ALL_LEVELS` is read. `highestUnlocked` stays pure and
+ * honest about real progress — the menu still continues from where you genuinely
+ * are — while this decides what the UI will let you open. Keeping the two apart
+ * means the testing flag cannot corrupt saved progress, and turning it off
+ * restores normal behaviour with no migration.
+ */
+export function playableUpTo(records: Record<number, LevelRecord>, total: number): number {
+  return UNLOCK_ALL_LEVELS ? total : highestUnlocked(records, total);
 }
 
 /** Where the "Play" button should go: the first level not yet cleared. */

@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { IconButton, Screen, useTheme } from '@components';
@@ -31,11 +31,14 @@ import {
   type Chapter,
 } from '@data/chapters';
 import {
+  clearedCount,
   highestUnlocked,
   isCleared,
+  playableUpTo,
   useProgressStore,
   type LevelRecord,
 } from '@state/progressStore';
+import { UNLOCK_ALL_LEVELS } from '@config';
 import { radius, spacing, typography, type Palette } from '@theme';
 
 const COLUMNS = 5;
@@ -70,7 +73,12 @@ export default function LevelSelectScreen() {
   const { palette } = useTheme();
   const records = useProgressStore((state) => state.records);
 
-  const unlocked = useMemo(() => highestUnlocked(records, LEVEL_COUNT), [records]);
+  // Two different questions, and conflating them is how the testing flag would
+  // start lying: `unlocked` is what the UI will let you open, `reached` is where
+  // you genuinely are. With every level open the first is always 600.
+  const unlocked = useMemo(() => playableUpTo(records, LEVEL_COUNT), [records]);
+  const reached = useMemo(() => highestUnlocked(records, LEVEL_COUNT), [records]);
+  const clearedTotal = useMemo(() => clearedCount(records), [records]);
   const cleared = useCallback((id: number) => isCleared(records, id), [records]);
 
   // Open on the chapter the player is actually in, not chapter one.
@@ -92,11 +100,15 @@ export default function LevelSelectScreen() {
           <Text style={[styles.subtitle, { color: palette.textFaint }]}>
             {openChapter
               ? openChapter.tagline
-              : `${unlocked - 1} of ${LEVEL_COUNT} cleared`}
+              : `${clearedTotal} of ${LEVEL_COUNT} cleared`}
           </Text>
         </View>
         <View style={styles.headerSpacer} />
       </View>
+
+      {UNLOCK_ALL_LEVELS ? (
+        <JumpToLevel palette={palette} onJump={(id) => router.push(`/play/${id}`)} />
+      ) : null}
 
       {openChapter ? (
         <ChapterGrid
@@ -104,12 +116,14 @@ export default function LevelSelectScreen() {
           chapter={openChapter}
           records={records}
           unlocked={unlocked}
+          current={reached}
           onOpenLevel={(id) => router.push(`/play/${id}`)}
         />
       ) : (
         <ChapterList
           palette={palette}
           unlocked={unlocked}
+          current={reached}
           isLevelCleared={cleared}
           onOpen={setOpenChapter}
         />
@@ -118,25 +132,84 @@ export default function LevelSelectScreen() {
   );
 }
 
+/**
+ * Straight to a level by number.
+ *
+ * Only while `UNLOCK_ALL_LEVELS` is on. Reaching level 106 by tapping through
+ * chapters is fine for a player working forward and miserable for someone
+ * checking one specific board.
+ */
+function JumpToLevel({
+  palette,
+  onJump,
+}: {
+  palette: Palette;
+  onJump: (id: number) => void;
+}) {
+  const [text, setText] = useState('');
+  const parsed = Number(text);
+  const valid = Number.isInteger(parsed) && parsed >= 1 && parsed <= LEVEL_COUNT;
+
+  return (
+    <View style={[styles.testingBar, { backgroundColor: palette.accentMuted, borderColor: palette.accent }]}>
+      <Text style={[styles.testingLabel, { color: palette.text }]}>TESTING · all levels open</Text>
+      <View style={styles.jumpRow}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          keyboardType="number-pad"
+          placeholder={`1-${LEVEL_COUNT}`}
+          placeholderTextColor={palette.textFaint}
+          accessibilityLabel="Level number to jump to"
+          returnKeyType="go"
+          onSubmitEditing={() => valid && onJump(parsed)}
+          style={[
+            styles.jumpInput,
+            { backgroundColor: palette.surfaceRaised, borderColor: palette.border, color: palette.text },
+          ]}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Go to level"
+          accessibilityState={{ disabled: !valid }}
+          disabled={!valid}
+          onPress={() => onJump(parsed)}
+          style={({ pressed }) => [
+            styles.jumpGo,
+            { backgroundColor: palette.accent, opacity: valid ? 1 : 0.4 },
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.jumpGoLabel, { color: palette.textOnAccent }]}>Go</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function ChapterList({
   palette,
   unlocked,
+  current,
   isLevelCleared,
   onOpen,
 }: {
   palette: Palette;
+  /** What may be opened. */
   unlocked: number;
+  /** Where the player genuinely is — highlights the chapter they are working on. */
+  current: number;
   isLevelCleared: (id: number) => boolean;
   onOpen: (chapter: Chapter) => void;
 }) {
-  const current = chapterOf(unlocked);
+  const currentChapter = chapterOf(current);
 
   return (
     <ScrollView contentContainerStyle={styles.chapterList} showsVerticalScrollIndicator={false}>
       {CHAPTERS.map((chapter) => {
         const open = isChapterOpen(chapter, unlocked);
         const { cleared, total } = chapterProgress(chapter, isLevelCleared);
-        const isCurrent = chapter.index === current.index;
+        const isCurrent = chapter.index === currentChapter.index;
         const done = cleared === total;
 
         return (
@@ -207,12 +280,14 @@ function ChapterGrid({
   chapter,
   records,
   unlocked,
+  current,
   onOpenLevel,
 }: {
   palette: Palette;
   chapter: Chapter;
   records: Record<number, LevelRecord>;
   unlocked: number;
+  current: number;
   onOpenLevel: (id: number) => void;
 }) {
   const listRef = useRef<FlatList<Row>>(null);
@@ -270,7 +345,7 @@ function ChapterGrid({
                 id={id}
                 record={records[id]}
                 locked={id > unlocked}
-                current={id === unlocked}
+                current={id === current}
                 onPress={() => onOpenLevel(id)}
               />
             ))}
@@ -343,6 +418,32 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 44 },
   title: { ...typography.title },
   subtitle: { ...typography.tiny, marginTop: 1 },
+
+  testingBar: {
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  testingLabel: { ...typography.tiny, letterSpacing: 1 },
+  jumpRow: { flexDirection: 'row', gap: spacing.sm },
+  jumpInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    ...typography.body,
+  },
+  jumpGo: {
+    width: 62,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+  },
+  jumpGoLabel: { ...typography.body, fontWeight: '700' },
 
   chapterList: { paddingTop: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.sm },
   chapterCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.md },
