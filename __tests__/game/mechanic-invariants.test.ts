@@ -1,7 +1,7 @@
 /**
  * The load-bearing properties of the rule set.
  *
- * These are not regression tests for a bug — they are executable evidence for the
+ * These are not regression tests for a bug â€” they are executable evidence for the
  * design claims the whole game rests on:
  *
  *   1. Tap *order* can never lose a level. Removing a snake only ever frees
@@ -16,7 +16,6 @@
 import {
   applyOutcome,
   castRay,
-  EMPTY,
   isSolvable,
   legalMoves,
   renderAscii,
@@ -46,7 +45,7 @@ describe('freeness is monotone', () => {
 
         for (const stillThere of freeBefore) {
           if (stillThere === removed) continue;
-          if (castRay(board, after, stillThere).blockerIndex !== EMPTY) {
+          if (castRay(board, after, stillThere).blockedBy !== 'nothing') {
             throw new Error(
               `removing arrow ${removed} blocked arrow ${stillThere}:\n` +
                 renderAscii(board, initial),
@@ -77,7 +76,7 @@ describe('tap order cannot lose a level', () => {
       if (!isSolvable(board, initial)) continue;
 
       // Play the whole level by picking uniformly at random from whatever is
-      // free — the least strategic player imaginable.
+      // free â€” the least strategic player imaginable.
       for (let attempt = 0; attempt < 3; attempt += 1) {
         let state = initial;
         while (state.remaining > 0) {
@@ -159,7 +158,7 @@ describe('hearts are the only way to lose', () => {
     session = tapArrow(board, session, 2).session;
 
     expect(session.status).toBe('failed');
-    // The board itself was never damaged — only the player's hearts.
+    // The board itself was never damaged â€” only the player's hearts.
     expect(session.state.remaining).toBe(3);
     expect(isSolvable(board, session.state)).toBe(true);
   });

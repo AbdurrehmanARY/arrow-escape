@@ -145,7 +145,10 @@ export function runEngineSelfCheck(): SelfCheckReport {
       const { board, initial } = buildOrThrow('A a a\n. . a');
       assert(board.arrows.length === 1, 'expected one arrow');
       assert(board.arrows[0]!.body.length === 4, 'expected a four-cell body');
-      assert(board.arrows[0]!.dir === 'left', `head should point left, got ${board.arrows[0]!.dir}`);
+      assert(
+        board.arrows[0]!.dir === 'left',
+        `head should point left, got ${board.arrows[0]!.dir}`,
+      );
       assert(initial.remaining === 1, 'expected one arrow on the board');
       return '4-cell body, head direction inferred from its last segment';
     }),
@@ -158,7 +161,15 @@ export function runEngineSelfCheck(): SelfCheckReport {
         cols: 2,
         layout: 'free',
         difficulty: 1,
-        arrows: [{ id: 'a', body: [[0, 0], [1, 1]] }],
+        arrows: [
+          {
+            id: 'a',
+            body: [
+              [0, 0],
+              [1, 1],
+            ],
+          },
+        ],
       });
       assert(!bad.ok, 'expected a disconnected body to be rejected');
       return 'returned a typed error instead of crashing';
@@ -210,7 +221,10 @@ export function runEngineSelfCheck(): SelfCheckReport {
       let session = startSession(initial, 5);
 
       session = tapArrow(board, session, 2).session;
-      assert(session.heartsLeft === 4, `blocked tap should cost a heart, got ${session.heartsLeft}`);
+      assert(
+        session.heartsLeft === 4,
+        `blocked tap should cost a heart, got ${session.heartsLeft}`,
+      );
       assert(session.state.remaining === 3, 'blocked tap must not change the board');
 
       session = tapArrow(board, session, 0).session;

@@ -26,6 +26,7 @@ import {
   EMPTY,
   err,
   type LevelDefinition,
+  NO_GROUP,
   ok,
   type Result,
 } from './types';
@@ -73,15 +74,47 @@ export function directionBetween(
 /**
  * What an arrowhead's forward ray runs into.
  *
- * `blockerIndex` is `EMPTY` when the ray reaches the edge unobstructed, which is
- * the "this arrow can leave" case. `freeCells` is how many empty cells sit
- * between the head and whatever stopped it.
+ * `blockedBy: 'nothing'` is the "this arrow can leave" case, and it is the only
+ * one callers should treat as free. It is a discriminator rather than the old
+ * `blockerIndex === EMPTY` test because three different things can now stop a
+ * ray, and only one of them is an arrow — a wall and a closed gate both stop it
+ * while leaving no arrow index to report.
  */
 export interface RayResult {
-  readonly blockerIndex: number;
+  readonly blockedBy: 'nothing' | 'arrow' | 'wall' | 'gate';
+  /** The arrow standing in the way, or `EMPTY` for every other case. */
+  readonly blockerArrow: number;
+  /** Controlling group of the gate that stopped it, or `NO_GROUP`. */
+  readonly blockerGroup: number;
+  /** Empty cells between the head and whatever stopped it. */
   readonly freeCells: number;
   /** Cell where the ray was stopped, or `EMPTY` if it reached the edge. */
   readonly blockedAt: CellIndex;
+}
+
+/** Shared "the ray got all the way out" result. Frozen — it is returned constantly. */
+const CLEAR_RAY: RayResult = Object.freeze({
+  blockedBy: 'nothing' as const,
+  blockerArrow: EMPTY,
+  blockerGroup: NO_GROUP,
+  freeCells: 0,
+  blockedAt: EMPTY,
+});
+
+/**
+ * Is this gate cell currently passable?
+ *
+ * The whole of the gate mechanic is these two lines. An `opens` gate is shut
+ * until its colour has left; a `shuts` gate is the exact inverse and seals once
+ * the colour is gone. Exported because the renderer needs the same answer to
+ * decide whether to draw a cell solid or ghosted, and two implementations of this
+ * would eventually disagree.
+ */
+export function isGateOpen(board: Board, state: BoardState, cell: CellIndex): boolean {
+  const group = board.gateGroup[cell]!;
+  if (group === NO_GROUP) return true;
+  const cleared = state.groupsLeft[group] === 0;
+  return board.gateOpens[cell] === 1 ? cleared : !cleared;
 }
 
 /**
@@ -93,6 +126,10 @@ export interface RayResult {
  *
  * An arrow can never block itself: the only cells ahead of the head belong to
  * other arrows, because a body is a simple path that does not double back.
+ *
+ * Walls and gates are checked behind `hasObstacles` so a board that has neither —
+ * which is every level shipped before Phase 15 — walks exactly the loop it always
+ * did, with one predictable branch added.
  */
 export function castRay(board: Board, state: BoardState, arrowIndex: number): RayResult {
   const arrow = board.arrows[arrowIndex]!;
@@ -107,14 +144,41 @@ export function castRay(board: Board, state: BoardState, arrowIndex: number): Ra
     const cell = r * cols + c;
     const occupant = state.occupancy[cell]!;
     if (occupant !== EMPTY && occupant !== arrowIndex) {
-      return { blockerIndex: occupant, freeCells, blockedAt: cell };
+      return {
+        blockedBy: 'arrow',
+        blockerArrow: occupant,
+        blockerGroup: NO_GROUP,
+        freeCells,
+        blockedAt: cell,
+      };
+    }
+    if (board.hasObstacles) {
+      if (board.walls[cell] === 1) {
+        return {
+          blockedBy: 'wall',
+          blockerArrow: EMPTY,
+          blockerGroup: NO_GROUP,
+          freeCells,
+          blockedAt: cell,
+        };
+      }
+      const group = board.gateGroup[cell]!;
+      if (group !== NO_GROUP && !isGateOpen(board, state, cell)) {
+        return {
+          blockedBy: 'gate',
+          blockerArrow: EMPTY,
+          blockerGroup: group,
+          freeCells,
+          blockedAt: cell,
+        };
+      }
     }
     freeCells += 1;
     r += arrow.dr;
     c += arrow.dc;
   }
 
-  return { blockerIndex: EMPTY, freeCells, blockedAt: EMPTY };
+  return { ...CLEAR_RAY, freeCells };
 }
 
 /** Cells the head crosses on its way off the board, nearest first. */
@@ -146,6 +210,7 @@ function resolveArrow(
   rows: number,
   cols: number,
   claimedCells: Map<number, string>,
+  group: number,
 ): Result<Arrow> {
   if (!spec.id) return err('every arrow needs a non-empty id');
   if (!Array.isArray(spec.body) || spec.body.length === 0) {
@@ -219,7 +284,7 @@ function resolveArrow(
   for (const cell of body) claimedCells.set(cell, spec.id);
 
   const [dr, dc] = DELTAS[dir];
-  return ok({ id: spec.id, dir, body, dr, dc });
+  return ok({ id: spec.id, dir, body, dr, dc, group });
 }
 
 /** A validated level, ready to play: immutable topology plus starting occupancy. */
@@ -249,17 +314,101 @@ export function buildLevel(level: LevelDefinition): Result<BuiltLevel> {
   const seenIds = new Set<string>();
   const arrows: Arrow[] = [];
 
+  // Group names are interned to indices here and nowhere else, so an arrow and a
+  // gate that spell the same colour always land on the same integer.
+  const groups: string[] = [];
+  const groupIndex = (name: string): number => {
+    const existing = groups.indexOf(name);
+    if (existing !== -1) return existing;
+    groups.push(name);
+    return groups.length - 1;
+  };
+
   for (const spec of level.arrows) {
     if (seenIds.has(spec.id)) return err(`level ${level.id}: duplicate arrow id "${spec.id}"`);
     seenIds.add(spec.id);
 
-    const resolved = resolveArrow(spec, rows, cols, claimedCells);
+    const group = spec.group === undefined ? NO_GROUP : groupIndex(spec.group);
+    const resolved = resolveArrow(spec, rows, cols, claimedCells, group);
     if (!resolved.ok) return err(`level ${level.id}: ${resolved.error}`);
     arrows.push(resolved.value);
   }
 
-  const board: Board = { rows, cols, cellCount: rows * cols, arrows };
+  const cellCount = rows * cols;
+  const walls = new Uint8Array(cellCount);
+  const gateGroup = new Int32Array(cellCount).fill(NO_GROUP);
+  const gateOpens = new Uint8Array(cellCount);
+  let hasShutters = false;
+
+  for (const point of level.walls ?? []) {
+    const cell = readCell(point, rows, cols);
+    if (!cell.ok) return err(`level ${level.id}: wall ${cell.error}`);
+    const owner = claimedCells.get(cell.value);
+    if (owner !== undefined) {
+      return err(`level ${level.id}: a wall sits on arrow "${owner}"`);
+    }
+    walls[cell.value] = 1;
+  }
+
+  for (const gate of level.gates ?? []) {
+    if (!gate.group) return err(`level ${level.id}: a gate has no group`);
+    if (gate.mode !== 'opens' && gate.mode !== 'shuts') {
+      return err(`level ${level.id}: gate "${gate.group}" has unknown mode "${gate.mode}"`);
+    }
+    // A gate keyed to a colour no arrow wears can never change state, which is
+    // always an authoring mistake — it is either a wall written the long way or a
+    // typo in the colour name.
+    if (!groups.includes(gate.group)) {
+      return err(
+        `level ${level.id}: gate "${gate.group}" names a group no arrow belongs to — ` +
+          'it could never open or shut',
+      );
+    }
+    const group = groupIndex(gate.group);
+    if (gate.mode === 'shuts') hasShutters = true;
+
+    for (const point of gate.cells) {
+      const cell = readCell(point, rows, cols);
+      if (!cell.ok) return err(`level ${level.id}: gate "${gate.group}" ${cell.error}`);
+      const owner = claimedCells.get(cell.value);
+      if (owner !== undefined) {
+        return err(`level ${level.id}: gate "${gate.group}" sits on arrow "${owner}"`);
+      }
+      if (walls[cell.value] === 1) {
+        return err(`level ${level.id}: gate "${gate.group}" sits on a wall`);
+      }
+      if (gateGroup[cell.value] !== NO_GROUP) {
+        return err(`level ${level.id}: two gates share a cell`);
+      }
+      gateGroup[cell.value] = group;
+      gateOpens[cell.value] = gate.mode === 'opens' ? 1 : 0;
+    }
+  }
+
+  const board: Board = {
+    rows,
+    cols,
+    cellCount,
+    arrows,
+    walls,
+    gateGroup,
+    gateOpens,
+    groups,
+    hasShutters,
+    hasObstacles: (level.walls?.length ?? 0) > 0 || (level.gates?.length ?? 0) > 0,
+  };
   return ok({ board, initial: createInitialState(board) });
+}
+
+/** Validate one authored `[row, col]` pair and pack it. Shared by walls and gates. */
+function readCell(point: readonly number[], rows: number, cols: number): Result<CellIndex, string> {
+  if (!Array.isArray(point) || point.length !== 2) return err('cell is malformed');
+  const row = point[0];
+  const col = point[1];
+  if (typeof row !== 'number' || typeof col !== 'number') return err('cell is non-numeric');
+  if (!Number.isInteger(row) || row < 0 || row >= rows) return err(`row ${row} is off-board`);
+  if (!Number.isInteger(col) || col < 0 || col >= cols) return err(`col ${col} is off-board`);
+  return ok(toCell(row, col, cols));
 }
 
 /**
@@ -271,12 +420,30 @@ export function buildLevel(level: LevelDefinition): Result<BuiltLevel> {
 export function createInitialState(board: Board): BoardState {
   const alive = new Uint8Array(board.arrows.length).fill(1);
   const occupancy = new Int32Array(board.cellCount).fill(EMPTY);
+  const groupsLeft = new Int32Array(board.groups.length);
 
   board.arrows.forEach((arrow, index) => {
     for (const cell of arrow.body) occupancy[cell] = index;
+    if (arrow.group !== NO_GROUP) groupsLeft[arrow.group] = (groupsLeft[arrow.group] ?? 0) + 1;
   });
 
-  return { alive, occupancy, remaining: board.arrows.length };
+  return { alive, occupancy, remaining: board.arrows.length, groupsLeft };
+}
+
+/**
+ * A board with nothing on it.
+ *
+ * Exists for the screen's "the level failed to load" path, which still has to hand
+ * the reducer a well-formed state before it can render an error. Building one by
+ * hand at the call site means a new `BoardState` field silently gets left off.
+ */
+export function emptyBoardState(): BoardState {
+  return {
+    alive: new Uint8Array(),
+    occupancy: new Int32Array(),
+    remaining: 0,
+    groupsLeft: new Int32Array(),
+  };
 }
 
 /** Copy a state so callers can treat every `BoardState` as frozen. */
@@ -285,6 +452,7 @@ export function cloneState(state: BoardState): BoardState {
     alive: Uint8Array.from(state.alive),
     occupancy: Int32Array.from(state.occupancy),
     remaining: state.remaining,
+    groupsLeft: Int32Array.from(state.groupsLeft),
   };
 }
 

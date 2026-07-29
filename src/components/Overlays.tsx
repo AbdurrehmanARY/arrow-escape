@@ -45,9 +45,7 @@ function Action({ palette, label, onPress, primary = false, disabled = false }: 
         pressed && !disabled && styles.pressed,
       ]}
     >
-      <Text
-        style={[styles.actionLabel, { color: primary ? palette.textOnAccent : palette.text }]}
-      >
+      <Text style={[styles.actionLabel, { color: primary ? palette.textOnAccent : palette.text }]}>
         {label}
       </Text>
     </Pressable>
@@ -158,6 +156,15 @@ export const WinOverlay = memo(function WinOverlay({
 export interface FailOverlayProps {
   palette: Palette;
   visible: boolean;
+  /**
+   * Whether the board left behind can still be cleared.
+   *
+   * True on every level without a shutter gate, which is nearly all of them — and
+   * saying so is the difference between a loss that reads as fair and one that
+   * reads as the game cheating. On a shutter board it can be false, and claiming
+   * otherwise would be a lie the player can check.
+   */
+  stillWinnable: boolean;
   onRetry: () => void;
   onLevels: () => void;
 }
@@ -165,6 +172,7 @@ export interface FailOverlayProps {
 export const FailOverlay = memo(function FailOverlay({
   palette,
   visible,
+  stillWinnable,
   onRetry,
   onLevels,
 }: FailOverlayProps) {
@@ -174,8 +182,9 @@ export const FailOverlay = memo(function FailOverlay({
       <Text style={[styles.title, { color: palette.text }]}>Not quite</Text>
 
       <Text style={[styles.body, { color: palette.textMuted }]}>
-        The board behind this is still perfectly winnable — nothing you tapped ever broke it. Five
-        arrows just weren&apos;t where you thought they were.
+        {stillWinnable
+          ? 'The board behind this is still perfectly winnable — nothing you tapped ever broke it. Five arrows just weren’t where you thought they were.'
+          : 'Five wrong reads, and a gate closed on something that still needed to get out. Both are fixable from the start.'}
       </Text>
       <Text style={[styles.bodySmall, { color: palette.textFaint }]}>
         Trace each arrowhead straight out to the edge before you tap. If anything crosses that line,
@@ -185,6 +194,54 @@ export const FailOverlay = memo(function FailOverlay({
       <View style={styles.actions}>
         <Action palette={palette} label="Levels" onPress={onLevels} />
         <Action palette={palette} label="Try again" onPress={onRetry} primary />
+      </View>
+    </Sheet>
+  );
+});
+
+export interface StuckOverlayProps {
+  palette: Palette;
+  visible: boolean;
+  /** True when arrows can still be tapped but the level is already lost. */
+  quietly: boolean;
+  onRetry: () => void;
+  onLevels: () => void;
+}
+
+/**
+ * Shown when a shutter has sealed on an arrow that still needed the way through.
+ *
+ * A separate overlay rather than a variant of `FailOverlay` because the player has
+ * lost for a completely different reason and, crucially, still has hearts in hand.
+ * Showing them a spent-hearts screen would teach them the wrong lesson about what
+ * went wrong — and the lesson is the only thing this screen is for.
+ */
+export const StuckOverlay = memo(function StuckOverlay({
+  palette,
+  visible,
+  quietly,
+  onRetry,
+  onLevels,
+}: StuckOverlayProps) {
+  return (
+    <Sheet palette={palette} visible={visible}>
+      <Text style={[styles.eyebrow, { color: palette.textFaint }]}>THE WAY OUT CLOSED</Text>
+      <Text style={[styles.title, { color: palette.text }]}>Wrong order</Text>
+
+      <Text style={[styles.body, { color: palette.textMuted }]}>
+        {quietly
+          ? 'You can still tap things, but this board can no longer be cleared — the last arrow of a colour left, and the gate it was holding open shut behind it.'
+          : 'The last arrow of a colour left the board, and the gate it was holding open shut behind it. Nothing left can reach an edge.'}
+      </Text>
+      <Text style={[styles.bodySmall, { color: palette.textFaint }]}>
+        On boards with gates, send anything that needs to cross a gate out{' '}
+        <Text style={{ fontStyle: 'italic' }}>before</Text> you clear the colour holding it open.
+        Your hearts are untouched — this one is order, not aim.
+      </Text>
+
+      <View style={styles.actions}>
+        <Action palette={palette} label="Levels" onPress={onLevels} />
+        <Action palette={palette} label="Start over" onPress={onRetry} primary />
       </View>
     </Sheet>
   );

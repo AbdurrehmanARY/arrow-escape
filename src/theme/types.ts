@@ -77,6 +77,25 @@ export interface Palette {
    */
   arrowVariants?: readonly string[];
 
+  /**
+   * Permanently impassable cells.
+   *
+   * Deliberately board furniture rather than a fifth arrow colour: a wall is part
+   * of the room, and anything that reads as a snake will be traced as one.
+   */
+  wall: string;
+  /**
+   * Colours for arrow colour groups, and for the gates keyed to them.
+   *
+   * A group's colour is the only way a player can connect "these arrows" to "that
+   * gate", so this is the one place in the game where colour carries meaning
+   * rather than decoration. Two consequences follow. It must survive colour-blind
+   * vision, so these are drawn from the Okabe–Ito set and gates also carry a shape
+   * cue. And colouring arrows makes them easier to tell apart, which makes a level
+   * easier — so a level should only spend a colour where a gate earns it.
+   */
+  groupColors: readonly string[];
+
   surface: string;
   surfaceRaised: string;
   border: string;

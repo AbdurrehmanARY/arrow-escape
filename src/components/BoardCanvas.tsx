@@ -26,7 +26,7 @@ import { memo, useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, Pattern, Rect } from 'react-native-svg';
 
-import { colOf, EMPTY, rowOf, type Board, type BoardState } from '@game';
+import { colOf, EMPTY, isGateOpen, NO_GROUP, rowOf, type Board, type BoardState } from '@game';
 import type { ArrowStyle, BoardStyle, Palette } from '@theme';
 
 import { ArrowSnake, type ArrowVisualState } from './ArrowSnake';
@@ -102,22 +102,59 @@ function BoardCanvasInner({
       case 'lines':
         return (
           <G>
-            <Line x1={0} y1={0} x2={cellSize} y2={0} stroke={palette.pattern} strokeWidth={lineWidth} />
-            <Line x1={0} y1={0} x2={0} y2={cellSize} stroke={palette.pattern} strokeWidth={lineWidth} />
+            <Line
+              x1={0}
+              y1={0}
+              x2={cellSize}
+              y2={0}
+              stroke={palette.pattern}
+              strokeWidth={lineWidth}
+            />
+            <Line
+              x1={0}
+              y1={0}
+              x2={0}
+              y2={cellSize}
+              stroke={palette.pattern}
+              strokeWidth={lineWidth}
+            />
           </G>
         );
       case 'crosses': {
         const arm = cellSize * 0.09;
         return (
           <G>
-            <Line x1={-arm} y1={0} x2={arm} y2={0} stroke={palette.pattern} strokeWidth={lineWidth} strokeLinecap="round" />
-            <Line x1={0} y1={-arm} x2={0} y2={arm} stroke={palette.pattern} strokeWidth={lineWidth} strokeLinecap="round" />
+            <Line
+              x1={-arm}
+              y1={0}
+              x2={arm}
+              y2={0}
+              stroke={palette.pattern}
+              strokeWidth={lineWidth}
+              strokeLinecap="round"
+            />
+            <Line
+              x1={0}
+              y1={-arm}
+              x2={0}
+              y2={arm}
+              stroke={palette.pattern}
+              strokeWidth={lineWidth}
+              strokeLinecap="round"
+            />
           </G>
         );
       }
       case 'checker':
         return (
-          <Rect x={0} y={0} width={cellSize / 2} height={cellSize / 2} fill={palette.pattern} opacity={0.35} />
+          <Rect
+            x={0}
+            y={0}
+            width={cellSize / 2}
+            height={cellSize / 2}
+            fill={palette.pattern}
+            opacity={0.35}
+          />
         );
       case 'none':
       default:
@@ -143,6 +180,81 @@ function BoardCanvasInner({
     }
     return indices;
   }, [board.arrows.length, state]);
+
+  /**
+   * Walls and gates, drawn under the arrows.
+   *
+   * Unlike the grid pattern these cannot be a tiled fill — each one is at a
+   * specific place — but there are only ever a handful per board, so a node each
+   * is the right trade. The list is rebuilt when gate state changes, which is
+   * exactly when a gate needs to change how it looks.
+   */
+  const obstacles = useMemo(() => {
+    if (!board.hasObstacles) return null;
+
+    const nodes: React.ReactNode[] = [];
+    const inset = cellSize * 0.08;
+    const size = cellSize - inset * 2;
+
+    for (let cell = 0; cell < board.cellCount; cell += 1) {
+      const isWall = board.walls[cell] === 1;
+      const group = board.gateGroup[cell] ?? NO_GROUP;
+      if (!isWall && group === NO_GROUP) continue;
+
+      const x = originX + colOf(cell, cols) * cellSize + inset;
+      const y = originY + rowOf(cell, cols) * cellSize + inset;
+
+      if (isWall) {
+        nodes.push(
+          <Rect
+            key={`w${cell}`}
+            x={x}
+            y={y}
+            width={size}
+            height={size}
+            rx={cellSize * 0.16}
+            fill={palette.wall}
+          />,
+        );
+        continue;
+      }
+
+      const color = palette.groupColors[group % palette.groupColors.length]!;
+      const open = isGateOpen(board, state, cell);
+
+      // Open and shut have to be unmistakable at a glance, because a misread gate
+      // costs a heart or — on a shutter board — the level. Shut is a filled block
+      // with a bar across it; open is the same outline left hollow.
+      nodes.push(
+        <G key={`g${cell}`} opacity={open ? 0.45 : 1}>
+          <Rect
+            x={x}
+            y={y}
+            width={size}
+            height={size}
+            rx={cellSize * 0.16}
+            fill={open ? 'none' : color}
+            stroke={color}
+            strokeWidth={Math.max(1, cellSize * 0.07)}
+            {...(open ? { strokeDasharray: `${cellSize * 0.14} ${cellSize * 0.1}` } : {})}
+          />
+          {open ? null : (
+            <Line
+              x1={x + size * 0.22}
+              y1={y + size / 2}
+              x2={x + size * 0.78}
+              y2={y + size / 2}
+              stroke={palette.board}
+              strokeWidth={Math.max(1.5, cellSize * 0.1)}
+              strokeLinecap="round"
+            />
+          )}
+        </G>,
+      );
+    }
+
+    return nodes;
+  }, [board, state, cellSize, cols, originX, originY, palette]);
 
   const visualFor = (index: number): ArrowVisualState => {
     if (index === blockedArrow) return 'blocked';
@@ -188,6 +300,8 @@ function BoardCanvasInner({
             />
           </>
         ) : null}
+
+        {obstacles}
 
         {drawnArrows.map((index) => (
           <ArrowSnake

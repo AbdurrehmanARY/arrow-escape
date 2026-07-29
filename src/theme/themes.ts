@@ -1,11 +1,11 @@
 /**
- * theme/themes.ts — the theme registry.
+ * theme/themes.ts â€” the theme registry.
  *
  * Purpose:      Every look the game ships, as data.
  * Responsibilities:
  *               - Palettes.
  *               - The `THEMES` list and lookup helpers.
- * Notes:        To add a theme, add an entry here. Nothing else changes — the
+ * Notes:        To add a theme, add an entry here. Nothing else changes â€” the
  *               renderer is driven entirely by these values. If a look you want
  *               is not expressible, add a field to `ArrowStyle`/`BoardStyle` and
  *               teach the renderer that one field; never branch on `theme.id`.
@@ -46,11 +46,28 @@ const dottedBoard: BoardStyle = {
   padCells: 0.5,
 };
 
+/**
+ * Group colours, from the Okabe–Ito colour-blind-safe set.
+ *
+ * These are the only colours in the game that carry information, so they are
+ * chosen to stay distinguishable under deuteranopia and protanopia rather than to
+ * look pretty. The gate glyph repeats the same information as a shape, because a
+ * palette alone is never an accessibility answer.
+ *
+ * Two variants only — light and dark — rather than one per theme. A theme is free
+ * to override them, but nothing gains from six near-identical sets of five
+ * colours, and each new set is another chance to ship an indistinguishable pair.
+ */
+const LIGHT_GROUP_COLORS = ['#D55E00', '#0072B2', '#009E73', '#CC79A7', '#8C6D1F'] as const;
+const DARK_GROUP_COLORS = ['#F0894B', '#56B4E9', '#4FCB8B', '#E58FC2', '#E6C34A'] as const;
+
 // ---------------------------------------------------------------------------
 // Palettes
 // ---------------------------------------------------------------------------
 
 const paperPalette: Palette = {
+  wall: '#B9B1A0',
+  groupColors: LIGHT_GROUP_COLORS,
   scheme: 'light',
   background: '#EEEBE4',
   board: '#F6F4EE',
@@ -84,6 +101,8 @@ const paperPalette: Palette = {
 };
 
 const midnightPalette: Palette = {
+  wall: '#39415F',
+  groupColors: DARK_GROUP_COLORS,
   scheme: 'dark',
   background: '#0E1120',
   board: '#161A2C',
@@ -137,6 +156,8 @@ const noodlePalette: Palette = {
 };
 
 const boldPalette: Palette = {
+  wall: '#8A6B00',
+  groupColors: LIGHT_GROUP_COLORS,
   scheme: 'light',
   background: '#F5C518',
   board: '#F7CF34',
@@ -170,6 +191,8 @@ const boldPalette: Palette = {
 };
 
 const blueprintPalette: Palette = {
+  wall: '#27689A',
+  groupColors: DARK_GROUP_COLORS,
   scheme: 'dark',
   background: '#0A2A43',
   board: '#0D3453',
@@ -218,7 +241,7 @@ export const THEMES: readonly Theme[] = [
   {
     id: 'midnight',
     name: 'Midnight',
-    description: 'The same design inverted — deep navy with bone-white arrows.',
+    description: 'The same design inverted â€” deep navy with bone-white arrows.',
     palette: midnightPalette,
     arrow: classicArrow,
     board: dottedBoard,
@@ -226,7 +249,8 @@ export const THEMES: readonly Theme[] = [
   {
     id: 'noodles',
     name: 'Noodles',
-    description: 'Chunky rounded noodles with eyes, each a different colour. Easier to read, so levels play softer.',
+    description:
+      'Chunky rounded noodles with eyes, each a different colour. Easier to read, so levels play softer.',
     palette: noodlePalette,
     arrow: {
       ...classicArrow,

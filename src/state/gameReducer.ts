@@ -93,7 +93,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const id = board.arrows[arrowIndex]?.id ?? '?';
 
       if (outcome.kind === 'blocked') {
-        const blocker = board.arrows[outcome.blockerIndex]?.id ?? '?';
         return {
           ...state,
           session,
@@ -104,10 +103,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             blocker: outcome.blockerIndex,
             nonce: (state.highlight?.nonce ?? 0) + 1,
           },
-          message:
-            session.status === 'failed'
-              ? 'Out of hearts.'
-              : `Blocked by "${blocker}" — that cost a heart.`,
+          message: session.status === 'failed' ? 'Out of hearts.' : blockedMessage(board, outcome),
         };
       }
 
@@ -118,14 +114,30 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         taps: state.taps + 1,
         departing: arrowIndex,
         highlight: undefined,
-        message:
-          session.status === 'won'
-            ? 'Board clear.'
-            : `"${id}" had a clear run.`,
+        message: session.status === 'won' ? 'Board clear.' : `"${id}" had a clear run.`,
       };
     }
 
     default:
       return state;
   }
+}
+
+/**
+ * Say what stopped the arrow, in the player's terms.
+ *
+ * Three different things can block a ray now, and they call for three different
+ * responses from the player — wait for another snake, give up on that arrow
+ * entirely, or clear a colour first. A single generic message would charge a heart
+ * and explain nothing, which is the version of this game nobody would keep
+ * playing.
+ */
+function blockedMessage(board: Board, outcome: Extract<MoveOutcome, { kind: 'blocked' }>): string {
+  if (outcome.blockerKind === 'wall') return 'That way is walled off — it cost a heart.';
+  if (outcome.blockerKind === 'gate') {
+    const group = board.groups[outcome.blockerGroup] ?? 'a colour';
+    return `A ${group} gate is closed — that cost a heart.`;
+  }
+  const blocker = board.arrows[outcome.blockerIndex]?.id ?? '?';
+  return `Blocked by "${blocker}" — that cost a heart.`;
 }

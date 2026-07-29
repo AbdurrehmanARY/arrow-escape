@@ -24,15 +24,25 @@
  *               from the head's last segment — an arrowhead always continues the
  *               line it is drawn on. So the picture alone fully determines the
  *               arrow, with nothing to keep in sync by hand.
+ *
+ *               Two more glyphs arrived with Phase 15. `#` is a wall, and a digit
+ *               is a gate cell — `0` is the first entry of `options.gates`, `1` the
+ *               second, and so on. Colours cannot be drawn, so an arrow's group is
+ *               named in `options.groups` by letter. Keeping gate polarity out of
+ *               the picture is deliberate: `opens` and `shuts` look identical on a
+ *               grid and would be the easiest thing in the world to misread.
  */
 
-import { colOf, rowOf, toCell } from './board';
+import { colOf, isGateOpen, rowOf, toCell } from './board';
 import {
   type ArrowSpec,
   type Board,
   type BoardState,
   EMPTY,
+  type GateMode,
+  type GateSpec,
   type LevelDefinition,
+  NO_GROUP,
 } from './types';
 
 export interface ParseAsciiOptions {
@@ -41,6 +51,16 @@ export interface ParseAsciiOptions {
   readonly layout?: string;
   readonly difficulty?: number;
   readonly hearts?: number;
+  /**
+   * Arrow letter -> colour group name, e.g. `{ a: 'red', b: 'red' }`.
+   *
+   * Groups live outside the picture because a grid of letters has no room left to
+   * carry a second axis of identity, and inventing one would make every fixture in
+   * the test suite harder to read for the sake of the few that need colours.
+   */
+  readonly groups?: Readonly<Record<string, string>>;
+  /** Gate definitions. Entry `n` is drawn as the digit `n` in the picture. */
+  readonly gates?: readonly { readonly group: string; readonly mode: GateMode }[];
 }
 
 /** Split a drawing into a rectangular grid of single-character cells. */
@@ -79,10 +99,33 @@ export function parseAscii(art: string, options: ParseAsciiOptions = {}): LevelD
 
   /** letter -> every cell holding it, plus which one was the head. */
   const cellsByLetter = new Map<string, { cells: number[]; head: number | undefined }>();
+  const walls: (readonly number[])[] = [];
+  /** Gate index (the digit drawn) -> the cells carrying it. */
+  const gateCells = new Map<number, (readonly number[])[]>();
 
   grid.forEach((row, r) => {
     row.forEach((glyph, c) => {
       if (glyph === '.') return;
+
+      if (glyph === '#') {
+        walls.push([r, c]);
+        return;
+      }
+
+      if (/^[0-9]$/.test(glyph)) {
+        const index = Number(glyph);
+        if (options.gates?.[index] === undefined) {
+          throw new Error(
+            `parseAscii: the drawing uses gate ${index} at (${r}, ${c}) but ` +
+              `options.gates has ${options.gates?.length ?? 0} entr(y/ies)`,
+          );
+        }
+        const existing = gateCells.get(index) ?? [];
+        existing.push([r, c]);
+        gateCells.set(index, existing);
+        return;
+      }
+
       if (!/^[A-Za-z]$/.test(glyph)) {
         throw new Error(`parseAscii: unknown glyph "${glyph}" at (${r}, ${c})`);
       }
@@ -155,13 +198,21 @@ export function parseAscii(art: string, options: ParseAsciiOptions = {}): LevelD
       );
     }
 
+    const group = options.groups?.[letter];
     arrows.push({
       id: letter,
       body: body.map((cell) => [rowOf(cell, cols), colOf(cell, cols)] as const),
+      ...(group !== undefined ? { group } : {}),
     });
   }
 
   if (arrows.length === 0) throw new Error('parseAscii: board has no arrows');
+
+  const gates: GateSpec[] = [];
+  for (const [index, cells] of [...gateCells.entries()].sort((a, b) => a[0] - b[0])) {
+    const spec = options.gates![index]!;
+    gates.push({ cells, group: spec.group, mode: spec.mode });
+  }
 
   return {
     id: options.id ?? 0,
@@ -171,6 +222,8 @@ export function parseAscii(art: string, options: ParseAsciiOptions = {}): LevelD
     layout: options.layout ?? 'free',
     difficulty: options.difficulty ?? 1,
     arrows,
+    ...(walls.length > 0 ? { walls } : {}),
+    ...(gates.length > 0 ? { gates } : {}),
     ...(options.hearts !== undefined ? { hearts: options.hearts } : {}),
   };
 }
@@ -180,11 +233,29 @@ export function parseAscii(art: string, options: ParseAsciiOptions = {}): LevelD
  *
  * Used for failure messages in tests and for the generator's console preview, so
  * a human can see the board that misbehaved instead of a list of coordinates.
+ *
+ * Obstacles are drawn under the arrows: `#` for a wall, the group's index digit
+ * for a closed gate, and `+` for one currently standing open. Note that an open
+ * gate does not round-trip back through `parseAscii` — this direction is for
+ * looking at, and a picture that showed every gate identically would hide the one
+ * thing worth seeing when a shutter level misbehaves.
  */
 export function renderAscii(board: Board, state: BoardState): string {
   const grid: string[][] = Array.from({ length: board.rows }, () =>
     Array.from({ length: board.cols }, () => '.'),
   );
+
+  if (board.hasObstacles) {
+    for (let cell = 0; cell < board.cellCount; cell += 1) {
+      const row = rowOf(cell, board.cols);
+      const col = colOf(cell, board.cols);
+      if (board.walls[cell] === 1) {
+        grid[row]![col] = '#';
+      } else if (board.gateGroup[cell] !== NO_GROUP) {
+        grid[row]![col] = isGateOpen(board, state, cell) ? '+' : String(board.gateGroup[cell]);
+      }
+    }
+  }
 
   board.arrows.forEach((arrow, index) => {
     if (state.alive[index] !== 1) return;

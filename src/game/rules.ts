@@ -22,6 +22,7 @@ import {
   EMPTY,
   type GameStatus,
   type MoveOutcome,
+  NO_GROUP,
   type PlaySession,
 } from './types';
 
@@ -43,7 +44,7 @@ export function resolveTap(board: Board, state: BoardState, arrowIndex: number):
   const arrow = board.arrows[arrowIndex]!;
   const ray = castRay(board, state, arrowIndex);
 
-  if (ray.blockerIndex === EMPTY) {
+  if (ray.blockedBy === 'nothing') {
     return {
       kind: 'escaped',
       arrowIndex,
@@ -52,13 +53,16 @@ export function resolveTap(board: Board, state: BoardState, arrowIndex: number):
       // be visually clear of the board.
       exitDistance: ray.freeCells + 1,
       bodyLength: arrow.body.length,
+      group: arrow.group,
     };
   }
 
   return {
     kind: 'blocked',
     arrowIndex,
-    blockerIndex: ray.blockerIndex,
+    blockerIndex: ray.blockerArrow,
+    blockerKind: ray.blockedBy,
+    blockerGroup: ray.blockerGroup,
     blockedAt: ray.blockedAt,
   };
 }
@@ -78,6 +82,7 @@ export function applyOutcome(state: BoardState, outcome: MoveOutcome): BoardStat
 
   const alive = Uint8Array.from(state.alive);
   const occupancy = Int32Array.from(state.occupancy);
+  const groupsLeft = Int32Array.from(state.groupsLeft);
 
   alive[outcome.arrowIndex] = 0;
   // Free every cell the snake occupied. It threads out along the trail its own
@@ -86,7 +91,11 @@ export function applyOutcome(state: BoardState, outcome: MoveOutcome): BoardStat
     if (occupancy[cell] === outcome.arrowIndex) occupancy[cell] = EMPTY;
   }
 
-  return { alive, occupancy, remaining: state.remaining - 1 };
+  if (outcome.group !== NO_GROUP) {
+    groupsLeft[outcome.group] = (groupsLeft[outcome.group] ?? 0) - 1;
+  }
+
+  return { alive, occupancy, remaining: state.remaining - 1, groupsLeft };
 }
 
 /** The board is empty — the player has won. */
@@ -104,7 +113,7 @@ export function legalMoves(board: Board, state: BoardState): number[] {
   const moves: number[] = [];
   for (let i = 0; i < board.arrows.length; i += 1) {
     if (!isAlive(state, i)) continue;
-    if (castRay(board, state, i).blockerIndex === EMPTY) moves.push(i);
+    if (castRay(board, state, i).blockedBy === 'nothing') moves.push(i);
   }
   return moves;
 }
@@ -113,7 +122,7 @@ export function legalMoves(board: Board, state: BoardState): number[] {
 export function hasLegalMove(board: Board, state: BoardState): boolean {
   for (let i = 0; i < board.arrows.length; i += 1) {
     if (!isAlive(state, i)) continue;
-    if (castRay(board, state, i).blockerIndex === EMPTY) return true;
+    if (castRay(board, state, i).blockedBy === 'nothing') return true;
   }
   return false;
 }
@@ -123,7 +132,7 @@ export function blockedArrows(board: Board, state: BoardState): number[] {
   const blocked: number[] = [];
   for (let i = 0; i < board.arrows.length; i += 1) {
     if (!isAlive(state, i)) continue;
-    if (castRay(board, state, i).blockerIndex !== EMPTY) blocked.push(i);
+    if (castRay(board, state, i).blockedBy !== 'nothing') blocked.push(i);
   }
   return blocked;
 }
@@ -184,19 +193,37 @@ export function tapArrow(
   }
 
   const state = applyOutcome(session.state, outcome);
-  return {
-    outcome,
-    session: { ...session, state, status: isCleared(state) ? 'won' : 'playing' },
-  };
+  return { outcome, session: { ...session, state, status: statusAfter(board, state) } };
 }
 
 /**
- * Won, failed, or still playing.
+ * The status a session lands in once a move has been committed.
  *
- * There is no "deadlocked" status. Because a tap only ever *removes* an arrow,
- * and removing an arrow can never block another one, a board that starts
- * solvable stays solvable no matter what the player taps. The only way to lose is
- * to run out of hearts. See `docs/MECHANIC_ANALYSIS.md`.
+ * The `stuck` branch only ever fires on a board carrying a `shuts` gate, and the
+ * `hasShutters` test is what keeps it free everywhere else: on every other board
+ * the arrow that just left cannot have blocked anything, so re-scanning for a
+ * legal move would be work with a known answer.
+ *
+ * Note what this detects and what it does not. "No arrow can be tapped" is exact
+ * and cheap. "Arrows can still be tapped, but the level is already lost" needs the
+ * solver, which `rules.ts` deliberately cannot import — that check lives in
+ * `isDoomed` and is called by the screen, which can see both modules.
+ */
+function statusAfter(board: Board, state: BoardState): GameStatus {
+  if (isCleared(state)) return 'won';
+  if (board.hasShutters && !hasLegalMove(board, state)) return 'stuck';
+  return 'playing';
+}
+
+/**
+ * Won, failed, stuck, or still playing.
+ *
+ * On a board with no `shuts` gate, `stuck` is unreachable — a tap only ever
+ * removes an arrow, removing an arrow can never block another one, so a board that
+ * starts solvable stays solvable no matter what the player taps, and running out
+ * of hearts is the only way to lose. A shutter is the single mechanic that breaks
+ * that, which is why it is the only thing that can produce `stuck`.
+ * See `docs/MECHANIC_ANALYSIS.md`.
  */
 export function getStatus(session: PlaySession): GameStatus {
   return session.status;

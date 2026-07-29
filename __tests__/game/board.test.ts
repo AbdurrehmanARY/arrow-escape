@@ -67,7 +67,7 @@ describe('buildLevel validation', () => {
     const result = buildLevel(base);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // Head at (0,0), neck at (0,1) — the head continues leftward.
+    // Head at (0,0), neck at (0,1) â€” the head continues leftward.
     expect(result.value.board.arrows[0]!.dir).toBe('left');
   });
 
@@ -153,7 +153,7 @@ describe('castRay', () => {
     // Head at (0,0) pointing left, body trailing right. Nothing to the left.
     const { board, initial } = build('A a a .');
     const ray = castRay(board, initial, 0);
-    expect(ray.blockerIndex).toBe(EMPTY);
+    expect(ray.blockedBy).toBe('nothing');
     expect(ray.freeCells).toBe(0);
     expect(ray.blockedAt).toBe(EMPTY);
   });
@@ -166,7 +166,7 @@ describe('castRay', () => {
     `);
     // Head at (1,3) pointing right, one column from the edge.
     const ray = castRay(board, initial, 0);
-    expect(ray.blockerIndex).toBe(EMPTY);
+    expect(ray.blockedBy).toBe('nothing');
     expect(ray.freeCells).toBe(0);
   });
 
@@ -176,12 +176,12 @@ describe('castRay', () => {
     `);
     // Arrow a's head is at (0,1) pointing right; arrow b occupies (0,3) and (0,4).
     const ray = castRay(board, initial, 0);
-    expect(ray.blockerIndex).toBe(1);
+    expect(ray.blockerArrow).toBe(1);
     expect(ray.freeCells).toBe(1);
     expect(ray.blockedAt).toBe(3);
   });
 
-  it('does not let an arrow block itself — a body threads out behind its own head', () => {
+  it('does not let an arrow block itself â€” a body threads out behind its own head', () => {
     // A hook whose own tail sits directly in front of its head: the head is at
     // (2,1) pointing right, and the tail occupies (2,3) on that exact ray. The
     // tail vacates as the head advances, so this arrow is free, not self-blocked.
@@ -195,13 +195,13 @@ describe('castRay', () => {
     expect(board.arrows[0]!.dir).toBe('right');
 
     const ray = castRay(board, initial, 0);
-    expect(ray.blockerIndex).toBe(EMPTY);
+    expect(ray.blockedBy).toBe('nothing');
   });
 
-  it('only looks forward — the body behind the head never blocks it', () => {
+  it('only looks forward â€” the body behind the head never blocks it', () => {
     const { board, initial } = build('. A a a');
     const ray = castRay(board, initial, 0);
-    expect(ray.blockerIndex).toBe(EMPTY);
+    expect(ray.blockedBy).toBe('nothing');
   });
 
   it('walks vertically as well as horizontally', () => {
@@ -213,8 +213,8 @@ describe('castRay', () => {
     `);
     // a's head at (0,0) points up (off the board); b's head at (2,0) points up
     // into a's body.
-    expect(castRay(board, initial, 0).blockerIndex).toBe(EMPTY);
-    expect(castRay(board, initial, 1).blockerIndex).toBe(0);
+    expect(castRay(board, initial, 0).blockedBy).toBe('nothing');
+    expect(castRay(board, initial, 1).blockerArrow).toBe(0);
   });
 });
 
@@ -225,7 +225,7 @@ describe('exitPath', () => {
       A a . .
       . . . .
     `);
-    // Head at (1,0) pointing left — one step and it is off the board.
+    // Head at (1,0) pointing left â€” one step and it is off the board.
     expect(exitPath(board, 0)).toEqual([]);
   });
 
@@ -292,7 +292,7 @@ describe('initial state', () => {
     expect(initial.occupancy[2]).toBe(EMPTY);
   });
 
-  it('createInitialState is repeatable — this is what Restart relies on', () => {
+  it('createInitialState is repeatable â€” this is what Restart relies on', () => {
     const { board, initial } = build('A a . B b');
     const again = createInitialState(board);
     expect(Array.from(again.occupancy)).toEqual(Array.from(initial.occupancy));

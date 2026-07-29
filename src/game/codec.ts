@@ -25,7 +25,7 @@
  *               encoder change cannot desync from the decoder.
  */
 
-import type { ArrowSpec, LevelDefinition } from './types';
+import type { ArrowSpec, GateMode, LevelDefinition } from './types';
 
 /** Difficulty tiers, as authored in the curriculum. */
 export type DifficultyTier = 'easy' | 'medium' | 'hard' | 'superHard' | 'extremeHard';
@@ -52,6 +52,28 @@ export interface EncodedLevel {
   readonly a: readonly string[];
   /** canonical solution, as comma-separated arrow indices */
   readonly s: string;
+  /**
+   * colour group per arrow, in arrow order, `""` for none.
+   *
+   * Every one of these optional fields is omitted entirely rather than written as
+   * an empty value, because the overwhelming majority of levels have no obstacles
+   * at all and four empty keys across six hundred levels is real bundle weight.
+   */
+  readonly p?: readonly string[];
+  /** walls, as `"row,col;row,col"` */
+  readonly w?: string;
+  /** gates */
+  readonly g?: readonly EncodedGate[];
+}
+
+/** One gate in its stored form. */
+export interface EncodedGate {
+  /** group name */
+  readonly u: string;
+  /** mode */
+  readonly m: GateMode;
+  /** cells, as `"row,col;row,col"` */
+  readonly c: string;
 }
 
 /** One pack file. Levels are grouped so 600 of them are not 600 Metro modules. */
@@ -121,12 +143,35 @@ function decodeBody(encoded: string): number[][] {
   return body;
 }
 
+/** Turn a list of `[row, col]` pairs into `"row,col;row,col"`. */
+function encodeCells(cells: readonly (readonly number[])[]): string {
+  return cells.map((cell) => `${cell[0]},${cell[1]}`).join(';');
+}
+
+/** Read `"row,col;row,col"` back into pairs. */
+function decodeCells(encoded: string): number[][] {
+  if (encoded.length === 0) return [];
+  return encoded.split(';').map((pair) => {
+    const [rowText, colText] = pair.split(',');
+    const row = Number(rowText);
+    const col = Number(colText);
+    if (!Number.isFinite(row) || !Number.isFinite(col)) {
+      throw new Error(`codec: malformed cell "${pair}"`);
+    }
+    return [row, col];
+  });
+}
+
 /** Compact a playable level for storage. */
 export function encodeLevel(
   level: LevelDefinition,
   tier: DifficultyTier,
   solutionIndices: readonly number[],
 ): EncodedLevel {
+  const groups = level.arrows.map((arrow) => arrow.group ?? '');
+  const walls = level.walls ?? [];
+  const gates = level.gates ?? [];
+
   return {
     i: level.id,
     n: level.name,
@@ -138,6 +183,11 @@ export function encodeLevel(
     h: level.hearts ?? 5,
     a: level.arrows.map((arrow) => encodeBody(arrow.body)),
     s: solutionIndices.join(','),
+    ...(groups.some((group) => group !== '') ? { p: groups } : {}),
+    ...(walls.length > 0 ? { w: encodeCells(walls) } : {}),
+    ...(gates.length > 0
+      ? { g: gates.map((gate) => ({ u: gate.group, m: gate.mode, c: encodeCells(gate.cells) })) }
+      : {}),
   };
 }
 
@@ -150,10 +200,14 @@ export function encodeLevel(
  * screen for — and `buildLevel` still validates the result properly afterwards.
  */
 export function decodeLevel(encoded: EncodedLevel): LevelDefinition {
-  const arrows: ArrowSpec[] = encoded.a.map((body, index) => ({
-    id: arrowIdFor(index),
-    body: decodeBody(body),
-  }));
+  const arrows: ArrowSpec[] = encoded.a.map((body, index) => {
+    const group = encoded.p?.[index] ?? '';
+    return {
+      id: arrowIdFor(index),
+      body: decodeBody(body),
+      ...(group !== '' ? { group } : {}),
+    };
+  });
 
   const solution = encoded.s
     .split(',')
@@ -169,6 +223,16 @@ export function decodeLevel(encoded: EncodedLevel): LevelDefinition {
     difficulty: encoded.d,
     hearts: encoded.h,
     arrows,
+    ...(encoded.w !== undefined ? { walls: decodeCells(encoded.w) } : {}),
+    ...(encoded.g !== undefined
+      ? {
+          gates: encoded.g.map((gate) => ({
+            group: gate.u,
+            mode: gate.m,
+            cells: decodeCells(gate.c),
+          })),
+        }
+      : {}),
     ...(solution.length > 0 ? { solution } : {}),
   };
 }

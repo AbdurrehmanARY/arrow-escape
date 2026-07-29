@@ -11,14 +11,26 @@ import {
   type ArrowSpec,
   buildLevel,
   type BuiltLevel,
+  type GateMode,
+  type GateSpec,
   type LevelDefinition,
   parseAscii,
+  type ParseAsciiOptions,
 } from '@game';
 
 /** Build a playable board from ASCII art, failing loudly if the art is invalid. */
 export function build(art: string, hearts?: number): BuiltLevel {
-  const level = parseAscii(art, hearts !== undefined ? { hearts } : {});
-  const result = buildLevel(level);
+  return buildWith(art, hearts !== undefined ? { hearts } : {});
+}
+
+/**
+ * `build`, with the parse options gates and colour groups need.
+ *
+ * Separate from `build` only so the eighty existing fixtures that want nothing but
+ * a picture keep reading as one argument.
+ */
+export function buildWith(art: string, options: ParseAsciiOptions): BuiltLevel {
+  const result = buildLevel(parseAscii(art, options));
   if (!result.ok) throw new Error(`build() fixture is invalid: ${result.error}`);
   return result.value;
 }
@@ -127,4 +139,64 @@ export function randomBoard(rng: () => number, options: RandomBoardOptions): Bui
   const result = buildLevel(randomLevel(rng, options));
   if (!result.ok) throw new Error(`randomBoard produced invalid level: ${result.error}`);
   return result.value;
+}
+
+/** Colour names used by the randomised gate tests. Three is enough to tangle. */
+const TEST_GROUPS = ['red', 'blue', 'green'] as const;
+
+/**
+ * A random board with colour groups and gates bolted on.
+ *
+ * Gates land on cells no arrow occupies, which is what `buildLevel` requires and
+ * also what makes them interesting: a gate is only ever a hole in the board that
+ * opens or shuts, never something sitting on top of a snake.
+ *
+ * Most of the boards this produces are unsolvable, and that is fine — the property
+ * tests filter on solvability first. What matters is that the ones that survive are
+ * shaped like real gate levels rather than like a special case someone thought of.
+ */
+export function randomGatedLevel(
+  rng: () => number,
+  options: RandomBoardOptions,
+  mode: GateMode,
+  gateCount = 2,
+): LevelDefinition {
+  const base = randomLevel(rng, options);
+  if (base.arrows.length === 0) return base;
+
+  const used = new Set<string>();
+  const arrows: ArrowSpec[] = base.arrows.map((arrow) => {
+    // Leave roughly a third of the arrows uncoloured: a board where every snake
+    // wears a colour is not the common case and would hide bugs in the
+    // `NO_GROUP` path.
+    if (rng() < 0.35) return arrow;
+    const group = TEST_GROUPS[Math.floor(rng() * TEST_GROUPS.length)]!;
+    used.add(group);
+    return { ...arrow, group };
+  });
+  if (used.size === 0) return { ...base, arrows };
+
+  const occupied = new Set<string>();
+  for (const arrow of arrows) {
+    for (const cell of arrow.body) occupied.add(`${cell[0]},${cell[1]}`);
+  }
+
+  const groups = [...used];
+  const gates: GateSpec[] = [];
+  const taken = new Set<string>();
+
+  for (let i = 0; i < gateCount; i += 1) {
+    const row = Math.floor(rng() * base.rows);
+    const col = Math.floor(rng() * base.cols);
+    const key = `${row},${col}`;
+    if (occupied.has(key) || taken.has(key)) continue;
+    taken.add(key);
+    gates.push({
+      cells: [[row, col]],
+      group: groups[Math.floor(rng() * groups.length)]!,
+      mode,
+    });
+  }
+
+  return { ...base, arrows, ...(gates.length > 0 ? { gates } : {}) };
 }

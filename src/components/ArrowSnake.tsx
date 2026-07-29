@@ -29,7 +29,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Circle, G, Path, Polygon, Polyline } from 'react-native-svg';
 
-import { exitPath, type Board } from '@game';
+import { exitPath, NO_GROUP, type Board } from '@game';
 import type { ArrowStyle, Palette } from '@theme';
 
 import {
@@ -77,16 +77,30 @@ const LINE_CAP: Record<ArrowStyle['tail'], 'round' | 'butt' | 'square'> = {
   tapered: 'round',
 };
 
-/** Gameplay state wins over theme colour — a blocked arrow must always read as blocked. */
+/**
+ * What colour to draw an arrow.
+ *
+ * The precedence is the interesting part. Gameplay state wins over everything —
+ * a blocked arrow must read as blocked whatever else is true of it. Below that,
+ * a **colour group beats the theme**, because a group colour is not decoration:
+ * it is the only thing linking an arrow to the gate it controls, and a theme that
+ * quietly overrode it would make the level unreadable rather than merely
+ * different-looking. `colorful` variants come last, since they mean nothing.
+ */
 function colorFor(
   visual: ArrowVisualState,
   arrowIndex: number,
+  group: number,
   style: ArrowStyle,
   palette: Palette,
 ): string {
   if (visual === 'blocked') return palette.arrowBlocked;
   if (visual === 'blocker') return palette.arrowBlocker;
   if (visual === 'safe') return palette.arrowSafe;
+
+  if (group !== NO_GROUP && palette.groupColors.length > 0) {
+    return palette.groupColors[group % palette.groupColors.length]!;
+  }
 
   const variants = palette.arrowVariants;
   if (style.colorful && variants && variants.length > 0) {
@@ -112,7 +126,7 @@ function ArrowSnakeInner({
   const geometry = buildArrowGeometry(board, arrowIndex, cellSize, originX, originY, style);
   const { body, tip, baseLeft, baseRight, stroke, forward } = geometry;
 
-  const color = colorFor(visual, arrowIndex, style, palette);
+  const color = colorFor(visual, arrowIndex, board.arrows[arrowIndex]!.group, style, palette);
   const cap = LINE_CAP[style.tail];
 
   // Body length: every segment is one cell, so this is just the segment count.

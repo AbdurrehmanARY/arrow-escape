@@ -28,11 +28,19 @@ import {
   IconButton,
   PillButton,
   Screen,
+  StuckOverlay,
   WinOverlay,
   computeBoardLayout,
   useTheme,
 } from '@components';
-import { buildLevel, findAllSafeMoves, findSafeMove, resolveTap } from '@game';
+import {
+  buildLevel,
+  emptyBoardState,
+  findAllSafeMoves,
+  findSafeMove,
+  isDoomed,
+  resolveTap,
+} from '@game';
 import { LEVEL_COUNT, levelById } from '@data/levels';
 import { WIN_OVERLAY_DELAY_MS } from '@config';
 import { availability, preload, showRewarded } from '@services/ads';
@@ -85,7 +93,7 @@ export default function PlayScreen() {
   const [state, dispatch] = useReducer(
     gameReducer,
     built?.ok ? initGameState(built.value.initial, hearts) : undefined,
-    (initial) => initial ?? initGameState({ alive: new Uint8Array(), occupancy: new Int32Array(), remaining: 0 }, hearts),
+    (initial) => initial ?? initGameState(emptyBoardState(), hearts),
   );
 
   const [hintedArrow, setHintedArrow] = useState<number | undefined>(undefined);
@@ -171,10 +179,27 @@ export default function PlayScreen() {
   }, [status, levelId, completeLevel, state.session.mistakes, state.session.heartsLeft, haptics]);
 
   useEffect(() => {
-    if (status !== 'failed') return;
+    if (status !== 'failed' && status !== 'stuck') return;
     playSfx('fail');
     if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   }, [status, haptics]);
+
+  /**
+   * Has a shutter already cost the player the level, before the board looks lost?
+   *
+   * `PlaySession.status` catches the blunt case — nothing left that can be tapped —
+   * but a gate can seal on one arrow while several others are still free, so the
+   * board stays playable for a few taps after it stopped being winnable. Letting
+   * someone keep playing a level they have already lost is the worst version of
+   * this mechanic, so the check runs after every move.
+   *
+   * It costs nothing on the levels that have no shutter: `isDoomed` returns false
+   * without looking at the board.
+   */
+  const doomed = useMemo(
+    () => (built?.ok ? isDoomed(built.value.board, state.session.state) : false),
+    [built, state.session.state],
+  );
 
   const safeArrows = useMemo(() => {
     if (!built?.ok) return [];
@@ -291,7 +316,11 @@ export default function PlayScreen() {
         <Text style={[styles.error, { color: palette.text }]}>
           Level {levelId} could not be loaded.
         </Text>
-        <PillButton palette={palette} label="Back to levels" onPress={() => router.replace('/levels')} />
+        <PillButton
+          palette={palette}
+          label="Back to levels"
+          onPress={() => router.replace('/levels')}
+        />
       </Screen>
     );
   }
@@ -311,13 +340,23 @@ export default function PlayScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <IconButton palette={palette} glyph="←" label="Back to levels" onPress={() => router.replace('/levels')} />
+        <IconButton
+          palette={palette}
+          glyph="←"
+          label="Back to levels"
+          onPress={() => router.replace('/levels')}
+        />
         <View style={styles.headerRight}>
           <View style={styles.hintChip}>
             <Text style={[styles.hintGlyph, { color: palette.accent }]}>💡</Text>
             <Text style={[styles.hintCount, { color: palette.text }]}>{hintsAvailable}</Text>
           </View>
-          <IconButton palette={palette} glyph="⚙" label="Settings" onPress={() => router.push('/settings')} />
+          <IconButton
+            palette={palette}
+            glyph="⚙"
+            label="Settings"
+            onPress={() => router.push('/settings')}
+          />
         </View>
       </View>
 
@@ -399,7 +438,13 @@ export default function PlayScreen() {
       <View style={styles.actions}>
         <PillButton palette={palette} label="Restart" icon="↺" onPress={onRestartPressed} />
         {hintsAvailable > 0 ? (
-          <PillButton palette={palette} label={`Hint (${hintsAvailable})`} icon="💡" onPress={onHint} primary />
+          <PillButton
+            palette={palette}
+            label={`Hint (${hintsAvailable})`}
+            icon="💡"
+            onPress={onHint}
+            primary
+          />
         ) : (
           <PillButton
             palette={palette}
@@ -442,6 +487,15 @@ export default function PlayScreen() {
       <FailOverlay
         palette={palette}
         visible={status === 'failed'}
+        stillWinnable={!doomed}
+        onRetry={doRestart}
+        onLevels={() => router.replace('/levels')}
+      />
+
+      <StuckOverlay
+        palette={palette}
+        visible={status === 'stuck' || (status === 'playing' && doomed)}
+        quietly={status === 'playing'}
         onRetry={doRestart}
         onLevels={() => router.replace('/levels')}
       />

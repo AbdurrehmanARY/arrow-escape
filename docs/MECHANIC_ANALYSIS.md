@@ -1,10 +1,15 @@
 # Mechanic analysis — where the difficulty actually lives
 
-> **Status:** settled. The rule set below is what ArrowPath ships.
+> **Status:** settled, and now **two rule sets rather than one**. Everything below
+> describes the base game, which is what the great majority of levels play by.
+> Phase 15 added an opt-in second rule set — see
+> [Planning, and the mechanic that buys it](#planning-and-the-mechanic-that-buys-it)
+> at the end. Read that section before touching anything here, because the base
+> game's central result does **not** hold under it.
 > **Written:** Phase 1, alongside the rules engine. Revised once the reference
-> screenshots arrived and the snake-body model was confirmed.
-> **Evidence:** `__tests__/game/mechanic-invariants.test.ts`, re-run on device by
-> the Phase 1 build.
+> screenshots arrived and the snake-body model was confirmed; extended in Phase 15.
+> **Evidence:** `__tests__/game/mechanic-invariants.test.ts` for the base rules,
+> `__tests__/game/gates.test.ts` for both rule sets side by side.
 
 ---
 
@@ -156,3 +161,85 @@ If a future mechanic ever lets a blocked arrow move — even a single cell — o
 starts to matter, deadlock becomes real, and the entire difficulty model here has
 to be rebuilt. `mechanic-invariants.test.ts` is what will tell you, loudly, on the
 day someone tries it.
+
+---
+
+## Planning, and the mechanic that buys it
+
+> Phase 15. This section describes rules that **only apply to levels that opt into
+> them.** A level with no gates behaves exactly as described above, and that is
+> most of them.
+
+The section above is right that this game has no planning in it, and for a long
+time the answer to "can we add some?" was: not without moving an arrow, and moving
+an arrow costs us everything else. Phase 15 found the cheaper door.
+
+Order matters if and only if a tap can **add** a constraint. Moving a blocked arrow
+is one way to do that. Taking a route away is another, and it needs no new
+animation, no partial arrow state, and no change at all to what a tap does.
+
+### Three new pieces of board
+
+- **Wall** — a permanently impassable cell. Pure geometry: it carves the board into
+  corridors and forces heads to line up with gaps. An arrow whose ray meets a wall
+  can never leave, so a board that contains one is unsolvable and the pipeline
+  rejects it.
+- **Colour group** — arrows can wear a colour. Colour is the only thing in this
+  game that carries information rather than decoration, which has a real cost:
+  colouring arrows makes them *easier* to tell apart, and telling arrows apart is
+  the skill. A level should only spend a colour where a gate earns it back.
+- **Gate** — a cell whose passability is tied to a colour group, in one of two
+  polarities. This one word is the whole design.
+
+### The two polarities
+
+| Mode | Behaviour | Order matters? | Solver |
+|---|---|---|---|
+| `opens` | Blocked **until** every arrow of its colour has left | No | Kahn's, microseconds |
+| `shuts` | Passable **while** its colour survives; seals permanently once the last one goes | **Yes** | Memoised search |
+
+`opens` is monotone. Clearing arrows only ever opens gates, so the set of free
+arrows only ever grows, the exchange argument from the top of this document still
+goes through word for word, and greedy still always works. What it buys is
+**depth** — a whole region of the board stays shut until you find and clear the key
+colour, and `dependencyDepth` becomes a dial with real range instead of a
+curiosity.
+
+`shuts` is the inverse and breaks monotonicity on purpose. Clear the red arrows
+too early and the shutter falls on something that still needed the way through.
+That is genuine planning: the board is lost, no heart was spent, and the only
+mistake was sequence.
+
+### What a shutter costs
+
+Being honest about the price, because it is not small:
+
+- **Deadlock is real**, so `GameStatus` gained `stuck` and the game gained a
+  screen that explains it. Note it is deliberately *not* folded into `failed` —
+  the player still has every heart, and showing them a spent-hearts screen would
+  teach them the wrong lesson about what went wrong.
+- **A board can be lost several taps before it looks lost.** `isDoomed` runs after
+  every move on a shutter board and surfaces the overlay early, because letting
+  someone keep playing a level they have already thrown away is the worst possible
+  version of this mechanic.
+- **Solving is a search.** No cheap characterisation survives, so `solve` branches
+  on `board.hasShutters`: DAG peel without them, depth-first search memoised on the
+  surviving arrow set with them. The search has a budget (`SEARCH_BUDGET`) and
+  reports `unknown` rather than `unsolvable` when it runs out — an unproven board
+  must never be shipped as a proved one.
+- **The fail copy had to become conditional.** It used to promise the board behind
+  it was still winnable. On a shutter board that can be false, and it is a claim
+  the player can check.
+
+### The new dial
+
+`analyze` gained **`blunderRate`**: the share of currently-legal taps that quietly
+lose the level, averaged across a game. It is exactly zero on every board without a
+shutter, which is not a coincidence — it is this document's central result,
+restated as a number. Where it is non-zero it measures how much planning a level
+actually demands: `0.3` means that at a typical moment, about a third of the arrows
+you *can* tap will cost you the board rather than a heart.
+
+That gives the curriculum two independent axes at last. `expectedBlindMistakes`
+asks how hard the board is to **read**; `blunderRate` asks how hard it is to
+**sequence**. A level can now be hard in either sense, or both.
