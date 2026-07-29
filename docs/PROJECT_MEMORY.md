@@ -1,14 +1,14 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 14 — heart-deduction fix, unlock-all testing flag.
+> **Last updated:** end of Phase 17 — gates and shutters, ten tiers, 114-silhouette shape library.
 
 ---
 
 ## Status
 
 **Code-complete at 600 levels.** Playable end to end: 600 generated and
-solver-verified levels across 74 silhouettes and five difficulty tiers, six
+solver-verified levels across 114 silhouettes and **ten** difficulty tiers, six
 themes, animation, hearts, hints, persistence, navigation, settings, first-run
 teaching, and an ads path that is implemented but switched off.
 
@@ -31,6 +31,19 @@ a solvable board can never become stuck.
 Difficulty therefore lives entirely in **reading the board**. Wrong *reads*, not
 wrong *plans*, are the failure mode. Full proof and the difficulty model are in
 [MECHANIC_ANALYSIS.md](MECHANIC_ANALYSIS.md).
+
+### …and the one exception, added in Phase 15
+The paragraph above holds on **560 of the 600 levels**. The other 40 carry a
+`shuts` gate — a cell that is open while its colour is on the board and seals for
+good once the last of that colour leaves. That lets a tap *take a route away*,
+which is the one thing that breaks monotonicity, so on those boards order matters,
+deadlock is real, and `GameStatus` has a `stuck` value for it.
+
+The distinction is enforced, not merely intended: `analyze` reports a
+**`blunderRate`** — the share of legal taps that quietly lose the level — and the
+level tests assert it is above zero on every shutter board and exactly zero on
+every other one. Walls and `opens` gates are also available and are both fully
+monotone; they buy dependency *depth*, not risk.
 
 ## Architecture decisions (locked for v0.1)
 1. **Level pipeline = hybrid generate-and-curate.** Shape mask + plan → generator → solver/validator → level JSON. Every shipped level is verified solvable *and* has its recorded solution replayed, in CI.
@@ -82,8 +95,25 @@ wrong *plans*, are the failure mode. Full proof and the difficulty model are in
 45. **`UNLOCK_ALL_LEVELS` is read in exactly one place** (`playableUpTo`). `highestUnlocked` stays pure and honest about real progress, so the flag cannot corrupt a save and turning it off needs no migration. While on, the menu and level select both show a TESTING badge — a build flag that looks like production is how one ships by accident.
 46. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
 
+### Added in Phases 15–17
+47. **Order is made to matter by taking a route away, not by moving an arrow.** The long-standing answer to "can this game have planning in it" was "only by letting blocked arrows move", which costs the no-dead-ends guarantee, the microsecond solver and every existing level. A gate that *shuts* achieves the same thing — a tap that adds a constraint — with no change to what a tap does and no change to any level that does not use one.
+48. **Gate polarity is one word, and it is the difference between two games.** `opens` is monotone: it blocks until its colour has left, so greedy still always works and it buys depth only. `shuts` is the inverse and breaks monotonicity on purpose. Both share all their machinery.
+49. **`stuck` is not folded into `failed`.** A player who deadlocks a shutter board still holds every heart, and showing them a spent-hearts screen would teach the wrong lesson about what went wrong. Separate status, separate overlay, and the fail copy's promise that "the board behind this is still winnable" is now conditional — it can be false, and the player can check.
+50. **A shutter board can be lost several taps before it looks lost**, so `isDoomed` runs after every move and surfaces the overlay early. It costs nothing on the 560 levels with no shutter: it returns false without looking at the board.
+51. **`solve` branches on `hasShutters`.** Kahn's peel without them, depth-first search memoised on the surviving arrow set with them, under a budget that reports `unknown` rather than `unsolvable`. An unproven board must never ship as a proved one.
+52. **The blocking graph must not skip self-edges for gates.** Skipping self is right for a body lying across its own ray and exactly wrong for an arrow whose own colour keys the gate in front of it. `castRay` had it right; the solver disagreed, and only a property test found it.
+53. **Colour is the one thing in this game that carries information.** It links an arrow to the gate it controls, so it is drawn from a colour-blind-safe set and gates carry a shape cue as well. It also makes arrows easier to tell apart, which makes a level *easier* — so a level only spends a colour where a gate earns it back.
+54. **Ten tiers, five colour pips.** Five tiers over 600 levels made "Hard" span a range wide enough to mean nothing. Ten bands are narrow enough that the label is a promise — but ten distinguishable dot colours do not exist in a palette that also works for colour-blind players, so the pips pair up and the tier *name* carries the precision.
+55. **A failed snake start must not consume an arrow slot.** Invisible at bodies of 2–6 and ruinous at 5–14: on a 30x30 board most starts paint themselves into a corner, so boards came out at half their intended density. Fixing it took nightmare levels from 70 to 161 average blind mistakes.
+56. **A silhouette caps how hard a level can be, and capacity dominates islands.** Arrows in separate regions can never block each other, so a fragmenting shape raises how many are free at once; and a narrow shape on a 28x28 board simply holds fewer snakes. Filtering the demanding tiers on islands *alone* made them easier, because it left a pool of detailed but thin outlines. Both filters together, measured rather than declared.
+57. **Glyphs are strokes, not bitmaps.** A `1` drawn at 16x16 is a two-pixel column: sampled to a 9-wide board it is either gone or four cells thick, and no single drawing survives both ends. A stroke is a distance function, so thickness is chosen at the target size — at least a cell wide, never wide enough to fill in the counter of an `O`.
+58. **Procedural shapes perforate the board rather than outlining it.** A bitmap says where the board ends; a honeycomb or a maze carves corridors through the middle, so snakes must bend constantly — a difficulty device dressed as decoration.
+59. **The two gate coach cards fire before the first tap**, unlike every other card, which explains something that has already happened. A gate cannot be inferred by watching, and a shutter would otherwise be met by losing a level with every heart still in hand.
+
 ### Reversed along the way
-- The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`.
+- The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`. Phase 15 revisited the same goal and reached it by a different route — see decision 47.
+- A two-pass snake growth fallback (retry leftover corridors at a shorter minimum length) was written for the perforated shapes, then **removed**: the rebuild came back byte-identical, because arrow counts were already being met. The undershoot was structural, not density.
+- Filtering demanding tiers on **island count alone** was tried and **reverted** — it made the top tiers measurably easier. See decision 56.
 - The first curriculum declared arrow counts directly. 37 of 50 plans were physically impossible. Replaced with capacity-derived counts.
 
 ## Commands
@@ -110,7 +140,10 @@ select show a TESTING badge. Set it to `false` for production; nothing else need
 changing.
 
 ## Pending work
-- **You:** play through on device; report anything that feels wrong about pacing, board size, or the 5-heart budget.
+- **You:** play through on device; report anything that feels wrong about pacing, board size, or the 5-heart budget. **Phases 15–17 are the ones to test** — gates, shutters, ten tiers, longer snakes, the expanded shape library.
+- **Phase 18 (not started):** UI/UX overhaul across all seven surfaces, including a pause menu, which does not exist yet. Includes removing the celebration effects.
+- **Phase 19 (not started):** the level design document / PDF covering all 600 levels. Two questions still open on its fields and format.
+- **Phase 20 (not started):** performance pass. Needs a real mid-range Android device to be worth doing.
 - **Assets:** audio files (`assets/audio/README.md`). Icons and splash are generated — rerun `npm run icons:build` after any brand change.
 - **Accounts:** AdMob ([ADS_SETUP.md](ADS_SETUP.md)), Play Console ([RELEASE.md](RELEASE.md)).
 - **Then:** validate the curve against real players before extending past 50 levels.

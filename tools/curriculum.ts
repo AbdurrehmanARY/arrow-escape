@@ -36,8 +36,16 @@
 
 import type { DifficultyTier } from '../src/game/codec';
 import type { GateMode } from '../src/game';
-import { maskCapacity, maskFor, SHAPE_NAMES, type ShapeName } from './shapes';
-import { shapeArtById } from './shapeArt';
+import {
+  maskCapacity,
+  maskFor,
+  maskRegionCount,
+  shapeDisplayName,
+  SHAPE_NAMES,
+  type ShapeName,
+} from './shapes';
+import { GLYPH_IDS } from './shapeGlyphs';
+import { PROCEDURAL_IDS } from './shapeProcedural';
 
 export interface LevelPlan {
   readonly id: number;
@@ -478,9 +486,7 @@ const GATED_QUALIFIERS: readonly string[] = [
 
 /** Readable label for a shape, for level names. */
 function shapeLabel(shape: ShapeName): string {
-  const artwork = shapeArtById(shape);
-  if (artwork) return artwork.name;
-  return shape.charAt(0).toUpperCase() + shape.slice(1);
+  return shapeDisplayName(shape);
 }
 
 /**
@@ -551,10 +557,61 @@ function pickTier(
  * detailed silhouette on a 7x7 grid is unreadable mush, so bitmaps only appear
  * once there are enough cells to carry them.
  */
-function shapePoolFor(size: number): readonly ShapeName[] {
+function shapePoolFor(size: number, demanding: boolean): readonly ShapeName[] {
   if (size <= 9) return ['free', 'diamond', 'circle', 'cross', 'ring', 'free'];
-  return SHAPE_NAMES;
+
+  // Glyphs need enough cells for a stroke to stay a stroke, and the perforated
+  // procedural families need enough for their holes to read as holes. Below about
+  // twelve both degrade into an indistinct blob, which is worse than a plain
+  // rectangle because it looks like a shape that failed.
+  const pool = size <= 12 ? SHAPE_NAMES.filter((name) => !isFineDetailShape(name)) : SHAPE_NAMES;
+
+  // A tier that promises real difficulty cannot deliver it on a shape that breaks
+  // the board into islands, however it is seeded — see `maskRegionCount`.
+  return demanding ? pool.filter((name) => !FRAGMENTING_SHAPES.has(name)) : pool;
 }
+
+/** Shapes that need a reasonably large grid to read as themselves. */
+function isFineDetailShape(name: ShapeName): boolean {
+  return GLYPH_IDS.includes(name) || PROCEDURAL_IDS.includes(name);
+}
+
+/**
+ * Shapes that cannot carry a genuinely hard level, measured rather than declared.
+ *
+ * Two independent ways a silhouette caps difficulty, and it took measuring both to
+ * find out which one dominates:
+ *
+ * - **Islands.** Arrows in separate regions can never block each other, so every
+ *   extra island raises how many arrows are free at once, and difficulty here is
+ *   almost entirely "how few can move right now".
+ * - **Capacity.** A narrow silhouette on a 28x28 board holds a third of the snakes
+ *   an open one does, and a sparse board is a easy board whatever it is called.
+ *
+ * Capacity turned out to be much the larger effect. Filtering on islands alone
+ * actually made the top tiers *easier*, because it left them a pool of detailed
+ * but thin silhouettes — brutal boards fell from 25 arrows to 18. Both filters
+ * together is what holds the top of the curve up.
+ *
+ * Measured at a reference size because it is a property of the silhouette that is
+ * easy to misjudge by eye, and because a shape added later is then classified
+ * correctly with nothing to remember to update.
+ */
+const REFERENCE_SIZE = 18;
+const MAX_ISLANDS_FOR_HARD_TIERS = 2;
+const MIN_CAPACITY_FOR_HARD_TIERS = 0.55;
+
+const FRAGMENTING_SHAPES: ReadonlySet<ShapeName> = new Set(
+  SHAPE_NAMES.filter((name) => {
+    const mask = maskFor(name, REFERENCE_SIZE, REFERENCE_SIZE);
+    const islands = maskRegionCount(mask, REFERENCE_SIZE, REFERENCE_SIZE);
+    const fill = maskCapacity(mask) / (REFERENCE_SIZE * REFERENCE_SIZE);
+    return islands > MAX_ISLANDS_FOR_HARD_TIERS || fill < MIN_CAPACITY_FOR_HARD_TIERS;
+  }),
+);
+
+/** Tiers at or above this blind-mistake floor need a shape that can carry it. */
+const DEMANDING_MIN_BLIND = 28;
 
 function buildOnboarding(): LevelPlan[] {
   const plans: LevelPlan[] = [];
@@ -597,6 +654,7 @@ function buildMainRun(): LevelPlan[] {
   // Rotate through the shape library rather than picking at random, so a
   // silhouette cannot appear twice within a few levels of itself.
   let shapeCursor = 0;
+  let lastShape: ShapeName | undefined;
 
   for (let id = 21; id <= 600; id += 1) {
     const planning = isPlanningLevel(id);
@@ -616,9 +674,18 @@ function buildMainRun(): LevelPlan[] {
     // sequence, and sequence is legible on a board you can see all at once.
     if (planning) size = Math.min(size, 15);
 
-    const pool = shapePoolFor(size);
-    const shape = pool[shapeCursor % pool.length]!;
+    // Rotate rather than sample, so a silhouette cannot appear twice within a few
+    // levels of itself. The skip loop matters now that the pool differs level to
+    // level — a demanding tier draws from a smaller set, so the same cursor value
+    // can land on the same shape two levels running even though it advanced.
+    const pool = shapePoolFor(size, spec.minBlind >= DEMANDING_MIN_BLIND);
+    let shape = pool[shapeCursor % pool.length]!;
     shapeCursor += 1;
+    for (let skip = 0; skip < pool.length && shape === lastShape; skip += 1) {
+      shape = pool[shapeCursor % pool.length]!;
+      shapeCursor += 1;
+    }
+    lastShape = shape;
 
     const fill = lerp(rng, spec.minFill, spec.maxFill);
     // Drift the blind-mistake target upward across the game inside each tier, so

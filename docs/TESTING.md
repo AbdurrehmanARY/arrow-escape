@@ -17,21 +17,21 @@ Runs three things in order:
 |---|---|
 | `tsc --noEmit` | the whole project typechecks under `strict` |
 | `eslint` | no lint errors anywhere |
-| `jest` | 203 tests — rules, solver, geometry, camera, reducer, stores, storage, and all 600 levels |
+| `jest` | 229 tests — rules, solver, gates, geometry, camera, reducer, stores, storage, and all 600 levels |
 | `levels:validate` | re-reads the packs *from disk* and re-solves all 600 |
 
 Expect:
 
 ```
-Test Suites: 13 passed, 13 total
-Tests:       203 passed, 203 total
+Test Suites: 14 passed, 14 total
+Tests:       229 passed, 229 total
 ...
 All levels decode, all are solvable, all recorded solutions verified.
 
   tier          count   blind mistakes: min / avg / max
-  easy           141      1.5 /    3.8 /    6.5
+  tutorial        29      1.0 /    1.7 /    2.5
   ...
-  extremeHard     59     52.3 /   84.2 /  158.8
+  nightmare       15    150.6 /  187.5 /  216.1
 ```
 
 The level check runs against the packs on disk rather than the generator's memory,
@@ -134,8 +134,8 @@ faster, because only changed modules are re-sent.
    the *blocker* turns orange, and a heart drains. The board is otherwise
    untouched.
 4. **Spend all five hearts.** The fail screen appears and says the board was still
-   winnable — because it always is. Check that reads as fair rather than as the
-   game cheating.
+   winnable — because on every level without a shutter gate, it is. Check that
+   reads as fair rather than as the game cheating.
 5. **Clear a level.** The board empties, confetti fires, and *then* the win
    screen arrives a beat later — you should see the last snake leave. Clear one
    without a single wrong tap and the burst is bigger and gold-flecked.
@@ -152,20 +152,70 @@ Every level is open in this build. Level select has a **jump-to-number box** at
 the top — type 106, hit Go. Both the menu and level select carry a TESTING badge
 while that flag is on.
 
+### Gates — new, and the most important thing to test
+
+**98 levels have a coloured gate. 40 have one that works backwards.** Both are
+things a player cannot infer by watching, so each gets a one-time card before the
+first tap. Reset progress in Settings if you want to see them again.
+
+**Ordinary gates (`opens`)** — a filled coloured square with a bar across it. It is
+shut, and nothing crosses it. Clear every arrow of that colour and it opens by
+itself. It becomes a dashed outline when open.
+
+- Tapping an arrow whose path crosses a shut gate costs a heart, and the message
+  should name the colour — *"A red gate is closed"*, not *"Blocked by a0"*.
+- These levels can never be lost by tapping in the wrong order.
+
+**Shutter gates (`shuts`)** — the inverse, and **the only rule in the game that can
+cost you a level without costing you a heart.** They start open and seal for good
+once the last arrow of their colour leaves. Level names warn you: *Sealed*,
+**Shuttered**, *One-Way*, *Closing*. Levels 120, 132, 144, … every twelfth up to
+588.
+
+What to check, in order of how badly it would matter:
+
+1. Deliberately clear the coloured arrows first. You should get a **"Wrong order"**
+   screen, **with all five hearts still showing**. If you get the out-of-hearts
+   screen instead, that is a bug.
+2. That screen should appear **as soon as the level is unwinnable**, not when the
+   board finally runs out of taps. If you can keep tapping after sealing yourself
+   out, tell me.
+3. Play one properly — send the arrows that need to cross the gate out *first*.
+   It should feel like a genuinely different puzzle from every other level.
+
 ### The curve
+
+Ten tiers now, from Tutorial to Nightmare. Level select shows the tier name; the
+colour pips pair them up (two tiers per colour).
 
 - **Levels 1–4** should be nearly impossible to fail even tapping carelessly.
 - **By level 20** you should be losing hearts if you are not tracing properly.
 - **After level 20 the difficulty is deliberately mixed.** An Easy board can
   follow a Super Hard one. That is the design — tell me if it feels random rather
   than refreshing.
-- **Jump ahead** from level select to sample the tiers. Try something in the 300s
-  and something in the 500s.
+- **Snakes are much longer than before** — up to fourteen cells in the top tiers,
+  where they used to stop at six. This is the single biggest change to how a board
+  feels. If tracing has gone from hard to hopeless, that is the number to tell me
+  about.
+- **Jump ahead** from level select to sample the tiers. Try something in the 300s,
+  something in the 500s, and level 600.
+
+### Shapes
+
+**114 silhouettes**, up from 74. New this phase: the alphabet (A–Z), digits, maths
+symbols, and a set of *procedural* patterns — mandala, honeycomb, maze, knotwork,
+star tiling, double helix, galaxy.
+
+The procedural ones are different in kind from the rest: instead of outlining the
+board they perforate it, so snakes have to thread through corridors and bend
+constantly. Worth a look at whether they read as patterns or as damage.
+
+Letters and digits only appear on boards of 13 or more, since a stroke needs room
+to stay a stroke. If you spot one that is unrecognisable, name the level.
 
 ### Oversized boards
 
-271 levels have boards bigger than your screen — every Super Hard and Extreme
-one. On those:
+261 levels have boards bigger than your screen. On those:
 
 - **Drag** to pan, **pinch** to zoom, **Fit** button to snap back to the whole
   board. There is deliberately no double-tap: on a board covered in tap targets it
@@ -173,7 +223,8 @@ one. On those:
 - The board cannot be dragged off into empty space; the camera is clamped.
 - **Tapping must stay accurate at every zoom level.** This is the thing most
   likely to be subtly wrong, so please test it zoomed right in and right out.
-- Level 600 is 27×30 — about four screens. It should be readable, not miserable.
+- Level 600 is 30×30 — about four screens, and now the hardest board in the game
+  by a distance. It should be readable, not miserable.
 
 The most useful thing you can tell me is **where you got stuck or bored**. Every
 level's difficulty is one number in `tools/curriculum.ts` and a 28-second

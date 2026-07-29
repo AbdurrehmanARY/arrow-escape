@@ -25,6 +25,8 @@
  */
 
 import { SHAPE_ART_IDS, shapeArtById, type ShapeCategory } from './shapeArt';
+import { GLYPH_IDS, glyphField, glyphName } from './shapeGlyphs';
+import { PROCEDURAL_IDS, proceduralById } from './shapeProcedural';
 
 /** Shapes defined by a formula. Exact at any board size. */
 export const ANALYTIC_SHAPES = ['free', 'diamond', 'circle', 'cross', 'ring', 'spiral'] as const;
@@ -75,13 +77,38 @@ const spiral: Field = (u, v) => {
 
 const FIELDS: Record<AnalyticShape, Field> = { free, diamond, circle, cross, ring, spiral };
 
-/** Every shape name available, analytic first. */
-export const SHAPE_NAMES: readonly ShapeName[] = [...ANALYTIC_SHAPES, ...SHAPE_ART_IDS];
+/**
+ * Every shape name available.
+ *
+ * Four families, resolved in this order by `maskFor`, and the order matters only
+ * because ids must not collide — analytic names, bitmap ids, glyph ids and
+ * procedural ids are all disjoint and `SHAPE_NAMES` is asserted unique in the
+ * shape tests.
+ */
+export const SHAPE_NAMES: readonly ShapeName[] = [
+  ...ANALYTIC_SHAPES,
+  ...SHAPE_ART_IDS,
+  ...GLYPH_IDS,
+  ...PROCEDURAL_IDS,
+];
 
 /** Category for a shape, for build reports and level metadata. */
-export function categoryOf(shape: ShapeName): ShapeCategory | 'geometric' {
+export function categoryOf(shape: ShapeName): ShapeCategory | 'geometric' | 'glyph' {
   if ((ANALYTIC_SHAPES as readonly string[]).includes(shape)) return 'geometric';
-  return shapeArtById(shape)?.category ?? 'geometric';
+  const bitmap = shapeArtById(shape);
+  if (bitmap) return bitmap.category;
+  if (GLYPH_IDS.includes(shape)) return 'glyph';
+  return proceduralById(shape)?.category ?? 'geometric';
+}
+
+/** Display name for any shape, whichever family it comes from. */
+export function shapeDisplayName(shape: ShapeName): string {
+  const bitmap = shapeArtById(shape);
+  if (bitmap) return bitmap.name;
+  const procedural = proceduralById(shape);
+  if (procedural) return procedural.name;
+  if (GLYPH_IDS.includes(shape)) return glyphName(shape);
+  return shape.charAt(0).toUpperCase() + shape.slice(1);
 }
 
 const index = (row: number, col: number, cols: number): number => row * cols + col;
@@ -225,14 +252,22 @@ export function maskFor(
 ): ShapeMask {
   let mask: ShapeMask;
 
-  const analytic = FIELDS[shape as AnalyticShape];
-  if (analytic) {
+  // Glyphs and procedural families are fields like the analytic shapes, but their
+  // *parameters* depend on the board — a glyph's stroke has to stay at least a cell
+  // wide, and a honeycomb's cells have to stay visible. So they are built here,
+  // per size, rather than being constants.
+  const field =
+    FIELDS[shape as AnalyticShape] ??
+    glyphField(shape, rows, cols) ??
+    proceduralById(shape)?.field(rows, cols);
+
+  if (field) {
     mask = new Array<boolean>(rows * cols).fill(false);
     for (let row = 0; row < rows; row += 1) {
       for (let col = 0; col < cols; col += 1) {
         const u = ((col + 0.5) / cols) * 2 - 1;
         const v = ((row + 0.5) / rows) * 2 - 1;
-        mask[index(row, col, cols)] = analytic(u, v);
+        mask[index(row, col, cols)] = field(u, v);
       }
     }
   } else {
@@ -256,6 +291,58 @@ export function maskFor(
 /** How many cells a shape leaves usable. */
 export function maskCapacity(mask: ShapeMask): number {
   return mask.reduce((total, allowed) => total + (allowed ? 1 : 0), 0);
+}
+
+/**
+ * How many separate islands a mask leaves behind.
+ *
+ * This turned out to matter far more than it sounds, and it is not a cosmetic
+ * property. Difficulty in this game is driven by how *few* arrows are free at
+ * once: a board where one arrow of twenty can move is a hunt, and one where eight
+ * can move is a stroll. Arrows in different islands can never block each other, so
+ * every extra island raises the number free at any moment and drags
+ * `expectedBlindMistakes` down.
+ *
+ * The perforated shapes — lattice, honeycomb, maze, brickwork — do exactly this,
+ * and no amount of reseeding fixes it: a Hard plan on a lattice measures easier
+ * than a Casual plan on an open board, every time. So the curriculum needs to be
+ * able to ask, and `shapePoolFor` keeps these shapes out of the demanding tiers.
+ */
+export function maskRegionCount(mask: ShapeMask, rows: number, cols: number): number {
+  const seen = new Uint8Array(rows * cols);
+  let regions = 0;
+
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || seen[start]) continue;
+    regions += 1;
+
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length > 0) {
+      const cell = stack.pop()!;
+      const row = Math.floor(cell / cols);
+      const col = cell % cols;
+
+      if (row > 0 && mask[cell - cols] && !seen[cell - cols]) {
+        seen[cell - cols] = 1;
+        stack.push(cell - cols);
+      }
+      if (row + 1 < rows && mask[cell + cols] && !seen[cell + cols]) {
+        seen[cell + cols] = 1;
+        stack.push(cell + cols);
+      }
+      if (col > 0 && mask[cell - 1] && !seen[cell - 1]) {
+        seen[cell - 1] = 1;
+        stack.push(cell - 1);
+      }
+      if (col + 1 < cols && mask[cell + 1] && !seen[cell + 1]) {
+        seen[cell + 1] = 1;
+        stack.push(cell + 1);
+      }
+    }
+  }
+
+  return regions;
 }
 
 /** Render a mask as text, for eyeballing a new shape before generating with it. */
