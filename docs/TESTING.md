@@ -377,8 +377,65 @@ If that is not enough, purge every layer:
 Remove-Item "$env:TEMP\metro-cache" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:TEMP\metro-file-map-*" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item .expo -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item node_modules\.cache -Recurse -Force -ErrorAction SilentlyContinue
 npm run start:clear
 ```
+
+### Starting completely fresh
+
+**Clearing the cache on this PC does not clear anything on the phone.** That is
+the single most common reason a change appears to be missing: Metro rebuilds
+correctly, and Expo Go keeps serving the bundle it already had. If a new feature
+seems absent, do the phone half before suspecting the code.
+
+Three levels, cheapest first.
+
+**1 — Metro only.** Right after a level rebuild or a source change:
+
+```powershell
+npm run start:clear
+```
+
+**2 — Every cache on this machine.** After changing a dependency, or when
+something is behaving as though it is a version behind:
+
+```powershell
+Remove-Item "$env:TEMP\metro-cache" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:TEMP\metro-file-map-*" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item .expo -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item node_modules\.cache -Recurse -Force -ErrorAction SilentlyContinue
+npm run start:clear
+```
+
+**3 — A genuine first-run, including the phone.** Reinstall, then clear Expo Go:
+
+```powershell
+Remove-Item node_modules -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item package-lock.json -Force -ErrorAction SilentlyContinue
+npm install
+npm run verify
+npm run start:clear
+```
+
+Then **on the phone**, one of:
+
+- Android Settings → Apps → **Expo Go** → Storage → **Clear storage**, or
+- shake the device in Expo Go → **Reload**, or
+- swipe Expo Go out of recents and rescan the QR.
+
+`npm run verify` is in that list on purpose: a fresh `node_modules` is exactly
+when a dependency resolves differently, and it is better to find that on the
+desktop than to spend twenty minutes wondering why the phone is odd.
+
+> Do **not** delete `.npmrc`. It pins `legacy-peer-deps=true`, and Expo 57 ships a
+> `react-dom` whose peer range excludes the pinned React. Installing without it
+> prunes packages and silently breaks the babel and jest toolchains.
+
+Level data needs no special step. The 600 levels are committed JSON under
+`src/data/levels/`, so they are bundled like any other module — but that is also
+why a stale Metro cache can serve *old levels* after a rebuild, which looks like
+the generator having done nothing. `npm run levels:build` then `npm run
+start:clear`, in that order.
 
 ### Symptom table
 
