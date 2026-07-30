@@ -206,6 +206,58 @@ describe('the difficulty mix', () => {
   });
 });
 
+describe('dense levels', () => {
+  /**
+   * Board coverage: cells carrying a snake, over cells on the board.
+   *
+   * Measured against the *board*, not against the silhouette, because that is what
+   * a player sees. The distinction is not academic — the first attempt at these
+   * levels measured 85% of a shield-shaped mask and shipped 54% of the grid.
+   */
+  const coverageOf = (id: number): number => {
+    const level = levelById(id)!;
+    const cells = level.arrows.reduce((sum, arrow) => sum + arrow.body.length, 0);
+    return cells / (level.rows * level.cols);
+  };
+
+  const packed = ALL_IDS.filter((id) => coverageOf(id) >= 0.7);
+
+  it('ships a real run of boards packed to roughly four cells in five', () => {
+    expect(packed.length).toBeGreaterThanOrEqual(30);
+  });
+
+  it('spreads them across the harder tiers rather than hoarding them at the top', () => {
+    // The point of dense levels is that they are a different *kind* of hard, not a
+    // higher degree of it — so they have to appear where a player meets them long
+    // before the endgame.
+    const tiers = new Set(packed.map((id) => tierOf(id)));
+    expect(tiers.size).toBeGreaterThanOrEqual(4);
+    expect([...tiers].some((tier) => tier === 'medium' || tier === 'tricky')).toBe(true);
+  });
+
+  it('keeps every one of them solvable', () => {
+    // The whole difficulty of building these. At this density almost every random
+    // board is a knot of mutual blocking, which is why the generator constructs a
+    // winning order rather than generating and checking.
+    for (const id of packed) {
+      const built = buildLevel(levelById(id)!);
+      if (!built.ok) throw new Error(`level ${id}: ${built.error}`);
+      const outcome = solve(built.value.board, built.value.initial);
+      if (outcome.kind !== 'solved') {
+        throw new Error(`dense level ${id} is UNSOLVABLE: ${outcome.reason}`);
+      }
+    }
+  });
+
+  it('stays within what the renderer can afford', () => {
+    // Density is bought with long snakes rather than many of them. Hundreds of
+    // arrows on one board is a frame-rate problem, not a harder puzzle.
+    for (const id of packed) {
+      expect(levelById(id)!.arrows.length).toBeLessThanOrEqual(110);
+    }
+  });
+});
+
 describe('gates in the shipped library', () => {
   const built = ALL_IDS.map((id) => {
     const level = levelById(id)!;

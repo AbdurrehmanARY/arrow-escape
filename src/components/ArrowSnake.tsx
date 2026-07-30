@@ -61,8 +61,41 @@ export type ArrowVisualState = 'normal' | 'blocked' | 'blocker' | 'safe';
  * unhurried animation never means an unhurried game.
  */
 export const RELEASE_MS = 720;
+
+/**
+ * How long a snake takes to cross one cell, and the bounds that keeps sane.
+ *
+ * A **constant duration was the single worst thing about the movement**, and it is
+ * not obvious until the numbers are written down. How far a snake travels is its
+ * body plus its whole exit ray, so on a 60x60 board one arrow may cover four cells
+ * and another eighty-eight. Giving both the same 720ms makes the first crawl and
+ * the second blur across the screen at twenty times the speed — the same tap
+ * looking like two completely different mechanics depending on where the arrow
+ * happened to sit. That reads as "abrupt" and "teleporting" precisely because it
+ * is inconsistent, not because it is fast.
+ *
+ * Duration therefore tracks distance, so every arrow leaves at roughly the same
+ * speed and the movement is legible. The floor stops a one-cell hop from being a
+ * flicker; the ceiling stops a full-width exit on the biggest board from becoming
+ * a three-second wait. Between them, speed varies by about three times rather than
+ * twenty.
+ */
+const MS_PER_CELL = 30;
+const MIN_RELEASE_MS = 300;
+const MAX_RELEASE_MS = 1000;
+
 /** How long the lurch-and-recoil of a blocked tap takes. */
 export const SHAKE_MS = 260;
+
+/**
+ * How long this arrow's exit should take, from how far it has to go.
+ *
+ * Exported so the win overlay's delay can be reasoned about against a real number
+ * rather than against the old constant.
+ */
+export function releaseDurationMs(travelCells: number): number {
+  return Math.max(MIN_RELEASE_MS, Math.min(MAX_RELEASE_MS, Math.round(travelCells * MS_PER_CELL)));
+}
 
 export interface ArrowSnakeProps {
   board: Board;
@@ -200,18 +233,21 @@ function ArrowSnakeInner({
     progress.value = withTiming(
       1,
       {
-        // Gently in, steady out. `Easing.in(cubic)` held the snake almost still and
-        // then flung it, which at 340ms passed for urgency and at this duration
-        // just looks like a stutter followed by a snap. A soft start that settles
-        // into a constant glide is what reads as an arrow *travelling*.
-        duration: RELEASE_MS,
-        easing: Easing.bezier(0.22, 0.35, 0.3, 1),
+        duration: releaseDurationMs(travel / cellSize),
+        // A soft start, then near-constant speed to the edge.
+        //
+        // The curve must **not** decelerate at the end. Easing out says "arriving",
+        // and this arrow is not arriving anywhere — it is leaving the board. A
+        // snake that slows to a halt as it vanishes looks like it got stuck, which
+        // is the one thing the animation must never suggest, since being stuck is a
+        // real state with a real cost.
+        easing: Easing.bezier(0.3, 0.02, 0.55, 1),
       },
       (done) => {
         if (done) runOnJS(finish)();
       },
     );
-  }, [departing, reducedMotion, onDepartComplete, arrowIndex, progress]);
+  }, [departing, reducedMotion, onDepartComplete, arrowIndex, travel, cellSize, progress]);
 
   useEffect(() => {
     if (shakeNonce === 0 || reducedMotion) return;

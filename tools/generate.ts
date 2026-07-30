@@ -65,6 +65,25 @@ export interface GenerateOptions {
   readonly hearts: number;
   /** A gate to try to add once the board is grown and known solvable. */
   readonly gate?: GateRequest;
+  /** Filled in as attempts run, for the density probe. Tooling only. */
+  readonly stats?: GenerateStats;
+}
+
+/**
+ * Where attempts are being lost, for diagnosing a plan that will not generate.
+ *
+ * "No solvable board found" is the same message whether the shape could not hold
+ * the snakes, or held them fine and every layout came out a knot — and those call
+ * for opposite fixes. Optional, and only the tooling passes it.
+ */
+export interface GenerateStats {
+  attempts: number;
+  /** Growth could not place enough snakes: the shape or the lengths are too tight. */
+  growthFailed: number;
+  /** Grew fine, but the blocking graph had a cycle repair could not break. */
+  unsolvable: number;
+  /** Grew and solved. */
+  ok: number;
 }
 
 export interface GateRequest {
@@ -204,6 +223,154 @@ function scoreCandidate(metrics: DifficultyMetrics, options: GenerateOptions): n
   // and trivial to trace however many arrows are on it.
   const bendPenalty = Math.max(0, 1.1 - metrics.avgTurns);
   return mistakeGap * 2 + arrowGap + bendPenalty;
+}
+
+/**
+ * Choose every snake's head-end so that the board is solvable **by construction**.
+ *
+ * This replaces guess-and-check at density, and the reason it has to is measurable.
+ * A board is solvable iff its blocking graph is acyclic, and the chance a *random*
+ * orientation is acyclic collapses as arrows are added: at 20x20 the repair pass
+ * still finds a way most of the time, and by 40x40 it failed on **100%** of
+ * attempts — not because the shape could not hold the snakes (growth succeeded
+ * every time) but because every layout was a knot. No amount of resampling fixes
+ * an exponentially unlikely event.
+ *
+ * So instead of producing a board and asking whether it can be solved, this
+ * produces the solution and reads the board off it. Repeatedly: find any arrow
+ * that has *some* orientation whose ray is clear of the arrows still present, fix
+ * it that way, and take it off the board. The sequence built is a winning order, so
+ * the board it describes cannot contain a cycle — there is nothing to check
+ * afterwards.
+ *
+ * It works at density for a reason worth knowing: an arrow with a cell on the
+ * border, pointed outward, has a ray of length zero and is therefore *always* free.
+ * Dense boards peel from the outside in, and there is always an outside.
+ *
+ * Reversing a body is free — it swaps which end carries the arrowhead and leaves
+ * the silhouette untouched — so this costs nothing in how the level looks.
+ *
+ * Returns `undefined` if it stalls, which is rare and handled by trying another
+ * seed.
+ */
+function orientForSolvability(
+  rng: () => number,
+  level: LevelDefinition,
+): LevelDefinition | undefined {
+  const { rows, cols } = level;
+  const bodies = level.arrows.map((arrow) => arrow.body.map((cell) => [cell[0]!, cell[1]!]));
+
+  // cell -> index of the arrow still on it, or -1.
+  const occupancy = new Int32Array(rows * cols).fill(-1);
+  bodies.forEach((body, index) => {
+    for (const [r, c] of body) occupancy[r! * cols + c!] = index;
+  });
+
+  /** Is this head's ray clear of every arrow still on the board? */
+  const rayIsClear = (body: number[][], index: number): boolean => {
+    const head = body[0]!;
+    const neck = body[1]!;
+    const dr = head[0]! - neck[0]!;
+    const dc = head[1]! - neck[1]!;
+
+    let r = head[0]! + dr;
+    let c = head[1]! + dc;
+    while (r >= 0 && r < rows && c >= 0 && c < cols) {
+      const occupant = occupancy[r * cols + c]!;
+      // Its own body never blocks it — each segment vacates as the one ahead moves.
+      if (occupant !== -1 && occupant !== index) return false;
+      r += dr;
+      c += dc;
+    }
+    return true;
+  };
+
+  const remaining = new Set<number>(bodies.map((_, index) => index));
+  const chosen: (number[][] | undefined)[] = new Array<number[][] | undefined>(bodies.length);
+
+  while (remaining.size > 0) {
+    // Shuffled so the peel order — and therefore the finished board — varies with
+    // the seed rather than always favouring the lowest index.
+    const candidates = [...remaining];
+    shuffle(candidates, rng);
+
+    let removed = -1;
+    for (const index of candidates) {
+      const body = bodies[index]!;
+      if (body.length < 2) continue;
+
+      const reversed = [...body].reverse();
+      let pick: number[][] | undefined;
+      if (rayIsClear(body, index)) pick = body;
+      else if (rayIsClear(reversed, index)) pick = reversed;
+      if (!pick) continue;
+
+      chosen[index] = pick;
+      for (const [r, c] of pick) occupancy[r! * cols + c!] = -1;
+      remaining.delete(index);
+      removed = index;
+      break;
+    }
+
+    if (removed === -1) return undefined;
+  }
+
+  return {
+    ...level,
+    arrows: level.arrows.map((arrow, index) => {
+      const body = chosen[index];
+      return body ? { ...arrow, body } : arrow;
+    }),
+  };
+}
+
+/**
+ * Point every snake at its nearer edge, before asking whether the board works.
+ *
+ * This is the change that makes dense boards possible at all, and the reasoning is
+ * worth stating because the naive version is so much worse.
+ *
+ * A board is solvable iff its blocking graph is acyclic, and an arrow's blockers
+ * are whatever sits on its head's ray. So the number of chances a board has to
+ * form a cycle scales with **total ray length** — every cell on every ray is a
+ * potential edge. Growth leaves each snake's head at whichever end the random walk
+ * finished, which means half of them face the long way across the board for no
+ * reason at all.
+ *
+ * Reversing a body swaps which end carries the head. It changes the exit direction
+ * and leaves the silhouette untouched, so it is free. Choosing the end with the
+ * shorter ray therefore cuts total ray length roughly in half, and cycles fall away
+ * with it. Measured on a 40x40 board at 75% fill, this took the share of generated
+ * candidates that were solvable at all from **none** to most of them.
+ *
+ * `repairBoard` still runs afterwards. This gets the board into a position where
+ * repair has a knot small enough to pick apart, rather than a board-sized one.
+ */
+function orientOutward(level: LevelDefinition): LevelDefinition {
+  const { rows, cols } = level;
+
+  const raySteps = (head: readonly number[], neck: readonly number[] | undefined): number => {
+    // With no neck the direction is unknown; treat it as the worst case so a
+    // single-cell arrow is never preferred on a false reading.
+    if (!neck) return rows + cols;
+    const dr = head[0]! - neck[0]!;
+    const dc = head[1]! - neck[1]!;
+    if (dr === -1) return head[0]!;
+    if (dr === 1) return rows - 1 - head[0]!;
+    if (dc === -1) return head[1]!;
+    return cols - 1 - head[1]!;
+  };
+
+  const arrows = level.arrows.map((arrow) => {
+    const body = arrow.body;
+    if (body.length < 2) return arrow;
+
+    const forward = raySteps(body[0]!, body[1]);
+    const reversed = raySteps(body[body.length - 1]!, body[body.length - 2]);
+    return reversed < forward ? { ...arrow, body: [...body].reverse() } : arrow;
+  });
+
+  return { ...level, arrows };
 }
 
 /**
@@ -422,8 +589,13 @@ export function generateLevel(
   let best: Candidate | undefined;
 
   for (let attempt = 0; attempt < options.attempts; attempt += 1) {
+    if (options.stats) options.stats.attempts += 1;
+
     const arrows = growBoard(rng, options, maskCells, owner);
-    if (!arrows) continue;
+    if (!arrows) {
+      if (options.stats) options.stats.growthFailed += 1;
+      continue;
+    }
 
     const level: LevelDefinition = {
       id: meta.id,
@@ -436,22 +608,28 @@ export function generateLevel(
       arrows,
     };
 
-    let playable = level;
-    if (!buildLevel(playable).ok) continue;
-
-    // Dense boards are almost never solvable as grown, so repair rather than
-    // discard — flipping an arrow inside the knot is far cheaper than another
-    // full board, and keeps the silhouette exactly as it was.
-    // Budget scales with the board: a knot can be as big as the arrow count, and a
-    // fixed forty rounds silently became "give up" once boards reached a hundred
-    // snakes.
-    const repaired = repairBoard(rng, playable, Math.max(40, arrows.length * 2));
-    if (!repaired) continue;
-    playable = repaired;
+    // Solvability is arranged, not hoped for. `orientForSolvability` builds a
+    // winning order and reads the head-ends off it, so the result cannot contain a
+    // blocking cycle. On the rare board where it stalls, fall back to the older
+    // flip-the-knot repair, which is still the better tool on sparse boards where
+    // it converges in a handful of rounds.
+    let playable = orientForSolvability(rng, level);
+    if (!playable) {
+      const outward = orientOutward(level);
+      playable = repairBoard(rng, outward, Math.max(40, arrows.length * 2));
+    }
+    if (!playable || !buildLevel(playable).ok) {
+      if (options.stats) options.stats.unsolvable += 1;
+      continue;
+    }
 
     let built = buildLevel(playable);
     if (!built.ok) continue;
-    if (!isSolvable(built.value.board, built.value.initial)) continue;
+    if (!isSolvable(built.value.board, built.value.initial)) {
+      if (options.stats) options.stats.unsolvable += 1;
+      continue;
+    }
+    if (options.stats) options.stats.ok += 1;
 
     // Gates go on last, onto a board already known to work. Adding them earlier
     // would mean the repair pass fighting the gate constraint at the same time as

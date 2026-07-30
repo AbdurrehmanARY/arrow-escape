@@ -52,7 +52,9 @@ for (const tier of TIER_ORDER) {
   const elapsed = ((Date.now() - started) / 1000).toFixed(1);
 
   if (!candidate) {
-    console.log(`${tier.padEnd(13)} ${`${plan.rows}x${plan.cols}`.padEnd(10)} FAILED after ${elapsed}s`);
+    console.log(
+      `${tier.padEnd(13)} ${`${plan.rows}x${plan.cols}`.padEnd(10)} FAILED after ${elapsed}s`,
+    );
     continue;
   }
 

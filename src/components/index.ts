@@ -11,6 +11,7 @@ export * from './BoardCanvas';
 export * from './camera';
 export * from './BoardViewport';
 export * from './Hud';
+export * from './Celebration';
 export * from './CoachCard';
 export * from './Overlays';
 export * from './PauseMenu';

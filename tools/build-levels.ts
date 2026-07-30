@@ -68,6 +68,10 @@ interface BuildResult {
   readonly gateModes: readonly string[];
   /** Share of legal taps that lose the level. Non-zero only on shutter boards. */
   readonly blunderRate: number;
+  /** This level asked to be packed to four-fifths coverage. */
+  readonly dense: boolean;
+  /** Share of the *board* actually covered by snakes, as shipped. */
+  readonly coverage: number;
 }
 
 function buildOne(planIndex: number): BuildResult {
@@ -83,7 +87,12 @@ function buildOne(planIndex: number): BuildResult {
         rows: plan.rows,
         cols: plan.cols,
         shape: plan.shape,
-        arrowCount: Math.max(3, plan.arrowCount - relax * Math.ceil(plan.arrowCount * 0.12)),
+        // Floor of five, matching `arrowsFor`. Relaxing is meant to make a tight
+        // plan achievable, not to hollow it out — three snakes is not an easy
+        // level, it is an empty one, and level 249 shipped exactly that before this
+        // floor existed. If five is still too many for the shape, the right answer
+        // is to fail loudly rather than ship a board with nothing to read.
+        arrowCount: Math.max(5, plan.arrowCount - relax * Math.ceil(plan.arrowCount * 0.12)),
         minBodyLength: Math.max(2, plan.minBodyLength - (relax > 1 ? 1 : 0)),
         maxBodyLength: plan.maxBodyLength,
         targetBlindMistakes: plan.targetBlindMistakes,
@@ -127,6 +136,8 @@ function buildOne(planIndex: number): BuildResult {
       oversized: isOversized(plan),
       gateModes: (candidate.level.gates ?? []).map((gate) => gate.mode),
       blunderRate: candidate.metrics.blunderRate,
+      dense: plan.dense,
+      coverage: candidate.level.arrows.reduce((sum, arrow) => sum + arrow.body.length, 0) / cells,
     };
   }
 
@@ -294,7 +305,12 @@ for (const tier of TIER_ORDER) {
   );
 }
 
-const offTarget = results.filter((r) => Math.abs(r.blind - r.target) > Math.max(3, r.target * 0.5));
+// Dense levels are excluded on purpose. They override their tier's fill to reach
+// four-fifths coverage, which makes them far harder than the tier target by design
+// — counting them as misses would turn this number into noise and hide a real
+// regression among the levels it is actually measuring.
+const tuned = results.filter((r) => !r.dense);
+const offTarget = tuned.filter((r) => Math.abs(r.blind - r.target) > Math.max(3, r.target * 0.5));
 const oversized = results.filter((r) => r.oversized).length;
 const totalArrows = results.reduce((sum, r) => sum + r.arrows, 0);
 
@@ -304,7 +320,8 @@ const plannedShutters = CURRICULUM.filter((plan) => isPlanningLevel(plan.id)).le
 
 console.log('');
 console.log(
-  `  ${results.length - offTarget.length}/${results.length} levels landed in their target band.`,
+  `  ${tuned.length - offTarget.length}/${tuned.length} tuned levels landed in their target band ` +
+    `(dense levels excluded — they are deliberately off-target).`,
 );
 console.log(`  ${oversized} boards are oversized and need zoom and pan.`);
 console.log(`  ${totalArrows} arrows across the library.`);
@@ -314,6 +331,18 @@ console.log(`  ${opensLevels} levels carry an opening gate.`);
 // Reported against what was planned, not just as a count. A shutter that could
 // not be placed silently downgrades a planning level to an ordinary one, and that
 // is exactly the kind of quiet shortfall a build log exists to surface.
+const denseLevels = results.filter((r) => r.dense);
+if (denseLevels.length > 0) {
+  const coverages = denseLevels.map((r) => r.coverage);
+  const avg = coverages.reduce((sum, c) => sum + c, 0) / coverages.length;
+  console.log(
+    `  ${denseLevels.length} dense levels, board coverage ` +
+      `${(Math.min(...coverages) * 100).toFixed(0)}% / ${(avg * 100).toFixed(0)}% / ` +
+      `${(Math.max(...coverages) * 100).toFixed(0)}% (min/avg/max), ` +
+      `${(denseLevels.reduce((sum, r) => sum + r.arrows, 0) / denseLevels.length).toFixed(0)} arrows avg.`,
+  );
+}
+
 console.log(
   `  ${shutsLevels.length} of ${plannedShutters} planned shutter levels got one` +
     (shutsLevels.length > 0

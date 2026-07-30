@@ -17,21 +17,21 @@ Runs three things in order:
 |---|---|
 | `tsc --noEmit` | the whole project typechecks under `strict` |
 | `eslint` | no lint errors anywhere |
-| `jest` | 231 tests — rules, solver, gates, geometry, camera, reducer, stores, storage, and all 600 levels |
+| `jest` | 237 tests — rules, solver, gates, geometry, camera, reducer, stores, storage, and all 600 levels |
 | `levels:validate` | re-reads the packs *from disk* and re-solves all 600 |
 
 Expect:
 
 ```
-Test Suites: 14 passed, 14 total
-Tests:       231 passed, 231 total
+Test Suites: 15 passed, 15 total
+Tests:       237 passed, 237 total
 ...
 All levels decode, all are solvable, all recorded solutions verified.
 
   tier          count   blind mistakes: min / avg / max
-  tutorial        29      0.9 /    1.7 /    2.7
+  tutorial        28      1.1 /    1.8 /    2.6
   ...
-  nightmare       15    189.0 /  341.8 /  608.1
+  nightmare       20    148.0 /  309.6 /  539.4
 ```
 
 The level check runs against the packs on disk rather than the generator's memory,
@@ -43,7 +43,9 @@ Other useful commands:
 ```bash
 npm run test:coverage    # coverage, thresholds enforced on src/game
 npm run levels:check     # prove every curriculum plan fits its shape
-npm run levels:build     # regenerate all 600 levels (deterministic, ~30s)
+npm run levels:build     # regenerate all 600 levels (deterministic, ~6 min)
+npm run levels:probe     # sample one level per tier, to re-derive difficulty targets
+npm run bench            # time the per-tap hot paths against the shipped levels
 npm run levels:preview   # render every theme to preview.html
 npm run shapes:inspect   # print every silhouette at a real board size
 npm run icons:build      # regenerate the app icons
@@ -129,20 +131,24 @@ faster, because only changed modules are re-sent.
 2. **Tap a snake with a clear run.** The head leads, the body threads out behind
    it through the cells the head cleared, and the tail whips out last. This is the
    signature moment — if it looks like a slide or a fade rather than threading,
-   something is wrong and I want to know. **It now takes 720ms rather than 340ms**,
-   and eases differently, so you can actually follow the tail. Arrows are also
-   noticeably thinner, which is what opens up the gaps between neighbouring snakes
-   on the bigger boards.
+   something is wrong and I want to know.
+
+   **Arrows now leave at a consistent speed rather than a consistent duration**,
+   which is the fix for movement feeling abrupt. Every exit used to take 720ms
+   whether the snake travelled four cells or eighty-eight, so the same tap looked
+   like two different mechanics depending where the arrow sat. Worth checking
+   directly: clear an arrow sitting on the board edge, then one on the far side of
+   a big board, and see whether they read as the same action.
 3. **Tap a blocked snake on purpose.** It lurches forward and recoils, turns red,
    the *blocker* turns orange, and a heart drains. The board is otherwise
    untouched.
 4. **Spend all five hearts.** The fail screen appears and says the board was still
    winnable — because on every level without a shutter gate, it is. Check that
    reads as fair rather than as the game cheating.
-5. **Clear a level.** The board empties and the win screen arrives a beat later —
-   you should see the last snake leave before anything covers it. **The confetti
-   is gone**, by request; the delay it used to share the moment with is not, since
-   that is the half that protects the animation.
+5. **Clear a level.** Confetti fires, **"Congratulations!"** pops in — or
+   **"Perfect!"** if you did not misread once — and the win screen follows a beat
+   later, so you see the last snake leave before anything covers it. The victory
+   *sound* is wired but silent: there are still no audio files in the build.
 6. **Clear two in a row cleanly** — the win screen starts showing a perfect-read
    streak from two upward.
 7. **Open the record screen** (★ on the menu, or tap the stat tiles) to see how
@@ -174,7 +180,7 @@ while that flag is on.
 
 ### Gates — new, and the most important thing to test
 
-**98 levels have a coloured gate. 40 have one that works backwards.** Both are
+**100 levels have a coloured gate. 35 have one that works backwards.** Both are
 things a player cannot infer by watching, so each gets a one-time card before the
 first tap. Reset progress in Settings if you want to see them again.
 
@@ -219,6 +225,28 @@ colour pips pair them up (two tiers per colour).
   about.
 - **Jump ahead** from level select to sample the tiers. Try something in the 300s,
   something in the 500s, and level 600.
+
+### Dense boards — new
+
+**46 levels are packed to roughly four cells in five** (71–83% of the board
+covered), spread from Medium up through Nightmare. Their names say so: *Packed*,
+*Crowded*, *Teeming*, *Choked*, *Jammed*.
+
+Two things about them are deliberate and worth knowing before you judge them:
+
+- **They are small boards — 18 to 24 a side, always a plain rectangle.** That is a
+  hard limit, not a shortcut. An arrow can only move when its whole ray to the edge
+  is clear, so at fixed density the chance that *anything* on the board can move
+  collapses exponentially as the board grows. Measured: four in four solvable at
+  24x24, **none at all** at 50x50 or 60x60. Four-fifths coverage on a 60x60 board
+  does not make a hard level, it makes no level.
+- **They carry no gates.** A dense board already asks for full attention; two
+  mechanics competing for it means neither gets it.
+
+What to check: do they feel like *meaningful congestion* — where you have to find
+the one snake with a way out and work inward — or just visual noise? That is the
+distinction that decides whether they are worth keeping, and it is the one thing I
+cannot measure from here.
 
 ### Shapes
 

@@ -165,7 +165,11 @@ function sampleArt(rows: number, cols: number, artRows: readonly string[]): Shap
  * it already did for bitmaps: a feature thinner than a cell now survives as long
  * as it covers a fair share of one, instead of depending on where its centre fell.
  */
-function sampleField(rows: number, cols: number, field: (u: number, v: number) => boolean): ShapeMask {
+function sampleField(
+  rows: number,
+  cols: number,
+  field: (u: number, v: number) => boolean,
+): ShapeMask {
   const mask: ShapeMask = new Array<boolean>(rows * cols).fill(false);
   const SUB = 3;
 

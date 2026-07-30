@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import {
   BoardCanvas,
   BoardViewport,
+  Celebration,
   CoachCard,
   ConfirmDialog,
   FailOverlay,
@@ -106,10 +107,10 @@ export default function PlayScreen() {
   /**
    * The overlay waits a beat after the win so the board clearing is visible.
    *
-   * This outlived the confetti it was originally introduced alongside, and it is
-   * the more important half of the pair: the last snake threading out is the
-   * satisfying moment, and a modal arriving on top of it is what threw that away.
-   * The particles were the decoration; the pause is the thing worth keeping.
+   * The confetti and the banner run inside this window; the overlay waits for it
+   * to finish. Both halves matter and they are not the same thing — the burst marks
+   * the moment, and the delay is what stops a modal landing on top of the last
+   * snake threading out, which is the best thing in the game to watch.
    */
   const [overlayVisible, setOverlayVisible] = useState(false);
   /** Bumped to send the board back to fit-to-screen. */
@@ -497,6 +498,20 @@ export default function PlayScreen() {
           </Text>
         </Pressable>
       ) : null}
+
+      {/*
+        Fires from the win itself rather than from its own state flag.
+
+        Replaying a level takes `status` false and true again, which re-triggers the
+        burst for free — a separate nonce would be a second signal meaning the same
+        thing, and a second thing to get out of step.
+      */}
+      <Celebration
+        active={status === 'won'}
+        intensity={state.session.mistakes === 0 ? 'perfect' : 'normal'}
+        palette={palette}
+        reducedMotion={reducedMotion}
+      />
 
       <PauseMenu
         palette={palette}

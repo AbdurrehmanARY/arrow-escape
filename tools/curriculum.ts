@@ -59,6 +59,8 @@ export interface LevelPlan {
   readonly maxBodyLength: number;
   readonly targetBlindMistakes: number;
   readonly hearts: number;
+  /** Packed to roughly four-fifths coverage. See `isDenseLevel`. */
+  readonly dense: boolean;
   /**
    * A gate for the generator to try to place, if any.
    *
@@ -142,8 +144,8 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
     // able to finish without losing a heart.
     minSize: 8,
     maxSize: 11,
-    minFill: 0.30,
-    maxFill: 0.40,
+    minFill: 0.3,
+    maxFill: 0.4,
     minLen: 2,
     maxLen: 4,
     minBlind: 1,
@@ -250,8 +252,8 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   brutal: {
     minSize: 54,
     maxSize: 58,
-    minFill: 0.40,
-    maxFill: 0.50,
+    minFill: 0.4,
+    maxFill: 0.5,
     minLen: 6,
     maxLen: 25,
     minBlind: 150,
@@ -298,6 +300,110 @@ const PLANNING_FROM = 120;
 export function isPlanningLevel(id: number): boolean {
   return id >= PLANNING_FROM && id <= 590 && id % PLANNING_STEP === 0;
 }
+
+/**
+ * Dense boards: roughly four cells in five carrying a snake.
+ *
+ * **Density and board size are in direct opposition, and the trade is physical
+ * rather than a tuning failure.** A board is solvable only if its blocking graph is
+ * acyclic, and an arrow can only move when its whole ray to the edge is clear — so
+ * at fill `f`, an arrow with a ray of `L` cells is free with probability roughly
+ * `(1 - f)^L`. Bigger boards mean longer rays, so at fixed density the chance that
+ * *anything* on the board can ever move collapses exponentially with size.
+ *
+ * That is measured, not assumed. `npx tsx tools/probe-density.ts`, at the attempt
+ * budget the real build allows:
+ *
+ * | board | best fill achieved | boards solvable |
+ * |---|---|---|
+ * | 20x20 | 76% | 4 of 4 |
+ * | 24x24 | 76% | 4 of 4 |
+ * | 30x30 | 73% | 2 of 4 |
+ * | 40x40 | 65% | 1 of 4 |
+ * | 50x50, 60x60 | — | **0 of 4** |
+ *
+ * So a dense level is a *small* level. `DENSE_MAX_SIZE` sits where the yield is
+ * still comfortable; asking for four-fifths coverage of a 50x50 board does not
+ * produce a hard level, it produces no level at all.
+ *
+ * They run from `DENSE_FROM` upward on their own cadence in every tier from Medium
+ * on, so each of those tiers gets a run of them rather than the idea being saved
+ * for the end. A dense 24x24 is a harder read than a sparse 40x40, which is exactly
+ * why they belong in the middle of the game too.
+ */
+const DENSE_STEP = 7;
+const DENSE_FROM = 60;
+const DENSE_MIN_SIZE = 18;
+const DENSE_MAX_SIZE = 24;
+/**
+ * Asked-for fill, chosen from measurement rather than from the target.
+ *
+ * Self-avoiding growth always strands cells, so the generator lands roughly a
+ * tenth below whatever it is asked for. Asking 93% is what actually produces the
+ * **77-81% board coverage** the probe measures at these sizes — asking for 80%
+ * would ship 72%, which is outside the band.
+ */
+const DENSE_FILL = 0.93;
+/** Long enough to keep the arrow count renderable, short enough to still read. */
+const DENSE_MAX_BODY = 12;
+
+/** Tiers that carry dense levels. Below Medium a board this packed is not fair. */
+const DENSE_TIERS: ReadonlySet<DifficultyTier> = new Set<DifficultyTier>([
+  'medium',
+  'tricky',
+  'hard',
+  'superHard',
+  'extremeHard',
+  'brutal',
+  'nightmare',
+]);
+
+/** True if this level should be packed to roughly four-fifths coverage. */
+export function isDenseLevel(id: number, tier: DifficultyTier): boolean {
+  return id >= DENSE_FROM && id % DENSE_STEP === 0 && DENSE_TIERS.has(tier);
+}
+
+/**
+ * Shapes a dense level may use: the ones that fill most of their grid.
+ *
+ * Fill is expressed as a share of the *silhouette*, but density is something a
+ * player sees against the whole **board**. On a letter or a helix the mask is a
+ * third of the grid, so packing it to 85% still leaves a board that looks mostly
+ * empty — which is precisely what the first attempt shipped: dense levels averaging
+ * 37% board coverage, with one at 10%.
+ *
+ * So a dense level needs a silhouette that is nearly all board to begin with. This
+ * is measured rather than hand-listed for the same reason the fragmenting set is:
+ * a new shape classifies itself, and capacity at a given size is not something to
+ * judge by eye.
+ *
+ * The bar is high enough that in practice only the open rectangle clears it, and
+ * that is a deliberate concession rather than an oversight. A wider bar was tried:
+ * at 70% it admitted circle, butterfly, ghost, dice and shield, and dense levels
+ * shipped at **54% average board coverage** — because 93% of a shield-shaped mask
+ * is only 65% of the grid the player is looking at. There is no fill that fixes
+ * that; the mask simply is not the board.
+ *
+ * So a dense level is a full rectangle, and its variety comes from size and aspect
+ * instead of silhouette. Four-fifths coverage was the requirement; a recognisable
+ * outline was not.
+ */
+/**
+ * Board size at which shape properties are measured.
+ *
+ * Shared by the dense-shape and fragmenting-shape filters so both classify a
+ * silhouette against the same yardstick. Declared here because it is used by the
+ * first of them, and a module-level const cannot be read before its definition.
+ */
+const REFERENCE_SIZE = 18;
+
+const DENSE_MIN_SHAPE_CAPACITY = 0.9;
+
+const DENSE_SHAPES: readonly ShapeName[] = SHAPE_NAMES.filter((name) => {
+  const mask = maskFor(name, REFERENCE_SIZE, REFERENCE_SIZE);
+  const fill = maskCapacity(mask) / (REFERENCE_SIZE * REFERENCE_SIZE);
+  return fill >= DENSE_MIN_SHAPE_CAPACITY;
+});
 
 /**
  * How the tier mix shifts across the game.
@@ -368,7 +474,7 @@ const MIX: readonly MixBand[] = [
       hard: 20,
       superHard: 17,
       extremeHard: 11,
-      brutal: 5,
+      brutal: 7,
       nightmare: 1,
     },
   },
@@ -383,8 +489,8 @@ const MIX: readonly MixBand[] = [
       hard: 17,
       superHard: 19,
       extremeHard: 17,
-      brutal: 12,
-      nightmare: 6,
+      brutal: 16,
+      nightmare: 7,
     },
   },
 ];
@@ -482,6 +588,27 @@ const PLANNING_QUALIFIERS: readonly string[] = [
   'Collapsing',
   'Receding',
   'Final-Door',
+];
+
+/**
+ * Names for boards packed to four-fifths coverage.
+ *
+ * Worth signalling, like the planning levels: a dense board is a different kind of
+ * work, and a player who opens one wants to know that before they start counting.
+ */
+const DENSE_QUALIFIERS: readonly string[] = [
+  'Packed',
+  'Crowded',
+  'Teeming',
+  'Choked',
+  'Swarming',
+  'Brimming',
+  'Thronged',
+  'Crammed',
+  'Heaving',
+  'Jammed',
+  'Bristling',
+  'Overrun',
 ];
 
 /** Names for levels carrying an ordinary (opening) gate. */
@@ -630,7 +757,6 @@ function isFineDetailShape(name: ShapeName): boolean {
  * easy to misjudge by eye, and because a shape added later is then classified
  * correctly with nothing to remember to update.
  */
-const REFERENCE_SIZE = 18;
 const MAX_ISLANDS_FOR_HARD_TIERS = 2;
 const MIN_CAPACITY_FOR_HARD_TIERS = 0.55;
 
@@ -678,6 +804,7 @@ function buildOnboarding(): LevelPlan[] {
       maxBodyLength: maxLen,
       targetBlindMistakes: Number(blind.toFixed(1)),
       hearts: 5,
+      dense: false,
     });
   }
 
@@ -701,8 +828,14 @@ function buildMainRun(): LevelPlan[] {
     const tier: DifficultyTier = id > 590 ? 'nightmare' : pickTier(rng, weightsFor(id));
     const spec = TIERS[tier];
 
+    const dense = isDenseLevel(id, tier);
+
     // Level 600 is the largest board in the game.
     let size = id === 600 ? spec.maxSize : Math.round(lerp(rng, spec.minSize, spec.maxSize));
+
+    // A dense board is a *small* board, and that is physics rather than a
+    // compromise — see `isDenseLevel`.
+    if (dense) size = Math.min(size, Math.round(lerp(rng, DENSE_MIN_SIZE, DENSE_MAX_SIZE)));
 
     // Planning levels are capped well below their tier's usual size. Proving a
     // shutter board solvable is a search rather than a graph peel, and the cost of
@@ -715,7 +848,7 @@ function buildMainRun(): LevelPlan[] {
     // levels of itself. The skip loop matters now that the pool differs level to
     // level — a demanding tier draws from a smaller set, so the same cursor value
     // can land on the same shape two levels running even though it advanced.
-    const pool = shapePoolFor(size, spec.minBlind >= DEMANDING_MIN_BLIND);
+    const pool = dense ? DENSE_SHAPES : shapePoolFor(size, spec.minBlind >= DEMANDING_MIN_BLIND);
     let shape = pool[shapeCursor % pool.length]!;
     shapeCursor += 1;
     for (let skip = 0; skip < pool.length && shape === lastShape; skip += 1) {
@@ -724,35 +857,53 @@ function buildMainRun(): LevelPlan[] {
     }
     lastShape = shape;
 
-    const fill = lerp(rng, spec.minFill, spec.maxFill);
+    const fill = dense ? DENSE_FILL : lerp(rng, spec.minFill, spec.maxFill);
     // Drift the blind-mistake target upward across the game inside each tier, so
     // a late Hard level is harder than an early one without changing tier.
     const drift = (id - 20) / 580;
     const blind = lerp(rng, spec.minBlind, spec.maxBlind) * (0.85 + drift * 0.3);
 
-    // Slight rectangular variation so not every board is a perfect square.
-    const stretch = rng() < 0.25 ? Math.round(lerp(rng, 1, 3)) : 0;
+    // Slight rectangular variation so not every board is a perfect square. Dense
+    // boards lean on this harder: they are all the same silhouette, so size and
+    // proportion are the only things left to tell them apart.
+    const stretch = dense
+      ? Math.round(lerp(rng, 0, 6))
+      : rng() < 0.25
+        ? Math.round(lerp(rng, 1, 3))
+        : 0;
     const rows = size;
     const cols = size + stretch;
 
     // Bodies are capped on planning levels too, for the same reason — and because
     // a level asking two hard questions at once usually asks neither well.
-    const maxLen = planning ? Math.min(spec.maxLen, 9) : spec.maxLen;
-    const minLen = Math.min(spec.minLen, maxLen);
+    // On a dense board they are capped differently: long snakes are what keep the
+    // arrow count renderable at four-fifths coverage, but a snake longer than about
+    // a dozen cells on a 24-wide board wraps the whole thing and stops reading as a
+    // shape at all.
+    const maxLen = planning
+      ? Math.min(spec.maxLen, 9)
+      : dense
+        ? Math.min(spec.maxLen, DENSE_MAX_BODY)
+        : spec.maxLen;
+    const minLen = Math.min(dense ? Math.max(spec.minLen, 4) : spec.minLen, maxLen);
 
-    const gate: GatePlan | undefined = planning
-      ? { mode: 'shuts', groupCount: 1, cellsPerGroup: 1 + Math.floor(rng() * 2) }
-      : rng() < spec.gateChance
-        ? {
-            mode: 'opens',
-            groupCount: rng() < 0.3 ? 2 : 1,
-            cellsPerGroup: 1 + Math.floor(rng() * 3),
-          }
-        : undefined;
+    // A dense board is already asking a lot. Adding a gate on top means two
+    // mechanics competing for the same attention, and neither getting it.
+    const gate: GatePlan | undefined = dense
+      ? undefined
+      : planning
+        ? { mode: 'shuts', groupCount: 1, cellsPerGroup: 1 + Math.floor(rng() * 2) }
+        : rng() < spec.gateChance
+          ? {
+              mode: 'opens',
+              groupCount: rng() < 0.3 ? 2 : 1,
+              cellsPerGroup: 1 + Math.floor(rng() * 3),
+            }
+          : undefined;
 
     plans.push({
       id,
-      name: nameFor(id, shape, planning, gate !== undefined),
+      name: nameFor(id, shape, planning, gate !== undefined, dense),
       tier,
       shape,
       rows,
@@ -762,6 +913,7 @@ function buildMainRun(): LevelPlan[] {
       maxBodyLength: maxLen,
       targetBlindMistakes: Number(blind.toFixed(1)),
       hearts: spec.hearts,
+      dense,
       ...(gate ? { gate } : {}),
     });
   }
@@ -776,10 +928,17 @@ function buildMainRun(): LevelPlan[] {
  * a board plays by a different rule, and a player who has just lost one without
  * spending a heart deserves to have been warned by something.
  */
-function nameFor(id: number, shape: ShapeName, planning: boolean, gated: boolean): string {
+function nameFor(
+  id: number,
+  shape: ShapeName,
+  planning: boolean,
+  gated: boolean,
+  dense: boolean,
+): string {
   if (id === 600) return 'Last Word';
   if (planning)
     return `${PLANNING_QUALIFIERS[id % PLANNING_QUALIFIERS.length]} ${shapeLabel(shape)}`;
+  if (dense) return `${DENSE_QUALIFIERS[id % DENSE_QUALIFIERS.length]} ${shapeLabel(shape)}`;
   if (gated) return `${GATED_QUALIFIERS[id % GATED_QUALIFIERS.length]} ${shapeLabel(shape)}`;
   return `${QUALIFIERS[(id * 7) % QUALIFIERS.length]} ${shapeLabel(shape)}`;
 }
