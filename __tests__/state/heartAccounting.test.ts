@@ -159,16 +159,23 @@ describe('the reducer keeps the same guarantees', () => {
     expect(next.session.heartsLeft).toBe(4);
   });
 
-  it('ignores a tap while an arrow is still leaving', () => {
-    // Without this, a fast second tap during the exit animation would resolve
-    // against a board that is mid-change.
+  it('charges exactly one heart for a wrong tap made while an arrow is still leaving', () => {
+    // The reducer used to refuse taps during the exit animation, and the reason
+    // given was that the second tap would "resolve against a board that is
+    // mid-change". That was never true: `applyOutcome` runs the moment the tap is
+    // accepted, so the board is already correct and only the *drawing* is behind.
+    // The guard was costing real taps, so it is gone.
+    //
+    // What has to survive is the accounting, which is what this pins.
     const { board, initial } = setup();
     let state = initGameState(initial, 5);
     state = gameReducer(state, { type: 'tap', board, arrowIndex: 0 });
+    expect(state.departing).toEqual([0]);
 
-    const ignored = gameReducer(state, { type: 'tap', board, arrowIndex: 2 });
-    expect(ignored).toBe(state);
-    expect(ignored.session.heartsLeft).toBe(5);
+    const during = gameReducer(state, { type: 'tap', board, arrowIndex: 2 });
+    expect(during.session.heartsLeft).toBe(4);
+    expect(during.session.mistakes).toBe(1);
+    expect(during.session.maxHearts - during.session.heartsLeft).toBe(during.session.mistakes);
   });
 
   it('applyOutcome on a blocked result is a no-op', () => {

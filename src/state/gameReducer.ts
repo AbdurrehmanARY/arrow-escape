@@ -35,8 +35,20 @@ export interface BlockHighlight {
 
 export interface GameState {
   readonly session: PlaySession;
-  /** The arrow currently animating off the board, if any. */
-  readonly departing: number | undefined;
+  /**
+   * Arrows currently animating off the board.
+   *
+   * A list, and taps are *not* blocked while it is non-empty. It used to be a
+   * single slot with the reducer ignoring any tap that arrived mid-flight, which
+   * was defensible when the exit took 340ms and became indefensible once it was
+   * slowed down deliberately — a player tapping at a normal pace would have every
+   * second tap silently dropped.
+   *
+   * Nothing is at risk in allowing them: `applyOutcome` has already removed the
+   * departing arrow from the board state, so the next tap resolves against a board
+   * that is correct *now*. The animation is presentation catching up, not state.
+   */
+  readonly departing: readonly number[];
   readonly highlight: BlockHighlight | undefined;
   /** The most recent outcome, so the view can react without diffing state. */
   readonly lastOutcome: MoveOutcome | undefined;
@@ -48,8 +60,8 @@ export interface GameState {
 
 export type GameAction =
   | { readonly type: 'tap'; readonly board: Board; readonly arrowIndex: number }
-  /** The release animation finished; the arrow can stop being tracked. */
-  | { readonly type: 'departed' }
+  /** One arrow's release animation finished; it can stop being tracked. */
+  | { readonly type: 'departed'; readonly arrowIndex: number }
   /** The failed-tap flash has run its course. */
   | { readonly type: 'clearHighlight' }
   | { readonly type: 'restart'; readonly initial: BoardState; readonly hearts: number };
@@ -60,7 +72,7 @@ const OPENING_MESSAGE = 'Find a head with a clear run to the edge.';
 export function initGameState(initial: BoardState, hearts: number): GameState {
   return {
     session: startSession(initial, hearts),
-    departing: undefined,
+    departing: [],
     highlight: undefined,
     lastOutcome: undefined,
     message: OPENING_MESSAGE,
@@ -73,8 +85,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'restart':
       return initGameState(action.initial, action.hearts);
 
-    case 'departed':
-      return state.departing === undefined ? state : { ...state, departing: undefined };
+    case 'departed': {
+      if (!state.departing.includes(action.arrowIndex)) return state;
+      return {
+        ...state,
+        departing: state.departing.filter((index) => index !== action.arrowIndex),
+      };
+    }
 
     case 'clearHighlight':
       return state.highlight === undefined ? state : { ...state, highlight: undefined };
@@ -82,11 +99,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'tap': {
       const { board, arrowIndex } = action;
 
-      // Ignore taps while an arrow is mid-flight. Without this, a fast double-tap
-      // can start a second release before the first has left, and the board
-      // appears to skip an animation.
-      if (state.departing !== undefined) return state;
-
+      // Deliberately no "ignore taps while an arrow is mid-flight" guard. See
+      // `GameState.departing` — it dropped taps a player had genuinely made, and
+      // the state it was protecting was never at risk.
       const { session, outcome } = tapArrow(board, state.session, arrowIndex);
       if (outcome.kind === 'invalid') return state;
 
@@ -112,7 +127,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         session,
         lastOutcome: outcome,
         taps: state.taps + 1,
-        departing: arrowIndex,
+        departing: [...state.departing, arrowIndex],
         highlight: undefined,
         message: session.status === 'won' ? 'Board clear.' : `"${id}" had a clear run.`,
       };

@@ -43,3 +43,6 @@ coverage/
 # generated native folders
 /ios
 /android
+
+# build output captured for inspection; the level packs themselves are committed
+/build.log

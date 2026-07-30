@@ -32,7 +32,7 @@ describe('initGameState', () => {
     const { state } = setup();
     expect(state.session.heartsLeft).toBe(DEFAULT_HEARTS);
     expect(state.session.status).toBe('playing');
-    expect(state.departing).toBeUndefined();
+    expect(state.departing).toEqual([]);
     expect(state.highlight).toBeUndefined();
     expect(state.taps).toBe(0);
   });
@@ -44,7 +44,7 @@ describe('tapping a free arrow', () => {
     const next = gameReducer(state, { type: 'tap', board, arrowIndex: 0 });
 
     expect(next.session.state.remaining).toBe(2);
-    expect(next.departing).toBe(0);
+    expect(next.departing).toEqual([0]);
     expect(next.taps).toBe(1);
     expect(next.highlight).toBeUndefined();
     expect(next.session.heartsLeft).toBe(DEFAULT_HEARTS);
@@ -55,7 +55,7 @@ describe('tapping a free arrow', () => {
     let current = state;
     for (const index of [0, 1, 2]) {
       current = gameReducer(current, { type: 'tap', board, arrowIndex: index });
-      current = gameReducer(current, { type: 'departed' });
+      current = gameReducer(current, { type: 'departed', arrowIndex: index });
     }
     expect(current.session.status).toBe('won');
     expect(current.message).toMatch(/clear/i);
@@ -101,30 +101,45 @@ describe('tapping a blocked arrow', () => {
 });
 
 describe('guards', () => {
-  it('ignores a tap while another arrow is still flying', () => {
-    // A fast double-tap would otherwise start a second release before the first
-    // finished, and the board would appear to skip an animation.
+  it('accepts a tap while another arrow is still flying', () => {
+    // This used to be refused, on the theory that a second release starting before
+    // the first finished would look like a skipped animation. It was the wrong
+    // trade even at a 340ms exit and became indefensible once the exit was
+    // deliberately slowed: a player tapping at a normal pace had every second tap
+    // silently dropped, which reads as the game not registering touches.
+    //
+    // Nothing is at risk. The first arrow is already off the board in `session`,
+    // so the second tap resolves against a board that is correct now; the
+    // animation is presentation catching up.
     const { board, state } = setup();
     const flying = gameReducer(state, { type: 'tap', board, arrowIndex: 0 });
-    const ignored = gameReducer(flying, { type: 'tap', board, arrowIndex: 1 });
+    const both = gameReducer(flying, { type: 'tap', board, arrowIndex: 1 });
 
-    expect(ignored).toBe(flying);
+    expect(both).not.toBe(flying);
+    expect(both.session.state.remaining).toBe(1);
+    expect(both.departing).toEqual([0, 1]);
+    expect(both.taps).toBe(2);
   });
 
-  it('accepts the next tap once the animation reports back', () => {
+  it('stops tracking each arrow independently as its animation ends', () => {
     const { board, state } = setup();
     let current = gameReducer(state, { type: 'tap', board, arrowIndex: 0 });
-    current = gameReducer(current, { type: 'departed' });
-    expect(current.departing).toBeUndefined();
-
     current = gameReducer(current, { type: 'tap', board, arrowIndex: 1 });
-    expect(current.session.state.remaining).toBe(1);
+    expect(current.departing).toEqual([0, 1]);
+
+    // Out of order on purpose: the two animations are independent, and a shorter
+    // exit ray finishes first regardless of which arrow was tapped first.
+    current = gameReducer(current, { type: 'departed', arrowIndex: 1 });
+    expect(current.departing).toEqual([0]);
+
+    current = gameReducer(current, { type: 'departed', arrowIndex: 0 });
+    expect(current.departing).toEqual([]);
   });
 
   it('ignores a tap on an arrow that already left', () => {
     const { board, state } = setup();
     let current = gameReducer(state, { type: 'tap', board, arrowIndex: 0 });
-    current = gameReducer(current, { type: 'departed' });
+    current = gameReducer(current, { type: 'departed', arrowIndex: 0 });
 
     const again = gameReducer(current, { type: 'tap', board, arrowIndex: 0 });
     expect(again).toBe(current);
@@ -142,7 +157,7 @@ describe('guards', () => {
   it('returns the same object when a no-op action arrives', () => {
     // Identity equality is what stops React re-rendering the board for nothing.
     const { state } = setup();
-    expect(gameReducer(state, { type: 'departed' })).toBe(state);
+    expect(gameReducer(state, { type: 'departed', arrowIndex: 0 })).toBe(state);
     expect(gameReducer(state, { type: 'clearHighlight' })).toBe(state);
   });
 });
@@ -174,7 +189,7 @@ describe('restart', () => {
     expect(fresh.session.mistakes).toBe(0);
     expect(fresh.session.state.remaining).toBe(3);
     expect(fresh.taps).toBe(0);
-    expect(fresh.departing).toBeUndefined();
+    expect(fresh.departing).toEqual([]);
     expect(fresh.highlight).toBeUndefined();
   });
 

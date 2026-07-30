@@ -47,7 +47,13 @@ function attemptsFor(cells: number): number {
   if (cells <= 100) return 900;
   if (cells <= 225) return 500;
   if (cells <= 400) return 260;
-  return 140;
+  if (cells <= 900) return 140;
+  // Beyond about a thousand cells one attempt grows and analyses a hundred-odd
+  // snakes, so the cost per try is an order of magnitude up. There is also less to
+  // gain: a board that big has so much room that most candidates land near the
+  // target anyway, and it is the outliers, not the sample size, that miss.
+  if (cells <= 2000) return 48;
+  return 24;
 }
 
 interface BuildResult {

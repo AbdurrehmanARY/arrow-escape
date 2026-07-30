@@ -22,6 +22,7 @@ import { memo, useEffect } from 'react';
 import Animated, {
   Easing,
   runOnJS,
+  type SharedValue,
   useAnimatedProps,
   useSharedValue,
   withSequence,
@@ -46,8 +47,20 @@ const AnimatedG = Animated.createAnimatedComponent(G);
 /** Which visual state an arrow is in. Only ever driven by gameplay, never identity. */
 export type ArrowVisualState = 'normal' | 'blocked' | 'blocker' | 'safe';
 
-/** How long a snake takes to thread off the board. */
-export const RELEASE_MS = 340;
+/**
+ * How long a snake takes to thread off the board.
+ *
+ * Slow on purpose. The signature moment of this game is watching a body follow its
+ * head out through the trail the head cleared, and at 340ms that was over before
+ * the eye had found the tail — it read as the arrow being deleted rather than
+ * leaving. At this speed you can follow the whole snake out, which is also what
+ * teaches a new player what the body *is*.
+ *
+ * The cost of slowing it down is entirely in responsiveness, and that is paid for
+ * separately: taps are no longer refused while an arrow is in flight, so an
+ * unhurried animation never means an unhurried game.
+ */
+export const RELEASE_MS = 720;
 /** How long the lurch-and-recoil of a blocked tap takes. */
 export const SHAKE_MS = 260;
 
@@ -66,6 +79,16 @@ export interface ArrowSnakeProps {
   onDepartComplete?: () => void;
   /** Changes on every failed tap of this arrow, re-triggering the shake. */
   shakeNonce?: number;
+  /**
+   * Index of the arrow currently under a finger, or `-1`.
+   *
+   * A shared value rather than a prop comparison, and deliberately so. Press
+   * feedback has to arrive on touch-*down* to be worth having, and re-rendering a
+   * board of a hundred snakes to acknowledge a touch would cost more frames than
+   * the feedback buys. Reading it inside an animated style means the highlight is
+   * applied on the UI thread with no React render at all.
+   */
+  pressedArrow?: SharedValue<number>;
   /** Swap animation for instant state changes (Settings → Reduced motion). */
   reducedMotion?: boolean;
 }
@@ -121,6 +144,7 @@ function ArrowSnakeInner({
   departing = false,
   onDepartComplete,
   shakeNonce = 0,
+  pressedArrow,
   reducedMotion = false,
 }: ArrowSnakeProps) {
   const geometry = buildArrowGeometry(board, arrowIndex, cellSize, originX, originY, style);
@@ -160,7 +184,14 @@ function ArrowSnakeInner({
     progress.value = 0;
     progress.value = withTiming(
       1,
-      { duration: RELEASE_MS, easing: Easing.in(Easing.cubic) },
+      {
+        // Gently in, steady out. `Easing.in(cubic)` held the snake almost still and
+        // then flung it, which at 340ms passed for urgency and at this duration
+        // just looks like a stutter followed by a snap. A soft start that settles
+        // into a constant glide is what reads as an arrow *travelling*.
+        duration: RELEASE_MS,
+        easing: Easing.bezier(0.22, 0.35, 0.3, 1),
+      },
       (done) => {
         if (done) runOnJS(finish)();
       },
@@ -186,7 +217,12 @@ function ArrowSnakeInner({
     const nudge = shake.value * cellSize * 0.16;
     const dx = forward.x * nudge;
     const dy = forward.y * nudge;
-    return { transform: `translate(${dx}, ${dy})` };
+    // Acknowledge the touch the instant it lands. Waiting for the tap to complete
+    // before showing anything is what makes a board feel unresponsive even when it
+    // is registering every touch correctly — the player has no way to tell a
+    // pending tap from an ignored one.
+    const held = pressedArrow !== undefined && pressedArrow.value === arrowIndex;
+    return { transform: `translate(${dx}, ${dy})`, opacity: held ? 0.55 : 1 };
   });
 
   const headProps = useAnimatedProps(() => {

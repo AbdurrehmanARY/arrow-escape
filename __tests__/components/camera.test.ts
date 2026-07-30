@@ -52,6 +52,26 @@ describe('clampScale', () => {
     expect(clampScale(99, fit, 3.5)).toBeCloseTo(fit * 3.5, 5);
   });
 
+  it('always lets the player reach at least 1:1, however small the fit', () => {
+    // The failure this pins only appears on the biggest boards, which is the worst
+    // place for it. A 60x60 level at 26dp cells is 1560dp wide and fits a phone at
+    // about 0.23, so a purely relative ceiling of 3.5x tops out at 0.8 — the player
+    // could never see a cell at the size it was designed at, on exactly the boards
+    // where picking out one arrowhead matters most.
+    const hugeBoardFit = fitScale(60 * 26, 60 * 26, VIEWPORT.width, VIEWPORT.height);
+    expect(hugeBoardFit).toBeLessThan(0.3);
+
+    const closest = clampScale(99, hugeBoardFit, 3.5);
+    expect(closest).toBeGreaterThanOrEqual(1);
+    expect(hugeBoardFit * 3.5).toBeLessThan(1); // the relative ceiling alone is not enough
+  });
+
+  it('still honours a generous relative ceiling on a board that nearly fits', () => {
+    // The absolute floor must not become the answer everywhere: a board that fits
+    // at 0.9 should still be zoomable to 3.15, not clipped to 1.75.
+    expect(clampScale(99, 0.9, 3.5)).toBeCloseTo(0.9 * 3.5, 5);
+  });
+
   it('leaves a scale inside the range alone', () => {
     expect(clampScale(1.2, fit, 3.5)).toBe(1.2);
   });

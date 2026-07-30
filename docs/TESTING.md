@@ -17,21 +17,21 @@ Runs three things in order:
 |---|---|
 | `tsc --noEmit` | the whole project typechecks under `strict` |
 | `eslint` | no lint errors anywhere |
-| `jest` | 229 tests — rules, solver, gates, geometry, camera, reducer, stores, storage, and all 600 levels |
+| `jest` | 231 tests — rules, solver, gates, geometry, camera, reducer, stores, storage, and all 600 levels |
 | `levels:validate` | re-reads the packs *from disk* and re-solves all 600 |
 
 Expect:
 
 ```
 Test Suites: 14 passed, 14 total
-Tests:       229 passed, 229 total
+Tests:       231 passed, 231 total
 ...
 All levels decode, all are solvable, all recorded solutions verified.
 
   tier          count   blind mistakes: min / avg / max
-  tutorial        29      1.0 /    1.7 /    2.5
+  tutorial        29      0.9 /    1.7 /    2.7
   ...
-  nightmare       15    150.6 /  187.5 /  216.1
+  nightmare       15    189.0 /  341.8 /  608.1
 ```
 
 The level check runs against the packs on disk rather than the generator's memory,
@@ -129,7 +129,10 @@ faster, because only changed modules are re-sent.
 2. **Tap a snake with a clear run.** The head leads, the body threads out behind
    it through the cells the head cleared, and the tail whips out last. This is the
    signature moment — if it looks like a slide or a fade rather than threading,
-   something is wrong and I want to know.
+   something is wrong and I want to know. **It now takes 720ms rather than 340ms**,
+   and eases differently, so you can actually follow the tail. Arrows are also
+   noticeably thinner, which is what opens up the gaps between neighbouring snakes
+   on the bigger boards.
 3. **Tap a blocked snake on purpose.** It lurches forward and recoils, turns red,
    the *blocker* turns orange, and a heart drains. The board is otherwise
    untouched.
@@ -213,9 +216,34 @@ constantly. Worth a look at whether they read as patterns or as damage.
 Letters and digits only appear on boards of 13 or more, since a stroke needs room
 to stay a stroke. If you spot one that is unrecognisable, name the level.
 
+### Touch — please be brutal with this
+
+The board used to swallow taps, and the cause was structural rather than a tuning
+problem: the pan gesture had **no activation threshold**, so it claimed the touch
+on the first pixel of movement and cancelled the button underneath. Every real tap
+drifts a pixel or two. Four separate things were changed:
+
+1. **Pan now needs 14dp of movement** before it takes over. A stationary finger can
+   no longer be stolen from.
+2. **The whole board is one tap surface**, not one button per cell. React Native's
+   buttons and gesture-handler's gestures do not negotiate with each other, and
+   mixing them was the root cause. It is also a thousand fewer views on a big board.
+3. **Near-misses count.** A tap that lands within about four-fifths of a cell of a
+   snake selects that snake. A tap on genuinely empty board still does nothing —
+   that part matters, since selecting the wrong arrow costs a heart.
+4. **Taps are no longer refused while an arrow is leaving.** They used to be, which
+   became untenable once the exit animation was slowed down.
+
+An arrow now **dims the instant your finger lands on it**, before you lift. That is
+the quickest way to tell a tap that was received from one that was not.
+
+What to check: tap fast, tap two different arrows in quick succession, tap while
+one is still flying, tap right at the edge of a snake, and tap while zoomed all the
+way in and all the way out. Every one should register first time.
+
 ### Oversized boards
 
-261 levels have boards bigger than your screen. On those:
+Almost every level past Easy is now bigger than your screen. On those:
 
 - **Drag** to pan, **pinch** to zoom, **Fit** button to snap back to the whole
   board. There is deliberately no double-tap: on a board covered in tap targets it
@@ -223,8 +251,15 @@ to stay a stroke. If you spot one that is unrecognisable, name the level.
 - The board cannot be dragged off into empty space; the camera is clamped.
 - **Tapping must stay accurate at every zoom level.** This is the thing most
   likely to be subtly wrong, so please test it zoomed right in and right out.
-- Level 600 is 30×30 — about four screens, and now the hardest board in the game
-  by a distance. It should be readable, not miserable.
+- **Level 600 is 60×60** — 3,600 cells. Zoomed out it is an overview, not something
+  you can play from; zoom in to read it. You can always reach at least 1:1 however
+  big the board is, which needed fixing: the zoom ceiling used to be a multiple of
+  fit-to-screen, so on a 60×60 board the closest you could get was 80% of the
+  designed cell size.
+- Board sizes are now roughly **Medium 30×30, Hard 40×40, Super Hard 50×50,
+  Nightmare 60×60**. Big boards are deliberately *sparser* than the old small ones
+  — a 30×30 Medium holds around twenty-five snakes, not eighty. If Medium feels
+  empty rather than spacious, say so; the fill is one number per tier.
 
 The most useful thing you can tell me is **where you got stuck or bored**. Every
 level's difficulty is one number in `tools/curriculum.ts` and a 28-second

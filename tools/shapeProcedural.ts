@@ -121,7 +121,7 @@ const knotwork: ProceduralShape = {
       // Two families of diagonal bands. The union of two 60%-coverage families is
       // almost the whole board, so each band has to be narrow for the weave to be
       // visible at all.
-      const band = (t: number): boolean => Math.abs(Math.sin(t * period)) > 0.78;
+      const band = (t: number): boolean => Math.abs(Math.sin(t * period)) > 0.88;
       return band(Math.SQRT1_2 * (u + v)) || band(Math.SQRT1_2 * (u - v));
     };
   },
@@ -259,8 +259,11 @@ const lattice: ProceduralShape = {
   field: (rows, cols) => {
     const bars = detail(rows, cols, 2, 5);
     return (u, v) => {
+      // Narrow bars. The union of two families covers far more than either alone,
+      // so a threshold that looks like "half" leaves no holes at all — and once
+      // the sampler started supersampling, `0.72` produced a solid board.
       const period = Math.PI * bars;
-      return Math.abs(Math.sin(u * period)) > 0.72 || Math.abs(Math.sin(v * period)) > 0.72;
+      return Math.abs(Math.sin(u * period)) > 0.88 || Math.abs(Math.sin(v * period)) > 0.88;
     };
   },
 };
@@ -274,7 +277,7 @@ const waves: ProceduralShape = {
     const bands = detail(rows, cols, 2, 5);
     return (u, v) => {
       const offset = Math.sin(u * Math.PI * 1.6) * 0.16;
-      return Math.abs(Math.sin((v + offset) * Math.PI * bands)) > 0.42;
+      return Math.abs(Math.sin((v + offset) * Math.PI * bands)) > 0.68;
     };
   },
 };
@@ -286,7 +289,7 @@ const chevrons: ProceduralShape = {
   category: 'abstract',
   field: (rows, cols) => {
     const count = detail(rows, cols, 2, 5);
-    return (u, v) => Math.abs(Math.sin((v - Math.abs(u) * 0.7) * Math.PI * count)) > 0.45;
+    return (u, v) => Math.abs(Math.sin((v - Math.abs(u) * 0.7) * Math.PI * count)) > 0.7;
   },
 };
 

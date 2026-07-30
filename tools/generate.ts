@@ -260,9 +260,27 @@ function repairBoard(
     const stuck = stuckArrows(current);
     if (stuck.length === 0) return current;
 
-    const victim = stuck[Math.floor(rng() * stuck.length)]!;
+    // Flip a share of the knot at once, not a single arrow.
+    //
+    // One flip per round is right when a board has thirty arrows and four of them
+    // are tangled. On a 40x43 board with a hundred and ten it is hopeless: a knot
+    // of sixty arrows would need sixty lucky rounds, and level 21 simply failed to
+    // build. Flipping a quarter of the knot converges in a handful of rounds, and
+    // the single-flip case is preserved exactly where it was already working,
+    // because a small knot still rounds down to one.
+    //
+    // The last few rounds drop back to one flip regardless, so a knot of two or
+    // three that needs a specific arrow reversed still gets tried individually.
+    const precise = attempt > budget * 0.75;
+    const flips = precise ? 1 : Math.max(1, Math.floor(stuck.length / 4));
+
+    const victims = new Set<number>();
+    for (let i = 0; i < flips; i += 1) {
+      victims.add(stuck[Math.floor(rng() * stuck.length)]!);
+    }
+
     const arrows = current.arrows.map((arrow, index) =>
-      index === victim ? { ...arrow, body: [...arrow.body].reverse() } : arrow,
+      victims.has(index) ? { ...arrow, body: [...arrow.body].reverse() } : arrow,
     );
     current = { ...current, arrows };
   }
@@ -424,7 +442,10 @@ export function generateLevel(
     // Dense boards are almost never solvable as grown, so repair rather than
     // discard — flipping an arrow inside the knot is far cheaper than another
     // full board, and keeps the silhouette exactly as it was.
-    const repaired = repairBoard(rng, playable, 40);
+    // Budget scales with the board: a knot can be as big as the arrow count, and a
+    // fixed forty rounds silently became "give up" once boards reached a hundred
+    // snakes.
+    const repaired = repairBoard(rng, playable, Math.max(40, arrows.length * 2));
     if (!repaired) continue;
     playable = repaired;
 

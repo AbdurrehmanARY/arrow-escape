@@ -35,6 +35,22 @@ import { type Board, type BoardState, EMPTY, NO_GROUP } from './types';
 const PERMANENT = 1 << 29;
 
 /**
+ * How many points along a game `blunderRate` is measured at, and how many of the
+ * moves on offer it checks at each.
+ *
+ * Both exist because measuring one move costs a full search, so the exhaustive
+ * version is `steps x moves x search` — quadratic in arrows with a search inside
+ * it. On the small shutter boards this was written against that was free; once
+ * they grew it made the level build take longer than everything else put together.
+ *
+ * A sample is entirely adequate here. `blunderRate` is a curation dial read to two
+ * decimal places and compared against a band, not a value anything depends on
+ * being exact.
+ */
+const BLUNDER_SAMPLE_STEPS = 12;
+const BLUNDER_SAMPLE_MOVES = 8;
+
+/**
  * The result of asking "can this be finished?".
  *
  * `unsolvable` is definitive here — there is no search budget to run out of.
@@ -480,19 +496,30 @@ function trace(
   let blunderShareTotal = 0;
   let steps = 0;
 
-  for (const move of outcome.solution) {
+  // Sampled, not exhaustive, and that is a hard requirement rather than a
+  // shortcut. Measuring every legal move at every step costs one full search per
+  // move — `steps x moves x search` — which is unbounded work for a *metric*, and
+  // it stalled the level build outright once shutter boards grew past a handful of
+  // arrows. A sample answers the question this number is for ("roughly what share
+  // of the taps on offer are traps") to far better precision than the number is
+  // ever read to.
+  const stepStride = Math.max(1, Math.ceil(outcome.solution.length / BLUNDER_SAMPLE_STEPS));
+
+  for (let index = 0; index < outcome.solution.length; index += 1) {
+    const move = outcome.solution[index]!;
     const moves = legalMoves(board, current);
     frontierSizes.push(moves.length);
     aliveCounts.push(current.remaining);
 
-    if (moves.length > 0) {
+    if (moves.length > 0 && index % stepStride === 0) {
+      const sample = moves.slice(0, BLUNDER_SAMPLE_MOVES);
       let blunders = 0;
-      for (const candidate of moves) {
+      for (const candidate of sample) {
         const result = resolveTap(board, current, candidate);
         if (result.kind !== 'escaped') continue;
         if (isDoomed(board, applyOutcome(current, result))) blunders += 1;
       }
-      blunderShareTotal += blunders / moves.length;
+      blunderShareTotal += blunders / sample.length;
       steps += 1;
     }
 

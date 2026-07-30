@@ -21,15 +21,27 @@ import type { ArrowStyle, BoardStyle, Palette, Theme } from './types';
 // Shared building blocks
 // ---------------------------------------------------------------------------
 
-/** The standard arrow: solid triangle head, rope-like rounded body, soft shadow. */
+/**
+ * The standard arrow: solid triangle head, rope-like rounded body, soft shadow.
+ *
+ * Slimmer than it was. A fat body reads well on an eight-cell board and turns a
+ * dense one into a solid mass — and the boards are far bigger now, so the gap
+ * *between* two snakes is what tells you they are two snakes. Thinning the stroke
+ * widens every one of those gaps without touching the layout.
+ *
+ * The head is deliberately **not** thinned in proportion. It is the only part that
+ * says which way the arrow goes, and a head no wider than its body stops reading
+ * as a point at all; keeping it broad against a slimmer body actually makes the
+ * direction easier to see than before.
+ */
 const classicArrow: ArrowStyle = {
   head: 'triangle',
   tail: 'round',
   join: 'round',
-  strokeRatio: 0.38,
+  strokeRatio: 0.24,
   headTipRatio: 0.46,
-  headHalfWidthRatio: 0.33,
-  headLengthRatio: 0.44,
+  headHalfWidthRatio: 0.3,
+  headLengthRatio: 0.42,
   shadow: true,
   shadowOffsetRatio: 0.05,
   highlight: false,
@@ -254,9 +266,12 @@ export const THEMES: readonly Theme[] = [
     palette: noodlePalette,
     arrow: {
       ...classicArrow,
+      // Still the chunkiest theme — that is its whole character — but it moved down
+      // with the rest, because on a 60x60 board the old weight left no daylight
+      // between neighbouring noodles at all.
       head: 'rounded',
       tail: 'round',
-      strokeRatio: 0.5,
+      strokeRatio: 0.34,
       headTipRatio: 0.42,
       headHalfWidthRatio: 0.3,
       headLengthRatio: 0.34,
@@ -276,8 +291,8 @@ export const THEMES: readonly Theme[] = [
       head: 'triangle',
       tail: 'flat',
       join: 'miter',
-      strokeRatio: 0.32,
-      headHalfWidthRatio: 0.36,
+      strokeRatio: 0.22,
+      headHalfWidthRatio: 0.34,
       shadow: false,
     },
     board: { ...dottedBoard, pattern: 'none', cornerRadius: 14, padCells: 0.4 },
@@ -291,9 +306,9 @@ export const THEMES: readonly Theme[] = [
       ...classicArrow,
       head: 'chevron',
       tail: 'square',
-      strokeRatio: 0.24,
+      strokeRatio: 0.16,
       headTipRatio: 0.46,
-      headHalfWidthRatio: 0.3,
+      headHalfWidthRatio: 0.28,
       headLengthRatio: 0.36,
       shadow: false,
     },
@@ -316,9 +331,9 @@ export const THEMES: readonly Theme[] = [
       ...classicArrow,
       head: 'pencil',
       tail: 'flat',
-      strokeRatio: 0.26,
+      strokeRatio: 0.17,
       headTipRatio: 0.5,
-      headHalfWidthRatio: 0.24,
+      headHalfWidthRatio: 0.23,
       headLengthRatio: 0.5,
       shadow: false,
     },

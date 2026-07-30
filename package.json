@@ -51,6 +51,7 @@
     "levels:preview": "tsx tools/preview-themes.ts",
     "levels:validate": "tsx tools/validate.ts",
     "levels:check": "tsx tools/check-curriculum.ts",
+    "levels:probe": "tsx tools/probe-tiers.ts",
     "start:clear": "expo start --clear",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",

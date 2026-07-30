@@ -106,28 +106,44 @@ interface TierSpec {
 /**
  * The ten tiers.
  *
- * Two things changed with Phase 16 and they pull against each other, which is why
- * the numbers below are not a smooth interpolation of the old five.
+ * **Board size is the dial that was set from outside.** Medium is 30x30, Hard 40,
+ * Super Hard 50, Nightmare 60, by request; the other six interpolate between them.
+ * Everything else in this table is a consequence of that, and the consequences are
+ * not small — this is the one place in the project where the numbers cannot be
+ * reasoned about in isolation, because size, density and difficulty are bound
+ * together.
  *
- * **Bodies got much longer** — from 2–6 cells to 2–14. That is the single biggest
- * lever on tracing difficulty, because following a fourteen-cell snake through a
- * tangle is a genuinely different task from following a four-cell one. But a
- * longer snake covers more cells, so the *same* fill yields far fewer arrows, and
- * fewer arrows means a smaller frontier ratio and therefore a *lower*
- * `expectedBlindMistakes`. Fill had to rise across the board to compensate.
+ * **Fill had to fall sharply as size rose.** `expectedBlindMistakes` tracks arrow
+ * count against how narrow the frontier is, so it grows much faster than area. At
+ * the old fills a 40x40 Hard board measured **697** where the tier asked for 45 —
+ * fifteen times over — and Extreme, Brutal and Nightmare could not be generated at
+ * all, because at that density nearly every board is a knot of mutual blocking
+ * that no amount of repair unpicks. Big boards are therefore *sparser* boards:
+ * roughly a fifth covered at Medium against a half at Nightmare. A 30x30 board with
+ * twenty-five snakes is spacious and fair, which is what Medium should be.
  *
- * **Gates arrived**, so the upper tiers have a second difficulty axis that is not
- * reading at all. `gateChance` is how often an `opens` gate is worth attempting;
- * shutter levels are placed deliberately rather than sampled — see `PLANNING_STEP`.
+ * **Bodies got much longer** — 2–4 cells at Tutorial to 6–28 at Nightmare. Long
+ * snakes are the main tracing burden, and they are also how a big board is filled
+ * without needing hundreds of them.
+ *
+ * **The blind-mistake ranges are measured, not chosen.** They come from
+ * `npx tsx tools/probe-tiers.ts`, which generates one sample per tier in seconds
+ * rather than the half hour a full build now takes. Change a size or a fill and
+ * they must be re-derived — a target that was right at one board size is off by an
+ * order of magnitude at another.
+ *
+ * **Gates** give the upper tiers a second difficulty axis that is not reading at
+ * all. `gateChance` is how often an `opens` gate is worth attempting; shutter
+ * levels are placed deliberately rather than sampled — see `PLANNING_STEP`.
  */
 const TIERS: Record<DifficultyTier, TierSpec> = {
   tutorial: {
     // Small and open on purpose. The only tier where a careless player should be
     // able to finish without losing a heart.
-    minSize: 6,
-    maxSize: 8,
-    minFill: 0.34,
-    maxFill: 0.46,
+    minSize: 8,
+    maxSize: 11,
+    minFill: 0.30,
+    maxFill: 0.40,
     minLen: 2,
     maxLen: 4,
     minBlind: 1,
@@ -139,10 +155,10 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   easy: {
     // Sized so even a narrow silhouette still carries 6+ snakes. An "easy" board
     // of three arrows is not easy, it is empty -- there is nothing to read.
-    minSize: 8,
-    maxSize: 10,
-    minFill: 0.48,
-    maxFill: 0.58,
+    minSize: 12,
+    maxSize: 16,
+    minFill: 0.26,
+    maxFill: 0.35,
     minLen: 2,
     maxLen: 5,
     minBlind: 3,
@@ -152,53 +168,53 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
     gateChance: 0,
   },
   casual: {
-    minSize: 9,
-    maxSize: 12,
-    minFill: 0.52,
-    maxFill: 0.62,
-    minLen: 2,
-    maxLen: 6,
+    minSize: 18,
+    maxSize: 24,
+    minFill: 0.23,
+    maxFill: 0.31,
+    minLen: 3,
+    maxLen: 8,
     minBlind: 6,
-    maxBlind: 12,
+    maxBlind: 13,
     hearts: 5,
     band: 2,
     gateChance: 0,
   },
   medium: {
-    minSize: 11,
-    maxSize: 14,
-    minFill: 0.56,
-    maxFill: 0.66,
+    minSize: 27,
+    maxSize: 32,
+    minFill: 0.21,
+    maxFill: 0.28,
     minLen: 3,
-    maxLen: 7,
-    minBlind: 11,
-    maxBlind: 19,
+    maxLen: 11,
+    minBlind: 12,
+    maxBlind: 24,
     hearts: 5,
     band: 2,
     gateChance: 0.15,
   },
   tricky: {
-    minSize: 13,
-    maxSize: 16,
-    minFill: 0.58,
-    maxFill: 0.68,
-    minLen: 3,
-    maxLen: 8,
-    minBlind: 18,
-    maxBlind: 30,
+    minSize: 32,
+    maxSize: 37,
+    minFill: 0.21,
+    maxFill: 0.29,
+    minLen: 4,
+    maxLen: 13,
+    minBlind: 20,
+    maxBlind: 38,
     hearts: 5,
     band: 3,
     gateChance: 0.25,
   },
   hard: {
-    minSize: 15,
-    maxSize: 18,
-    minFill: 0.6,
-    maxFill: 0.7,
-    minLen: 3,
-    maxLen: 9,
-    minBlind: 28,
-    maxBlind: 46,
+    minSize: 37,
+    maxSize: 42,
+    minFill: 0.25,
+    maxFill: 0.33,
+    minLen: 4,
+    maxLen: 15,
+    minBlind: 34,
+    maxBlind: 62,
     hearts: 5,
     band: 3,
     gateChance: 0.35,
@@ -206,53 +222,53 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   superHard: {
     // Past this size the board no longer fits a phone screen, and inspecting it
     // means panning and zooming. That is the tier's defining feature.
-    minSize: 17,
-    maxSize: 21,
-    minFill: 0.62,
-    maxFill: 0.72,
-    minLen: 4,
-    maxLen: 11,
-    minBlind: 42,
-    maxBlind: 70,
+    minSize: 46,
+    maxSize: 52,
+    minFill: 0.28,
+    maxFill: 0.37,
+    minLen: 5,
+    maxLen: 19,
+    minBlind: 56,
+    maxBlind: 100,
     hearts: 5,
     band: 4,
     gateChance: 0.4,
   },
   extremeHard: {
-    minSize: 21,
-    maxSize: 25,
-    minFill: 0.64,
-    maxFill: 0.74,
-    minLen: 4,
-    maxLen: 12,
-    minBlind: 65,
-    maxBlind: 110,
+    minSize: 50,
+    maxSize: 55,
+    minFill: 0.33,
+    maxFill: 0.42,
+    minLen: 5,
+    maxLen: 22,
+    minBlind: 92,
+    maxBlind: 158,
     hearts: 5,
     band: 4,
     gateChance: 0.45,
   },
   brutal: {
-    minSize: 24,
-    maxSize: 28,
-    minFill: 0.66,
-    maxFill: 0.76,
-    minLen: 4,
-    maxLen: 13,
-    minBlind: 95,
-    maxBlind: 155,
+    minSize: 54,
+    maxSize: 58,
+    minFill: 0.40,
+    maxFill: 0.50,
+    minLen: 6,
+    maxLen: 25,
+    minBlind: 150,
+    maxBlind: 235,
     hearts: 5,
     band: 5,
     gateChance: 0.5,
   },
   nightmare: {
-    minSize: 26,
-    maxSize: 30,
-    minFill: 0.68,
-    maxFill: 0.78,
-    minLen: 5,
-    maxLen: 14,
-    minBlind: 135,
-    maxBlind: 230,
+    minSize: 57,
+    maxSize: 60,
+    minFill: 0.46,
+    maxFill: 0.58,
+    minLen: 6,
+    maxLen: 28,
+    minBlind: 215,
+    maxBlind: 330,
     hearts: 5,
     band: 5,
     gateChance: 0.55,
@@ -499,6 +515,23 @@ function shapeLabel(shape: ShapeName): string {
 const USABLE_FRACTION = 0.6;
 
 /**
+ * Hard ceiling on how many snakes one level may contain.
+ *
+ * Nothing in the difficulty model wants this — by every metric, more arrows is
+ * more difficulty. It exists for the two things the model does not see.
+ *
+ * **Rendering.** Each snake is three or four SVG nodes, and a 60x60 board at the
+ * fill its tier asks for would want close to three hundred of them. That is a
+ * thousand nodes on a mid-range phone, redrawn on every tap.
+ *
+ * **Patience.** Clearing 300 snakes on one board is not a harder puzzle than
+ * clearing 110, it is the same puzzle four times over. Difficulty on the big
+ * boards comes from tracing long snakes through a tangle, which is what the raised
+ * body lengths are for.
+ */
+const MAX_ARROWS_PER_LEVEL = 110;
+
+/**
  * Turn a fill fraction into an arrow count the shape can actually hold.
  *
  * Sized off the mid-point of the length range, since growth lands between the
@@ -524,7 +557,7 @@ function arrowsFor(
   const averageLength = (minLen + maxLen) / 2;
   const byFill = Math.floor((capacity * fill) / averageLength);
   const byCapacity = Math.floor((capacity * USABLE_FRACTION) / minLen);
-  return Math.max(1, Math.min(Math.max(floor, byFill), byCapacity));
+  return Math.max(1, Math.min(Math.max(floor, byFill), byCapacity, MAX_ARROWS_PER_LEVEL));
 }
 
 /** Which mix band a level falls in. */
@@ -618,7 +651,11 @@ function buildOnboarding(): LevelPlan[] {
 
   for (let id = 1; id <= 20; id += 1) {
     const progress = (id - 1) / 19;
-    const size = Math.round(6 + progress * 5); // 6x6 up to 11x11
+    // Capped at 12 deliberately, even though every other tier grew. At the minimum
+    // cell size a 12-wide board is the largest that fits a phone without panning,
+    // and the first twenty levels are where a player is learning what an arrow even
+    // is. Making them learn the camera at the same time is one thing too many.
+    const size = Math.round(8 + progress * 4); // 8x8 up to 12x12
     const shape = ONBOARDING_SHAPES[id - 1] ?? 'free';
     const fill = 0.32 + progress * 0.2;
     // Bodies lengthen across the twenty as well as everything else: the first few
@@ -672,7 +709,7 @@ function buildMainRun(): LevelPlan[] {
     // that search is what decides whether the library builds in half a minute or
     // half an hour. It costs these levels nothing worth having: a shutter is about
     // sequence, and sequence is legible on a board you can see all at once.
-    if (planning) size = Math.min(size, 15);
+    if (planning) size = Math.min(size, 24);
 
     // Rotate rather than sample, so a silhouette cannot appear twice within a few
     // levels of itself. The skip loop matters now that the pool differs level to
@@ -700,7 +737,7 @@ function buildMainRun(): LevelPlan[] {
 
     // Bodies are capped on planning levels too, for the same reason — and because
     // a level asking two hard questions at once usually asks neither well.
-    const maxLen = planning ? Math.min(spec.maxLen, 7) : spec.maxLen;
+    const maxLen = planning ? Math.min(spec.maxLen, 9) : spec.maxLen;
     const minLen = Math.min(spec.minLen, maxLen);
 
     const gate: GatePlan | undefined = planning

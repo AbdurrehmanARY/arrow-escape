@@ -12,10 +12,16 @@
  *               far corner and tracing its ray across the board is the puzzle.
  *
  *               **Touch stays exact at every zoom level for free.** The board's
- *               per-cell touch targets live *inside* the transformed view, so the
- *               same matrix that scales the pixels scales the hit areas. Nothing
- *               here converts coordinates by hand, which is where this kind of
- *               feature usually goes wrong.
+ *               tap surface lives *inside* the transformed view, so the same matrix
+ *               that scales the pixels scales the hit area, and the tap's local
+ *               coordinates are already board coordinates. Nothing here converts
+ *               coordinates by hand, which is where this kind of feature usually
+ *               goes wrong.
+ *
+ *               **The pan gesture must not activate on a stationary finger.** See
+ *               `PAN_SLOP`. Without an activation threshold this component quietly
+ *               ate taps, because gesture-handler cancels whatever is underneath
+ *               the moment a pan claims the touch.
  *
  *               Clamping happens on the worklet thread during the gesture, not
  *               after it. Correcting afterwards produces a visible snap-back;
@@ -39,6 +45,15 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { clampScale, clampTranslation, fitScale as computeFitScale } from './camera';
+
+/**
+ * How far a finger may travel and still count as a tap rather than a drag, in dp.
+ *
+ * Shared with the board's tap gesture so the two agree on where the boundary is.
+ * If the tap allowed less than the pan, there would be a band of movement that is
+ * neither — a touch that does nothing at all, which reads as the game ignoring you.
+ */
+export const PAN_SLOP = 14;
 
 export interface BoardViewportProps {
   /** Natural, unscaled size of the board content. */
@@ -105,8 +120,24 @@ export function BoardViewport({
       runOnJS(report)(scale.value / fitScale);
     });
 
+  /**
+   * Drag to pan — but only after the finger has genuinely moved.
+   *
+   * The thresholds are the important part, and their absence was a real bug. A
+   * `Pan` with no activation offset claims the touch on the *first pixel* of
+   * movement, and gesture-handler then cancels whatever was underneath. Every real
+   * tap drifts a pixel or two, so the board was swallowing taps and the player had
+   * to tap again — on a game where a tap is the only verb, that is close to fatal.
+   *
+   * `PAN_SLOP` is the distance a finger may wander and still be a tap. Big enough
+   * to survive a thumb roll on a phone, small enough that a deliberate drag starts
+   * without feeling stuck.
+   */
   const pan = Gesture.Pan()
     .averageTouches(true)
+    .minDistance(PAN_SLOP)
+    .activeOffsetX([-PAN_SLOP, PAN_SLOP])
+    .activeOffsetY([-PAN_SLOP, PAN_SLOP])
     .onStart(() => {
       savedX.value = translateX.value;
       savedY.value = translateY.value;

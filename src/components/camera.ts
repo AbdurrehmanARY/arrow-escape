@@ -56,12 +56,30 @@ export function fitScale(
 }
 
 /**
+ * The closest a player may ever get, as an absolute scale.
+ *
+ * `maxZoom` is expressed relative to fit-to-screen, which is the right unit for a
+ * board that nearly fits: three and a half times a full view is plenty. It is the
+ * wrong unit for a board that does not fit at all. A 60x60 level fits at about
+ * 0.23, so a purely relative ceiling of 3.5x tops out at 0.8 — the player could
+ * never reach the size the cells were designed at, on precisely the boards where
+ * reading a single arrowhead matters most.
+ *
+ * So the ceiling is whichever is larger: the relative allowance, or this. At 1:1 a
+ * cell is drawn at its intended size, and a little beyond that is useful for
+ * picking apart a knot.
+ */
+const MIN_MAX_SCALE = 1.75;
+
+/**
  * Hold a scale inside the usable range.
  *
  * The floor is fit-to-screen: zooming out past it would only add empty margin and
- * shrink the board inside it, which is never what someone wants.
+ * shrink the board inside it, which is never what someone wants. The ceiling is
+ * `maxZoom` times fit, but never less than `MIN_MAX_SCALE`.
  */
 export function clampScale(value: number, fit: number, maxZoom: number): number {
   'worklet';
-  return Math.min(fit * maxZoom, Math.max(fit, value));
+  const ceiling = Math.max(fit * maxZoom, MIN_MAX_SCALE);
+  return Math.min(ceiling, Math.max(fit, value));
 }

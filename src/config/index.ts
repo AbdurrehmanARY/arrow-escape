@@ -56,5 +56,9 @@ export const UNLOCK_ALL_LEVELS = true;
  * slapping a modal over it instantly throws that away. This is long enough for
  * the exit animation to finish and the celebration to reach its peak, short
  * enough that it never feels like waiting.
+ *
+ * **Must stay comfortably above `RELEASE_MS`.** If the overlay can arrive before
+ * the last snake has left, the one moment this delay exists to protect is the one
+ * moment it covers up.
  */
-export const WIN_OVERLAY_DELAY_MS = 900;
+export const WIN_OVERLAY_DELAY_MS = 1150;

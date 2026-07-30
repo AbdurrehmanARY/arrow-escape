@@ -232,21 +232,25 @@ export default function PlayScreen() {
   }, [assist, coach, built, hintedArrow, state.session.state, status]);
 
   /**
-   * Rejects a second delivery of the same tap.
+   * Rejects a repeat of the *same* arrow within one animation frame or two.
    *
-   * Belt and braces alongside removing the double-tap gesture: a wrong tap costs
-   * a heart, so any duplicate delivery from any source is a heart the player did
-   * not spend. Short enough that a deliberate re-tap still registers.
+   * Narrower than it used to be, and deliberately so. The old guard rejected any
+   * tap within 120ms of any other, which stopped duplicate delivery and also
+   * stopped a player tapping two different arrows in quick succession — the exact
+   * complaint that "I have to tap more than once". Duplicate delivery is no longer
+   * possible now that the board uses a single gesture-handler tap rather than
+   * `Pressable`s nested inside a `GestureDetector`, so all this needs to catch is a
+   * genuine double-fire on one arrow.
    */
-  const lastTapAt = useRef(0);
+  const lastTap = useRef<{ index: number; at: number }>({ index: -1, at: 0 });
 
   const onTapArrow = useCallback(
     (index: number) => {
       if (!built?.ok) return;
 
       const now = Date.now();
-      if (now - lastTapAt.current < 120) return;
-      lastTapAt.current = now;
+      if (lastTap.current.index === index && now - lastTap.current.at < 60) return;
+      lastTap.current = { index, at: now };
 
       setHintedArrow(undefined);
       setHintNotice(undefined);
@@ -413,8 +417,8 @@ export default function PlayScreen() {
             blockedArrow={state.highlight?.blocked}
             blockerArrow={state.highlight?.blocker}
             shakeNonce={state.highlight?.nonce ?? 0}
-            departingArrow={state.departing}
-            onDepartComplete={() => dispatch({ type: 'departed' })}
+            departingArrows={state.departing}
+            onDepartComplete={(arrowIndex) => dispatch({ type: 'departed', arrowIndex })}
             reducedMotion={reducedMotion}
             onTapArrow={onTapArrow}
             disabled={status !== 'playing'}

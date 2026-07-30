@@ -152,6 +152,43 @@ function sampleArt(rows: number, cols: number, artRows: readonly string[]): Shap
 }
 
 /**
+ * Sample a field shape onto a target grid, supersampled like the bitmaps.
+ *
+ * One sample per cell centre is the obvious implementation and it has a failure
+ * mode that is invisible until it bites: when a periodic pattern's period is
+ * commensurate with the grid, *every* cell centre lands in the same phase. Both
+ * `starTiling` at 16x16 and `lattice` at 20x20 came out completely empty that way
+ * — not thin, not ugly, empty — because every sample fell a hundredth below the
+ * threshold. Nothing about the shapes was wrong; the sampling was aliasing.
+ *
+ * Averaging over a patch removes the resonance, and it also does for fields what
+ * it already did for bitmaps: a feature thinner than a cell now survives as long
+ * as it covers a fair share of one, instead of depending on where its centre fell.
+ */
+function sampleField(rows: number, cols: number, field: (u: number, v: number) => boolean): ShapeMask {
+  const mask: ShapeMask = new Array<boolean>(rows * cols).fill(false);
+  const SUB = 3;
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      let hits = 0;
+      for (let sr = 0; sr < SUB; sr += 1) {
+        for (let sc = 0; sc < SUB; sc += 1) {
+          const u = ((col + (sc + 0.5) / SUB) / cols) * 2 - 1;
+          const v = ((row + (sr + 0.5) / SUB) / rows) * 2 - 1;
+          if (field(u, v)) hits += 1;
+        }
+      }
+      // Same slightly-under-half threshold as `sampleArt`, so a thin stroke
+      // straddling a cell boundary survives rather than vanishing on a tie.
+      mask[index(row, col, cols)] = hits >= 4;
+    }
+  }
+
+  return mask;
+}
+
+/**
  * Drop cells no snake could ever use.
  *
  * A body is at least two cells long, so a masked cell with no masked neighbour is
@@ -262,14 +299,7 @@ export function maskFor(
     proceduralById(shape)?.field(rows, cols);
 
   if (field) {
-    mask = new Array<boolean>(rows * cols).fill(false);
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        const u = ((col + 0.5) / cols) * 2 - 1;
-        const v = ((row + 0.5) / rows) * 2 - 1;
-        mask[index(row, col, cols)] = field(u, v);
-      }
-    }
+    mask = sampleField(rows, cols, field);
   } else {
     const artwork = shapeArtById(shape);
     if (!artwork) {
@@ -285,6 +315,16 @@ export function maskFor(
   pruneIsolated(mask, rows, cols);
   pruneSmallRegions(mask, rows, cols, options.minRegion ?? 4);
   pruneIsolated(mask, rows, cols);
+
+  // A silhouette that leaves almost nothing at this size cannot hold a level, and
+  // an empty mask makes a level that cannot be generated at all. Falling back to
+  // the open board keeps the build moving; the shape is still named in the level
+  // data and in `npm run shapes:inspect`, so a shape that degenerates is visible
+  // rather than silently producing a broken plan.
+  if (maskCapacity(mask) < rows * cols * 0.08) {
+    return new Array<boolean>(rows * cols).fill(true);
+  }
+
   return mask;
 }
 
