@@ -171,9 +171,7 @@ export function fitCellSize(
   maxWidth: number,
   maxHeight: number,
 ): number {
-  return Math.floor(
-    Math.min(maxWidth / (cols + padCells * 2), maxHeight / (rows + padCells * 2)),
-  );
+  return Math.floor(Math.min(maxWidth / (cols + padCells * 2), maxHeight / (rows + padCells * 2)));
 }
 
 export interface BoardLayout {

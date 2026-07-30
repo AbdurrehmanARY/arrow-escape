@@ -139,15 +139,32 @@ faster, because only changed modules are re-sent.
 4. **Spend all five hearts.** The fail screen appears and says the board was still
    winnable — because on every level without a shutter gate, it is. Check that
    reads as fair rather than as the game cheating.
-5. **Clear a level.** The board empties, confetti fires, and *then* the win
-   screen arrives a beat later — you should see the last snake leave. Clear one
-   without a single wrong tap and the burst is bigger and gold-flecked.
+5. **Clear a level.** The board empties and the win screen arrives a beat later —
+   you should see the last snake leave before anything covers it. **The confetti
+   is gone**, by request; the delay it used to share the moment with is not, since
+   that is the half that protects the animation.
 6. **Clear two in a row cleanly** — the win screen starts showing a perfect-read
    streak from two upward.
 7. **Open the record screen** (★ on the menu, or tap the stat tiles) to see how
    the 600 are going.
 8. **Force-quit and reopen.** You should land back where you were with progress
    and hints intact.
+
+### The pause menu — new
+
+The play screen used to carry a back button, a settings button and a hint count
+along its top edge. All three are gone; there is one **pause button** at the top
+left instead, and the sheet behind it holds Resume, Restart, Settings, and Leave.
+
+- It shows the level, its **tier name**, board size, hearts left, and how many
+  arrows are out — the last of which the play screen now also shows as a thin bar
+  under the level name. On a 60×60 board "how much is left" was a question nothing
+  on screen could answer.
+- **Tapping the dimmed background resumes.** Nobody opens a pause menu meaning to
+  lose their place, so the easiest gesture is the harmless one.
+- **Restart is deliberately not the highlighted button.** It is the destructive
+  option, and a sheet that opens with the destructive option glowing trains people
+  to tap it by reflex.
 
 ### Jumping around
 

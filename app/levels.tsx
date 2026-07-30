@@ -20,7 +20,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { IconButton, Screen, useTheme } from '@components';
+import { Screen, ScreenHeader, useTheme } from '@components';
 import { TIER_BANDS, TIER_LABELS, type DifficultyTier } from '@game/codec';
 import { ENCODED_LEVELS, LEVEL_COUNT } from '@data/levels';
 import { CHAPTERS, chapterOf, chapterProgress, isChapterOpen, type Chapter } from '@data/chapters';
@@ -104,23 +104,13 @@ export default function LevelSelectScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
-        <IconButton
-          palette={palette}
-          glyph="←"
-          label={openChapter ? 'Back to chapters' : 'Back'}
-          onPress={() => (openChapter ? setOpenChapter(null) : router.back())}
-        />
-        <View style={styles.headerCentre}>
-          <Text style={[styles.title, { color: palette.text }]}>
-            {openChapter ? openChapter.name : 'Levels'}
-          </Text>
-          <Text style={[styles.subtitle, { color: palette.textFaint }]}>
-            {openChapter ? openChapter.tagline : `${clearedTotal} of ${LEVEL_COUNT} cleared`}
-          </Text>
-        </View>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader
+        palette={palette}
+        title={openChapter ? openChapter.name : 'Levels'}
+        subtitle={openChapter ? openChapter.tagline : `${clearedTotal} of ${LEVEL_COUNT} cleared`}
+        backLabel={openChapter ? 'Back to chapters' : 'Back'}
+        onBack={() => (openChapter ? setOpenChapter(null) : router.back())}
+      />
 
       {UNLOCK_ALL_LEVELS ? (
         <JumpToLevel palette={palette} onJump={(id) => router.push(`/play/${id}`)} />
@@ -428,12 +418,6 @@ function LevelTile({
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerCentre: { alignItems: 'center', flex: 1 },
-  headerSpacer: { width: 44 },
-  title: { ...typography.title },
-  subtitle: { ...typography.tiny, marginTop: 1 },
-
   testingBar: {
     marginTop: spacing.md,
     borderWidth: 1,

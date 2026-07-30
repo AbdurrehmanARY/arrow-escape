@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 17 — gates and shutters, ten tiers, 114-silhouette shape library.
+> **Last updated:** end of Phase 18 — pause menu, celebration removed, one shared screen header.
 
 ---
 
@@ -64,7 +64,7 @@ monotone; they buy dependency *depth*, not risk.
 14. **Hints are "the first move of a winning line"**, so a hint provably cannot cost a heart.
 15. **A theme is data.** Palette + ArrowStyle + BoardStyle, all ratios of one cell; **the renderer never branches on a theme's id**.
 16. **Drawing maths is a pure module** (`arrowGeometry.ts`), unit-tested, and shared with the off-device theme preview.
-17. **Touch targets are real `Pressable` views**, one per occupied cell — not SVG `onPress`, which hit-tests inconsistently across platforms.
+17. ~~**Touch targets are real `Pressable` views**, one per occupied cell — not SVG `onPress`, which hit-tests inconsistently across platforms.~~ **Superseded — see 61 and 62.** The half about avoiding SVG `onPress` still holds; the `Pressable`-per-cell half was the cause of two separate touch bugs and is gone.
 18. **Arrow counts in the curriculum are derived from mask capacity, never declared.** A snake occupies several cells; "18 arrows" inside a 56-cell heart is arithmetic, not design. `npm run levels:check` proves every plan fits before generating.
 19. **High difficulty is many moderate snakes, not a few enormous ones.** A long rope is easy to follow; a dense field of similar short ones is where tracing genuinely hurts. Grids grow faster than bodies across the curve.
 20. **Unlocking is derived from the completed set, never stored** — a stored "highest unlocked" can drift and lock a player out of levels they finished.
@@ -121,7 +121,15 @@ monotone; they buy dependency *depth*, not risk.
 67. **Sampling a periodic field at cell centres aliases catastrophically.** When a pattern's period is commensurate with the grid, every sample lands in the same phase: `starTiling` at 16x16 and `lattice` at 20x20 came out *completely empty*, every sample a hundredth below the threshold. Field shapes are supersampled like the bitmaps now, and a mask that still comes out near-empty falls back to the open board rather than producing an ungeneratable level.
 68. **The repair pass has to scale with the board.** A fixed forty flips is right for a knot of four and hopeless for a knot of sixty; level 21 simply failed to build. It now flips a quarter of the knot per round, with a budget proportional to arrow count, and drops back to single flips for the last quarter of its rounds.
 
+### Added in the UI pass
+69. **The play screen has one row of chrome, not two.** Back, settings and the hint count were three tap targets along the top edge of a screen whose only verb is "tap an arrow", and none of them was ever wanted mid-move. They are behind a single pause button now.
+70. **A pause menu is worth building even with no clock to stop.** "Pause" is a slight misnomer — nothing is running — but it is the word players look for when they want to stop and do something else, and a truer one would be accurate and useless.
+71. **Restart is not the primary action on the pause sheet.** It is the most destructive option there, and a sheet that opens with the destructive option highlighted trains people to tap it by reflex. Tapping the scrim resumes, because nobody opens a pause menu meaning to lose their place.
+72. **The HUD needs a progress bar now that boards are 60x60.** An arrows-left count says nothing without knowing the starting number, and on a board four screens wide "am I nearly done" was a question nothing on screen could answer.
+73. **Three screens had each hand-rolled the same header**, including three copies of a `width: 44` spacer to fake optical centring against the back button. `ScreenHeader` centres on the layout instead, so the title does not shift depending on what is in the right-hand slot.
+
 ### Reversed along the way
+- **The celebration was removed in the UI pass**, by request — `Celebration.tsx` and its sixty confetti pieces are gone. The 900ms win-overlay delay it shared the moment with was *kept*, and is now 1150ms: the particles were decoration, but the pause is what stops a modal landing on top of the last snake threading out. In git history at `acd4fa6`.
 - The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`. Phase 15 revisited the same goal and reached it by a different route — see decision 47.
 - A two-pass snake growth fallback (retry leftover corridors at a shorter minimum length) was written for the perforated shapes, then **removed**: the rebuild came back byte-identical, because arrow counts were already being met. The undershoot was structural, not density.
 - Filtering demanding tiers on **island count alone** was tried and **reverted** — it made the top tiers measurably easier. See decision 56.

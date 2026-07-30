@@ -5,10 +5,11 @@ snaking bodies with an arrowhead at one end. Tap one and it threads out through
 its head, but only if the straight line from that head to the board edge is clear.
 Misread it and it costs a heart. Five wrong reads and the level is over.
 
-**Status:** code-complete — **600 solver-verified levels** across 74 silhouettes
-and five difficulty tiers, six themes, animation, hearts, hints, persistence,
-first-run teaching, chapters, celebrations, streaks, and a record screen. What remains needs accounts and
-assets: audio files, AdMob, and a Play listing. See
+**Status:** code-complete — **600 solver-verified levels** across 114 silhouettes
+and ten difficulty tiers, boards from 8×8 to 60×60, colour gates that make tap
+order matter on 40 of them, six themes, animation, hearts, hints, persistence,
+first-run teaching, chapters, streaks, and a record screen. What remains needs
+accounts and assets: audio files, AdMob, and a Play listing. See
 [docs/RELEASE.md](docs/RELEASE.md).
 
 ---

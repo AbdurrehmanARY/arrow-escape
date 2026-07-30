@@ -38,10 +38,7 @@ export const CoachCard = memo(function CoachCard({
   return (
     <View
       accessibilityRole="alert"
-      style={[
-        styles.card,
-        { backgroundColor: palette.accentMuted, borderColor: palette.accent },
-      ]}
+      style={[styles.card, { backgroundColor: palette.accentMuted, borderColor: palette.accent }]}
     >
       <View style={styles.text}>
         <Text style={[styles.title, { color: palette.text }]}>{title}</Text>

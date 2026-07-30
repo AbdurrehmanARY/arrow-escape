@@ -20,7 +20,7 @@ import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { IconButton, Screen, useTheme } from '@components';
+import { Screen, ScreenHeader, useTheme } from '@components';
 import { TIER_LABELS, TIER_ORDER, type DifficultyTier } from '@game/codec';
 import { ENCODED_LEVELS, LEVEL_COUNT } from '@data/levels';
 import { CHAPTERS, chapterProgress } from '@data/chapters';
@@ -50,9 +50,7 @@ export default function StatsScreen() {
   const chaptersDone = useMemo(
     () =>
       CHAPTERS.filter((chapter) => {
-        const { cleared: done, total } = chapterProgress(chapter, (id) =>
-          isCleared(records, id),
-        );
+        const { cleared: done, total } = chapterProgress(chapter, (id) => isCleared(records, id));
         return done === total;
       }).length,
     [records],
@@ -76,11 +74,12 @@ export default function StatsScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
-        <IconButton palette={palette} glyph="←" label="Back" onPress={() => router.back()} />
-        <Text style={[styles.title, { color: palette.text }]}>Record</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader
+        palette={palette}
+        title="Record"
+        {...(started ? { subtitle: `${cleared} of ${LEVEL_COUNT} cleared` } : {})}
+        onBack={() => router.back()}
+      />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {!started ? (
@@ -90,9 +89,20 @@ export default function StatsScreen() {
         ) : null}
 
         <View style={styles.tiles}>
-          <Tile palette={palette} value={`${cleared}`} of={`/ ${LEVEL_COUNT}`} label="levels cleared" wide />
+          <Tile
+            palette={palette}
+            value={`${cleared}`}
+            of={`/ ${LEVEL_COUNT}`}
+            label="levels cleared"
+            wide
+          />
           <Tile palette={palette} value={`${quality.perfect}`} label="perfect reads" />
-          <Tile palette={palette} value={`${chaptersDone}`} of={`/ ${CHAPTERS.length}`} label="chapters done" />
+          <Tile
+            palette={palette}
+            value={`${chaptersDone}`}
+            of={`/ ${CHAPTERS.length}`}
+            label="chapters done"
+          />
         </View>
 
         <Section palette={palette} title="Streak">
@@ -112,9 +122,27 @@ export default function StatsScreen() {
         </Section>
 
         <Section palette={palette} title="How you clear them">
-          <Bar palette={palette} label="Perfect — no wrong taps" value={quality.perfect} total={cleared} color={palette.success} />
-          <Bar palette={palette} label="Clean — one or two" value={quality.clean} total={cleared} color={palette.accent} />
-          <Bar palette={palette} label="Scraped through" value={quality.scraped} total={cleared} color={palette.arrowBlocker} />
+          <Bar
+            palette={palette}
+            label="Perfect — no wrong taps"
+            value={quality.perfect}
+            total={cleared}
+            color={palette.success}
+          />
+          <Bar
+            palette={palette}
+            label="Clean — one or two"
+            value={quality.clean}
+            total={cleared}
+            color={palette.accent}
+          />
+          <Bar
+            palette={palette}
+            label="Scraped through"
+            value={quality.scraped}
+            total={cleared}
+            color={palette.arrowBlocker}
+          />
           <Text style={[styles.note, { color: palette.textFaint }]}>
             Counted from your best run on each level, so it only ever improves.
           </Text>
@@ -188,7 +216,9 @@ function Section({
   return (
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: palette.textFaint }]}>{title.toUpperCase()}</Text>
-      <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+      <View
+        style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}
+      >
         {children}
       </View>
     </View>
@@ -237,9 +267,6 @@ function Line({ palette, label, value }: { palette: Palette; label: string; valu
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerSpacer: { width: 44 },
-  title: { ...typography.title },
   scroll: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
   empty: { ...typography.body, textAlign: 'center', marginBottom: spacing.lg },
 

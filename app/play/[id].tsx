@@ -20,12 +20,11 @@ import * as Haptics from 'expo-haptics';
 import {
   BoardCanvas,
   BoardViewport,
-  Celebration,
   CoachCard,
   ConfirmDialog,
   FailOverlay,
   Hud,
-  IconButton,
+  PauseMenu,
   PillButton,
   Screen,
   StuckOverlay,
@@ -41,7 +40,8 @@ import {
   isDoomed,
   resolveTap,
 } from '@game';
-import { LEVEL_COUNT, levelById } from '@data/levels';
+import { LEVEL_COUNT, levelById, tierOf } from '@data/levels';
+import { TIER_LABELS } from '@game/codec';
 import { WIN_OVERLAY_DELAY_MS } from '@config';
 import { availability, preload, showRewarded } from '@services/ads';
 import { playSfx } from '@services/audio';
@@ -87,6 +87,9 @@ export default function PlayScreen() {
   const setLastPlayed = useProgressStore((state) => state.setLastPlayed);
 
   const level = levelById(levelId);
+  // Read from the encoded pack rather than the decoded level: the tier is metadata
+  // and `tierOf` does not pay to expand a 3,600-cell board to answer.
+  const tierLabel = TIER_LABELS[tierOf(levelId) ?? 'medium'];
   const built = useMemo(() => (level ? buildLevel(level) : undefined), [level]);
 
   const hearts = level?.hearts ?? 5;
@@ -103,12 +106,15 @@ export default function PlayScreen() {
   /**
    * The overlay waits a beat after the win so the board clearing is visible.
    *
-   * This is the only piece of win presentation that needs its own state — the
-   * celebration is simply "has this level been won", derived below.
+   * This outlived the confetti it was originally introduced alongside, and it is
+   * the more important half of the pair: the last snake threading out is the
+   * satisfying moment, and a modal arriving on top of it is what threw that away.
+   * The particles were the decoration; the pause is the thing worth keeping.
    */
   const [overlayVisible, setOverlayVisible] = useState(false);
   /** Bumped to send the board back to fit-to-screen. */
   const [fitNonce, setFitNonce] = useState(0);
+  const [paused, setPaused] = useState(false);
 
   const status = state.session.status;
 
@@ -193,8 +199,8 @@ export default function PlayScreen() {
     playSfx('win');
     if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // The celebration fires from the win itself. Only the overlay is delayed, so
-    // the board clearing is visible before anything covers it.
+    // Only the overlay is delayed, so the board clearing is visible before
+    // anything covers it.
     const timer = setTimeout(() => setOverlayVisible(true), WIN_OVERLAY_DELAY_MS);
     return () => clearTimeout(timer);
   }, [status, levelId, completeLevel, state.session.mistakes, state.session.heartsLeft, haptics]);
@@ -364,34 +370,24 @@ export default function PlayScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
-        <IconButton
-          palette={palette}
-          glyph="←"
-          label="Back to levels"
-          onPress={() => router.replace('/levels')}
-        />
-        <View style={styles.headerRight}>
-          <View style={styles.hintChip}>
-            <Text style={[styles.hintGlyph, { color: palette.accent }]}>💡</Text>
-            <Text style={[styles.hintCount, { color: palette.text }]}>{hintsAvailable}</Text>
-          </View>
-          <IconButton
-            palette={palette}
-            glyph="⚙"
-            label="Settings"
-            onPress={() => router.push('/settings')}
-          />
-        </View>
-      </View>
+      {/*
+        One row of chrome above the board, not two.
 
+        Everything that led away from the level — back, settings — is behind the
+        pause button now. Those were three tap targets along the top edge of a
+        screen whose only verb is "tap an arrow", and none of them was ever wanted
+        mid-move.
+      */}
       <Hud
         palette={palette}
         levelName={level.name}
         levelNumber={level.id}
+        tierLabel={tierLabel}
         heartsLeft={state.session.heartsLeft}
         maxHearts={state.session.maxHearts}
         arrowsLeft={state.session.state.remaining}
+        arrowsTotal={built.value.board.arrows.length}
+        onPause={() => setPaused(true)}
       />
 
       <View style={styles.boardWrap}>
@@ -489,11 +485,28 @@ export default function PlayScreen() {
         </Pressable>
       ) : null}
 
-      <Celebration
-        active={status === 'won'}
-        intensity={state.session.mistakes === 0 ? 'perfect' : 'normal'}
+      <PauseMenu
         palette={palette}
-        reducedMotion={reducedMotion}
+        visible={paused && status === 'playing'}
+        levelNumber={level.id}
+        levelName={level.name}
+        tierLabel={tierLabel}
+        boardRows={built.value.board.rows}
+        boardCols={built.value.board.cols}
+        arrowsLeft={state.session.state.remaining}
+        arrowsTotal={built.value.board.arrows.length}
+        heartsLeft={state.session.heartsLeft}
+        maxHearts={state.session.maxHearts}
+        onResume={() => setPaused(false)}
+        onRestart={() => {
+          setPaused(false);
+          onRestartPressed();
+        }}
+        onSettings={() => {
+          setPaused(false);
+          router.push('/settings');
+        }}
+        onLevels={() => router.replace('/levels')}
       />
 
       <WinOverlay
@@ -539,17 +552,6 @@ export default function PlayScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  hintChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  hintGlyph: { fontSize: 15 },
-  hintCount: { ...typography.heading },
-
   boardWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   panRow: {
     flexDirection: 'row',

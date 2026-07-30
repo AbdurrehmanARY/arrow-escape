@@ -58,6 +58,62 @@ export function Screen({ children, scroll = false, padded = true }: ScreenProps)
   );
 }
 
+export interface ScreenHeaderProps {
+  palette: Palette;
+  title: string;
+  /** One line under the title. Omitted rather than left blank when there is none. */
+  subtitle?: string;
+  /** Back action. Omit for a screen with nothing behind it. */
+  onBack?: () => void;
+  backLabel?: string;
+  /** Anything that belongs on the right — usually one `IconButton`. */
+  right?: ReactNode;
+}
+
+/**
+ * The header every non-game screen wears.
+ *
+ * Three screens had written this out by hand, each with its own copy of the same
+ * `headerSpacer: { width: 44 }` hack to keep the title optically centred against
+ * the back button. Three copies of a magic number is three chances for one of them
+ * to drift, and it had already produced three slightly different vertical rhythms.
+ *
+ * The centring is done properly here: both flanks reserve the same width, so the
+ * title is centred against the *layout* rather than against whatever happens to be
+ * in the right-hand slot.
+ */
+export function ScreenHeader({
+  palette,
+  title,
+  subtitle,
+  onBack,
+  backLabel = 'Back',
+  right,
+}: ScreenHeaderProps) {
+  return (
+    <View style={styles.header}>
+      <View style={styles.flank}>
+        {onBack ? (
+          <IconButton palette={palette} glyph="←" label={backLabel} onPress={onBack} />
+        ) : null}
+      </View>
+
+      <View style={styles.headerCentre}>
+        <Text style={[styles.headerTitle, { color: palette.text }]} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle === undefined ? null : (
+          <Text style={[styles.headerSubtitle, { color: palette.textFaint }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
+
+      <View style={[styles.flank, styles.flankEnd]}>{right}</View>
+    </View>
+  );
+}
+
 export interface IconButtonProps {
   palette: Palette;
   glyph: string;
@@ -94,6 +150,20 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   body: { flex: 1 },
   pressed: { opacity: 0.6 },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    minHeight: MIN_TOUCH_TARGET,
+  },
+  // Equal, fixed-width flanks so the title sits centred on the screen rather than
+  // on whatever the right-hand slot happens to contain.
+  flank: { width: MIN_TOUCH_TARGET, flexShrink: 0 },
+  flankEnd: { alignItems: 'flex-end' },
+  headerCentre: { flexGrow: 1, flexShrink: 1, minWidth: 0, alignItems: 'center' },
+  headerTitle: { ...typography.title },
+  headerSubtitle: { ...typography.small, marginTop: 1 },
   icon: {
     width: MIN_TOUCH_TARGET,
     height: MIN_TOUCH_TARGET,

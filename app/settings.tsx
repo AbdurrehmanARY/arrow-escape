@@ -15,7 +15,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { ConfirmDialog, IconButton, Screen, useTheme } from '@components';
+import { ConfirmDialog, Screen, ScreenHeader, useTheme } from '@components';
 import { APP_VERSION } from '@config';
 import { hasAudioAssets } from '@services/audio';
 import { clearAll } from '@services/storage';
@@ -48,11 +48,7 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
-        <IconButton palette={palette} glyph="←" label="Back" onPress={() => router.back()} />
-        <Text style={[styles.title, { color: palette.text }]}>Settings</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader palette={palette} title="Settings" onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Section palette={palette} title="Look">
@@ -196,7 +192,9 @@ function Section({
   return (
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: palette.textFaint }]}>{title.toUpperCase()}</Text>
-      <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+      <View
+        style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.border }]}
+      >
         {children}
       </View>
     </View>
@@ -237,9 +235,6 @@ function Toggle({
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerSpacer: { width: 44 },
-  title: { ...typography.title },
   scroll: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
 
   section: { marginBottom: spacing.xl },
