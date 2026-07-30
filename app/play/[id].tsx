@@ -250,6 +250,19 @@ export default function PlayScreen() {
    */
   const lastTap = useRef<{ index: number; at: number }>({ index: -1, at: 0 });
 
+  /**
+   * Stable across renders, deliberately.
+   *
+   * Every arrow on the board receives this, and `ArrowSnake` is memoised. An inline
+   * arrow function here would be a fresh identity on every render of this screen,
+   * which defeats that memo for every snake — ninety needless re-renders per tap on
+   * the largest boards, and nothing anywhere would report it.
+   */
+  const onDepartComplete = useCallback(
+    (arrowIndex: number) => dispatch({ type: 'departed', arrowIndex }),
+    [],
+  );
+
   const onTapArrow = useCallback(
     (index: number) => {
       if (!built?.ok) return;
@@ -414,7 +427,7 @@ export default function PlayScreen() {
             blockerArrow={state.highlight?.blocker}
             shakeNonce={state.highlight?.nonce ?? 0}
             departingArrows={state.departing}
-            onDepartComplete={(arrowIndex) => dispatch({ type: 'departed', arrowIndex })}
+            onDepartComplete={onDepartComplete}
             reducedMotion={reducedMotion}
             onTapArrow={onTapArrow}
             disabled={status !== 'playing'}

@@ -52,6 +52,7 @@
     "levels:validate": "tsx tools/validate.ts",
     "levels:check": "tsx tools/check-curriculum.ts",
     "levels:probe": "tsx tools/probe-tiers.ts",
+    "bench": "tsx tools/bench.ts",
     "start:clear": "expo start --clear",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",

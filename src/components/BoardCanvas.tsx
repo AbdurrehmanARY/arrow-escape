@@ -50,6 +50,22 @@ import { PAN_SLOP } from './BoardViewport';
  */
 const TAP_TOLERANCE_CELLS = 0.85;
 
+/**
+ * Above this many snakes, arrows drop their shadow and gloss highlight.
+ *
+ * Each of those is an extra full-length `<Polyline>` with round joins at a real
+ * stroke width, so on a ninety-snake board they are most of the draw cost and none
+ * of the information. They are also the least visible things on exactly those
+ * boards: a big level is played zoomed out, where a shadow offset of a twentieth
+ * of a cell lands well inside one screen pixel.
+ *
+ * This is a *node budget*, not a style decision, which is why it lives here rather
+ * than in the theme. A theme says what an arrow looks like; this says how much the
+ * renderer can afford to spend saying it. The threshold sits above every board that
+ * fits a screen, so the levels a player studies up close are untouched.
+ */
+const SIMPLIFY_ABOVE_ARROWS = 45;
+
 export interface BoardCanvasProps {
   board: Board;
   state: BoardState;
@@ -396,6 +412,52 @@ function BoardCanvasInner({
     return nodes;
   }, [board, state, cellSize, cols, originX, originY, palette]);
 
+  const simplified = board.arrows.length > SIMPLIFY_ABOVE_ARROWS;
+
+  /**
+   * Screen-reader handles, one per arrow rather than one per cell.
+   *
+   * `pointerEvents="none"` is load-bearing: these must never take part in touch
+   * handling. Mixing React Native's touch system with gesture-handler is what made
+   * taps unreliable in the first place, and reintroducing it for accessibility
+   * would trade a problem everyone has for a benefit few can use.
+   * `onAccessibilityTap` is delivered by the accessibility service directly, so it
+   * still works from an assistive gesture.
+   *
+   * Memoised because it is ninety views on a large board and it depends only on
+   * *which* arrows are present, not on anything that changes within a tap. Rebuilt
+   * inline it was the largest piece of per-tap render work outside the arrows.
+   *
+   * This will not make the game playable with a screen reader — it is a puzzle
+   * about visually tracing a line through a tangle — but naming the arrows and
+   * their directions is meaningfully better than an unlabelled canvas.
+   */
+  const accessibilityHandles = useMemo(
+    () =>
+      drawnArrows.map((index) => {
+        const arrow = board.arrows[index]!;
+        const head = arrow.body[0]!;
+        return (
+          <View
+            key={`a11y-${arrow.id}`}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={`Arrow ${arrow.id}, ${arrow.body.length} cells, pointing ${arrow.dir}`}
+            onAccessibilityTap={() => onTapArrow(index)}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: originX + colOf(head, cols) * cellSize,
+              top: originY + rowOf(head, cols) * cellSize,
+              width: cellSize,
+              height: cellSize,
+            }}
+          />
+        );
+      }),
+    [drawnArrows, board, cols, cellSize, originX, originY, onTapArrow],
+  );
+
   const visualFor = (index: number): ArrowVisualState => {
     if (index === blockedArrow) return 'blocked';
     if (index === blockerArrow) return 'blocker';
@@ -455,9 +517,13 @@ function BoardCanvasInner({
             palette={palette}
             visual={visualFor(index)}
             departing={departingArrows?.includes(index) ?? false}
-            {...(onDepartComplete ? { onDepartComplete: () => onDepartComplete(index) } : {})}
+            // Passed straight through, never wrapped. A wrapper closure here is a
+            // new prop identity per arrow per render, which silently kills the
+            // `memo` on `ArrowSnake` for the whole board.
+            {...(onDepartComplete ? { onDepartComplete } : {})}
             shakeNonce={index === blockedArrow ? shakeNonce : 0}
             pressedArrow={pressedArrow}
+            simplified={simplified}
             reducedMotion={reducedMotion}
           />
         ))}
@@ -502,29 +568,7 @@ function BoardCanvasInner({
         about visually tracing a line through a tangle — but naming the arrows and
         their directions is meaningfully better than an unlabelled canvas.
       */}
-      {disabled
-        ? null
-        : drawnArrows.map((index) => {
-            const arrow = board.arrows[index]!;
-            const head = arrow.body[0]!;
-            return (
-              <View
-                key={`a11y-${arrow.id}`}
-                accessible
-                accessibilityRole="button"
-                accessibilityLabel={`Arrow ${arrow.id}, ${arrow.body.length} cells, pointing ${arrow.dir}`}
-                onAccessibilityTap={() => onTapArrow(index)}
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  left: originX + colOf(head, cols) * cellSize,
-                  top: originY + rowOf(head, cols) * cellSize,
-                  width: cellSize,
-                  height: cellSize,
-                }}
-              />
-            );
-          })}
+      {disabled ? null : accessibilityHandles}
     </View>
   );
 }

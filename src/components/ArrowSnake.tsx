@@ -75,8 +75,14 @@ export interface ArrowSnakeProps {
   visual: ArrowVisualState;
   /** True while this arrow is leaving the board. */
   departing?: boolean;
-  /** Called once the release animation has finished. */
-  onDepartComplete?: () => void;
+  /**
+   * Called with this arrow's index once its release animation has finished.
+   *
+   * Takes the index rather than being a closure over it, so the caller can pass
+   * one stable function to every arrow. A per-arrow closure is a new prop identity
+   * on every render, which silently defeats the `memo` below — see the note there.
+   */
+  onDepartComplete?: (arrowIndex: number) => void;
   /** Changes on every failed tap of this arrow, re-triggering the shake. */
   shakeNonce?: number;
   /**
@@ -89,6 +95,14 @@ export interface ArrowSnakeProps {
    * applied on the UI thread with no React render at all.
    */
   pressedArrow?: SharedValue<number>;
+  /**
+   * Drop the shadow and the gloss highlight.
+   *
+   * Set by the board on dense levels as a node budget — see `SIMPLIFY_ABOVE_ARROWS`
+   * in `BoardCanvas`. Both are full-length polylines that carry no information, and
+   * on a board big enough to trigger this they are also invisible.
+   */
+  simplified?: boolean;
   /** Swap animation for instant state changes (Settings → Reduced motion). */
   reducedMotion?: boolean;
 }
@@ -145,6 +159,7 @@ function ArrowSnakeInner({
   onDepartComplete,
   shakeNonce = 0,
   pressedArrow,
+  simplified = false,
   reducedMotion = false,
 }: ArrowSnakeProps) {
   const geometry = buildArrowGeometry(board, arrowIndex, cellSize, originX, originY, style);
@@ -174,7 +189,7 @@ function ArrowSnakeInner({
   useEffect(() => {
     if (!departing) return;
 
-    const finish = () => onDepartComplete?.();
+    const finish = () => onDepartComplete?.(arrowIndex);
     if (reducedMotion) {
       progress.value = 1;
       finish();
@@ -196,7 +211,7 @@ function ArrowSnakeInner({
         if (done) runOnJS(finish)();
       },
     );
-  }, [departing, reducedMotion, onDepartComplete, progress]);
+  }, [departing, reducedMotion, onDepartComplete, arrowIndex, progress]);
 
   useEffect(() => {
     if (shakeNonce === 0 || reducedMotion) return;
@@ -261,7 +276,7 @@ function ArrowSnakeInner({
 
   return (
     <AnimatedG animatedProps={groupProps}>
-      {style.shadow ? (
+      {style.shadow && !simplified ? (
         <AnimatedPolyline
           points={fullPath}
           fill="none"
@@ -287,7 +302,7 @@ function ArrowSnakeInner({
         animatedProps={bodyProps}
       />
 
-      {style.highlight ? (
+      {style.highlight && !simplified ? (
         <AnimatedPolyline
           points={toPointsAttr(offsetPoints([...body, exitPoint], 0, -stroke * 0.18))}
           fill="none"
@@ -325,6 +340,19 @@ function ArrowSnakeInner({
 
 /**
  * Memoised because a board redraws on every tap, but only the tapped arrow and
- * its blocker actually change. On a dense level that is 20+ untouched snakes.
+ * its blocker actually change. On a 60x60 board that is ninety untouched snakes,
+ * each of which would otherwise rebuild its geometry and re-create four animated
+ * props for nothing.
+ *
+ * **Every prop must be referentially stable across renders, or this does nothing
+ * at all** — and "nothing at all" is silent. It was broken for exactly that
+ * reason: the board passed `onDepartComplete={() => onDepartComplete(index)}`, a
+ * fresh closure per arrow per render, so the comparison failed for all of them and
+ * the memo had been dead weight since the touch rewrite. Nothing surfaced it,
+ * because a broken memo is not a bug — it is only slow.
+ *
+ * `__tests__/components/arrowSnakeMemo.test.ts` now checks the props the board
+ * actually passes are stable, so the next accidental closure fails a test rather
+ * than quietly costing ninety re-renders a tap.
  */
 export const ArrowSnake = memo(ArrowSnakeInner);

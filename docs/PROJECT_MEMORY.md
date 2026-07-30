@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 18 — pause menu, celebration removed, one shared screen header.
+> **Last updated:** end of Phase 20 — performance pass. Phase 19 (level design document) deferred by request.
 
 ---
 
@@ -127,6 +127,13 @@ monotone; they buy dependency *depth*, not risk.
 71. **Restart is not the primary action on the pause sheet.** It is the most destructive option there, and a sheet that opens with the destructive option highlighted trains people to tap it by reflex. Tapping the scrim resumes, because nobody opens a pause menu meaning to lose their place.
 72. **The HUD needs a progress bar now that boards are 60x60.** An arrows-left count says nothing without knowing the starting number, and on a board four screens wide "am I nearly done" was a question nothing on screen could answer.
 73. **Three screens had each hand-rolled the same header**, including three copies of a `width: 44` spacer to fake optical centring against the back button. `ScreenHeader` centres on the layout instead, so the title does not shift depending on what is in the right-hand slot.
+
+### Added in the performance pass
+74. **The engine is not the bottleneck and never was.** `npm run bench` puts every per-tap domain call on the worst board in the library under a hundredth of a millisecond. That is the dividend from keeping `game/` pure — it was written to be testable off-device and turns out to be cheap for the same reasons. Every real cost is in the renderer.
+75. **A broken `memo` has no symptoms.** `ArrowSnake`'s had been dead since the touch rewrite because the board passed it a fresh closure per arrow per render, so every tap re-rendered every snake. Nothing logged, nothing warned, no test failed — it was only slow. Props handed to a memoised component must be referentially stable, and that is now enforced by a render-counting test with a negative control rather than by hoping.
+76. **Nothing in the board may scale with cell count.** At 3,600 cells the two things that once did — the grid and the touch targets — are a single tiled `<Pattern>` and a single tap surface. The accessibility handles are per *arrow* and memoised on the arrow set.
+77. **A node budget is not a style decision.** Above 45 snakes arrows drop their shadow and highlight: full-length polylines that are most of the draw cost, carry no information, and are invisible on the boards big enough to trigger it. It lives in the renderer rather than the theme, because a theme says what an arrow looks like and this says what the renderer can afford to spend saying it.
+78. **Occupancy must be copied to the UI thread on every tap, not throttled.** A stale copy resolves a tap to an arrow that has already left, and the tap is silently dropped — so this is a correctness constraint wearing performance clothing.
 
 ### Reversed along the way
 - **The celebration was removed in the UI pass**, by request — `Celebration.tsx` and its sixty confetti pieces are gone. The 900ms win-overlay delay it shared the moment with was *kept*, and is now 1150ms: the particles were decoration, but the pause is what stops a modal landing on top of the last snake threading out. In git history at `acd4fa6`.
