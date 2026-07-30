@@ -29,6 +29,7 @@ import { buildLevel, solve, verifySolution } from '../src/game';
 import { encodeLevel, TIER_ORDER, type DifficultyTier, type EncodedLevel } from '../src/game/codec';
 import { CURRICULUM, isOversized, isPlanningLevel, bandOf } from './curriculum';
 import { generateLevel } from './generate';
+import { maskCapacity, maskFor } from './shapes';
 
 const OUT_DIR = join(process.cwd(), 'src', 'data', 'levels');
 const PACK_SIZE = 50;
@@ -39,21 +40,22 @@ const seedFor = (id: number): number => id * 7919 + 104729;
 /**
  * Search budget, scaled to board size.
  *
- * A 7x7 board evaluates in microseconds so it can afford thousands of tries; a
- * 26x26 with 90 snakes costs far more per attempt, and the extra tries buy less
- * because there is more room to land near the target anyway.
+ * Far smaller than it was, and the reason is a trap worth recording. Packed
+ * generation is nearly deterministic in quality — every attempt covers roughly the
+ * same share of the board — so extra attempts buy almost nothing. Worse, the
+ * generator only stops early when a candidate scores well against its
+ * blind-mistake target, and packed boards sit so far above those targets that the
+ * early exit never fires. The old budget of 900 therefore ran *in full*, on every
+ * level, with a much more expensive `analyze` behind it. The build went from six
+ * minutes to not finishing.
+ *
+ * These numbers are enough to sample a little variety and no more.
  */
 function attemptsFor(cells: number): number {
-  if (cells <= 100) return 900;
-  if (cells <= 225) return 500;
-  if (cells <= 400) return 260;
-  if (cells <= 900) return 140;
-  // Beyond about a thousand cells one attempt grows and analyses a hundred-odd
-  // snakes, so the cost per try is an order of magnitude up. There is also less to
-  // gain: a board that big has so much room that most candidates land near the
-  // target anyway, and it is the outliers, not the sample size, that miss.
-  if (cells <= 2000) return 48;
-  return 24;
+  if (cells <= 225) return 40;
+  if (cells <= 900) return 24;
+  if (cells <= 2000) return 12;
+  return 8;
 }
 
 interface BuildResult {
@@ -68,9 +70,15 @@ interface BuildResult {
   readonly gateModes: readonly string[];
   /** Share of legal taps that lose the level. Non-zero only on shutter boards. */
   readonly blunderRate: number;
-  /** This level asked to be packed to four-fifths coverage. */
-  readonly dense: boolean;
-  /** Share of the *board* actually covered by snakes, as shipped. */
+  /**
+   * Share of the *playable area* covered by snakes, as shipped.
+   *
+   * Against the silhouette rather than the grid, and the distinction is the whole
+   * number on a shaped level: a pumpkin cannot fill a rectangle, so measuring
+   * against the grid reported those boards at 48% when they were in fact 84% full
+   * — as packed as the free boards next to them, and looking it. Measured against
+   * the grid the metric mostly reports which shape was chosen.
+   */
   readonly coverage: number;
 }
 
@@ -98,6 +106,15 @@ function buildOne(planIndex: number): BuildResult {
         targetBlindMistakes: plan.targetBlindMistakes,
         attempts: attemptsFor(cells),
         hearts: plan.hearts,
+        // Every board is packed — except the shutter levels.
+        //
+        // Proving a shutter board solvable is a depth-first search rather than a
+        // graph peel, and its cost explodes with the number of arrows. On a packed
+        // board that is a hundred snakes deep, and the build stopped finishing:
+        // levels 100-150 alone took six minutes. A shutter level is about
+        // *sequence*, not density, so it loses nothing by staying open, and the
+        // player can actually see the order they are being asked to work out.
+        packed: plan.gate?.mode !== 'shuts',
         // Only the last relaxation pass drops the gate. A planning level without a
         // shutter is a different level wearing the wrong name, so it is worth
         // several attempts before giving up on it — but not worth failing the whole
@@ -136,8 +153,9 @@ function buildOne(planIndex: number): BuildResult {
       oversized: isOversized(plan),
       gateModes: (candidate.level.gates ?? []).map((gate) => gate.mode),
       blunderRate: candidate.metrics.blunderRate,
-      dense: plan.dense,
-      coverage: candidate.level.arrows.reduce((sum, arrow) => sum + arrow.body.length, 0) / cells,
+      coverage:
+        candidate.level.arrows.reduce((sum, arrow) => sum + arrow.body.length, 0) /
+        Math.max(1, maskCapacity(maskFor(plan.shape, plan.rows, plan.cols))),
     };
   }
 
@@ -149,12 +167,12 @@ function buildOne(planIndex: number): BuildResult {
 
 // ---------------------------------------------------------------------------
 
+// The old levels stay on disk until the new ones are ready to replace them.
+// Generating 600 levels takes minutes, and clearing the directory first left the
+// app unbuildable for that whole window — Metro cannot resolve `@data/levels`
+// when it is empty, so a rebuild broke the running dev server every time. Stale
+// packs are swept at the end instead; see below.
 mkdirSync(OUT_DIR, { recursive: true });
-for (const file of readdirSync(OUT_DIR)) {
-  if (file.endsWith('.json') || file === 'index.ts') {
-    rmSync(join(OUT_DIR, file), { force: true });
-  }
-}
 
 const started = Date.now();
 const results: BuildResult[] = [];
@@ -267,6 +285,15 @@ export function summaryOf(id: number):
   'utf8',
 );
 
+// Sweep packs left over from a build that produced more of them than this one.
+// Safe to do now: every file the new index imports has already been written.
+const kept = new Set(packNames.map((name) => `${name}.json`));
+for (const file of readdirSync(OUT_DIR)) {
+  if (file.endsWith('.json') && !kept.has(file)) {
+    rmSync(join(OUT_DIR, file), { force: true });
+  }
+}
+
 // ---- Report ---------------------------------------------------------------
 
 const elapsed = ((Date.now() - started) / 1000).toFixed(0);
@@ -279,8 +306,8 @@ for (const r of results) {
   byTier.set(r.tier, list);
 }
 
-console.log('  tier          count   arrows(avg)   cells(avg)   blind: min / avg / max');
-console.log('  ' + '-'.repeat(74));
+console.log('  tier          count   arrows(avg)   cells(avg)   fill   blind: min / avg / max');
+console.log('  ' + '-'.repeat(81));
 for (const tier of TIER_ORDER) {
   const rows = byTier.get(tier) ?? [];
   if (rows.length === 0) continue;
@@ -295,6 +322,7 @@ for (const tier of TIER_ORDER) {
       `${avg((r) => r.cells)
         .toFixed(0)
         .padStart(9)}   ` +
+      `${(avg((r) => r.coverage) * 100).toFixed(0).padStart(3)}%   ` +
       `${Math.min(...blinds)
         .toFixed(1)
         .padStart(6)} / ${avg((r) => r.blind)
@@ -305,11 +333,7 @@ for (const tier of TIER_ORDER) {
   );
 }
 
-// Dense levels are excluded on purpose. They override their tier's fill to reach
-// four-fifths coverage, which makes them far harder than the tier target by design
-// — counting them as misses would turn this number into noise and hide a real
-// regression among the levels it is actually measuring.
-const tuned = results.filter((r) => !r.dense);
+const tuned = results;
 const offTarget = tuned.filter((r) => Math.abs(r.blind - r.target) > Math.max(3, r.target * 0.5));
 const oversized = results.filter((r) => r.oversized).length;
 const totalArrows = results.reduce((sum, r) => sum + r.arrows, 0);
@@ -331,15 +355,25 @@ console.log(`  ${opensLevels} levels carry an opening gate.`);
 // Reported against what was planned, not just as a count. A shutter that could
 // not be placed silently downgrades a planning level to an ordinary one, and that
 // is exactly the kind of quiet shortfall a build log exists to surface.
-const denseLevels = results.filter((r) => r.dense);
-if (denseLevels.length > 0) {
-  const coverages = denseLevels.map((r) => r.coverage);
-  const avg = coverages.reduce((sum, c) => sum + c, 0) / coverages.length;
+// Coverage, reported for the whole library rather than a subset: every board is
+// packed now, so this is the number that says whether the game looks full.
+// Shutter levels are counted separately rather than dragging the headline down.
+// They are the one tier-independent exception to the density target and it is
+// deliberate — see the `fill` comment in `curriculum.ts`.
+const packedResults = results.filter((r) => !r.gateModes.includes('shuts'));
+const coverages = packedResults.map((r) => r.coverage).sort((a, b) => a - b);
+const meanCoverage = coverages.reduce((sum, c) => sum + c, 0) / coverages.length;
+const belowTarget = coverages.filter((c) => c < 0.8).length;
+console.log(
+  `  playable area covered ${(coverages[0]! * 100).toFixed(0)}% / ` +
+    `${(meanCoverage * 100).toFixed(0)}% / ${(coverages[coverages.length - 1]! * 100).toFixed(0)}% ` +
+    `(min/avg/max) across ${packedResults.length} packed levels; ${belowTarget} under 80%.`,
+);
+if (shutsLevels.length > 0) {
+  const shutterFill = shutsLevels.reduce((sum, r) => sum + r.coverage, 0) / shutsLevels.length;
   console.log(
-    `  ${denseLevels.length} dense levels, board coverage ` +
-      `${(Math.min(...coverages) * 100).toFixed(0)}% / ${(avg * 100).toFixed(0)}% / ` +
-      `${(Math.max(...coverages) * 100).toFixed(0)}% (min/avg/max), ` +
-      `${(denseLevels.reduce((sum, r) => sum + r.arrows, 0) / denseLevels.length).toFixed(0)} arrows avg.`,
+    `  the ${shutsLevels.length} shutter levels sit at ${(shutterFill * 100).toFixed(0)}% by design — ` +
+      'an order has to be readable off the board.',
   );
 }
 

@@ -23,7 +23,7 @@ import { useHintStore } from '@state/hintStore';
 import { useOnboardingStore } from '@state/onboardingStore';
 import { useProgressStore } from '@state/progressStore';
 import { useSettingsStore } from '@state/settingsStore';
-import { radius, spacing, THEMES, typography, type Palette } from '@theme';
+import { MIN_TOUCH_TARGET, radius, spacing, THEMES, typography, type Palette } from '@theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -93,16 +93,39 @@ export default function SettingsScreen() {
         </Section>
 
         <Section palette={palette} title="Sound">
+          {audioAvailable ? null : (
+            <Text style={[styles.hint, { color: palette.textFaint }]}>
+              No audio files are bundled in this build yet, so everything below is
+              silent. The controls still work and their settings are saved — sound
+              arrives the moment the files are added.
+            </Text>
+          )}
+
+          <VolumeControl
+            palette={palette}
+            label="Master volume"
+            detail="Scales everything, music and effects together."
+            value={settings.masterVolume}
+            onChange={(value) => settings.set('masterVolume', value)}
+          />
+          <VolumeControl
+            palette={palette}
+            label="Music volume"
+            value={settings.musicVolume}
+            onChange={(value) => settings.set('musicVolume', value)}
+          />
+          <VolumeControl
+            palette={palette}
+            label="Effects volume"
+            value={settings.sfxVolume}
+            onChange={(value) => settings.set('sfxVolume', value)}
+          />
+
           <Toggle
             palette={palette}
             label="Music"
-            detail={
-              audioAvailable
-                ? 'A quiet ambient loop.'
-                : 'No audio files are bundled in this build yet.'
-            }
+            detail="A quiet bed, different in the menu and in a level."
             value={settings.music}
-            disabled={!audioAvailable}
             onChange={() => settings.toggle('music')}
           />
           <Toggle
@@ -110,7 +133,6 @@ export default function SettingsScreen() {
             label="Sound effects"
             detail="A swoosh on release, a bump when a tap is blocked."
             value={settings.sfx}
-            disabled={!audioAvailable}
             onChange={() => settings.toggle('sfx')}
           />
           <Toggle
@@ -177,6 +199,83 @@ export default function SettingsScreen() {
         onCancel={() => setConfirmReset(false)}
       />
     </Screen>
+  );
+}
+
+/**
+ * A volume, in five steps.
+ *
+ * Deliberately not a slider. A continuous slider needs a native dependency this
+ * project does not have, and adding one has twice broken the toolchain here for
+ * less reason than this. It is also the wrong control for a thumb: nobody sets a
+ * game's music to 43%, and five taps of a segmented bar are easier to hit than one
+ * drag of a 4dp track.
+ *
+ * Each segment is a full touch target and reports the level it sets, so the whole
+ * control is usable without seeing it.
+ */
+function VolumeControl({
+  palette,
+  label,
+  detail,
+  value,
+  onChange,
+}: {
+  palette: Palette;
+  label: string;
+  detail?: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const steps = [0, 0.25, 0.5, 0.75, 1];
+  const active = steps.reduce((best, step) =>
+    Math.abs(step - value) < Math.abs(best - value) ? step : best,
+  );
+
+  return (
+    <View>
+      <View style={styles.toggleText}>
+        <Text style={[styles.toggleLabel, { color: palette.text }]}>{label}</Text>
+        {detail ? (
+          <Text style={[styles.toggleDetail, { color: palette.textFaint }]}>{detail}</Text>
+        ) : null}
+      </View>
+      <View style={styles.volumeRow}>
+        {steps.map((step) => {
+          const filled = step <= active && active > 0;
+          const isOff = step === 0;
+          return (
+            <Pressable
+              key={step}
+              accessibilityRole="button"
+              accessibilityLabel={`${label} ${Math.round(step * 100)} percent`}
+              accessibilityState={{ selected: step === active }}
+              onPress={() => onChange(step)}
+              style={({ pressed }) => [
+                styles.volumeStep,
+                {
+                  backgroundColor: filled ? palette.accent : palette.surfaceRaised,
+                  borderColor: step === active ? palette.accent : palette.border,
+                },
+                isOff && styles.volumeOff,
+                pressed && styles.pressed,
+              ]}
+            >
+              {isOff ? (
+                <Text
+                  style={[
+                    styles.volumeOffLabel,
+                    { color: active === 0 ? palette.textOnAccent : palette.textFaint },
+                  ]}
+                >
+                  0
+                </Text>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -251,6 +350,21 @@ const styles = StyleSheet.create({
   themeDescription: { ...typography.small, lineHeight: 18 },
 
   toggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+
+  volumeRow: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.sm },
+  volumeStep: {
+    flexGrow: 1,
+    flexBasis: 0,
+    // Full-height touch target: the visible bar is short, but the thing a thumb
+    // has to hit is not.
+    height: MIN_TOUCH_TARGET,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volumeOff: { flexGrow: 0, flexBasis: MIN_TOUCH_TARGET },
+  volumeOffLabel: { ...typography.small, fontWeight: '700' },
   disabled: { opacity: 0.45 },
   toggleText: { flex: 1 },
   toggleLabel: { ...typography.body, fontWeight: '700' },

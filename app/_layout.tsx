@@ -22,7 +22,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { initAds } from '@services/ads';
-import { applyAudioSettings, initAudio, startMusic } from '@services/audio';
+import { applyAudioSettings, initAudio } from '@services/audio';
 import { useHintStore } from '@state/hintStore';
 import { useOnboardingStore } from '@state/onboardingStore';
 import { useProgressStore } from '@state/progressStore';
@@ -62,6 +62,9 @@ export default function RootLayout() {
 
   const music = useSettingsStore((state) => state.music);
   const sfx = useSettingsStore((state) => state.sfx);
+  const masterVolume = useSettingsStore((state) => state.masterVolume);
+  const musicVolume = useSettingsStore((state) => state.musicVolume);
+  const sfxVolume = useSettingsStore((state) => state.sfxVolume);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +78,7 @@ export default function RootLayout() {
       void hydrateProgress();
       void hydrateHints();
       void hydrateOnboarding();
-      void initAudio().then(() => startMusic());
+      void initAudio();
       void initAds();
     })();
 
@@ -84,10 +87,23 @@ export default function RootLayout() {
     };
   }, [hydrateSettings, hydrateProgress, hydrateHints, hydrateOnboarding]);
 
+  /**
+   * Push the audio settings down whenever any of them changes.
+   *
+   * Mutes and volumes go together in one call because the mix is multiplicative —
+   * applying them separately would briefly mix at a level the player never chose,
+   * which on a change of master volume is audible.
+   */
   useEffect(() => {
     if (!ready) return;
-    applyAudioSettings({ music, sfx });
-  }, [ready, music, sfx]);
+    applyAudioSettings({
+      musicMuted: !music,
+      sfxMuted: !sfx,
+      masterVolume,
+      musicVolume,
+      sfxVolume,
+    });
+  }, [ready, music, sfx, masterVolume, musicVolume, sfxVolume]);
 
   if (!ready) return null;
 

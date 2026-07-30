@@ -1,22 +1,32 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 20 — performance pass. Phase 19 (level design document) deferred by request.
+> **Last updated:** end of Phase 21 — density, heart synchronisation, audio system. Phase 19 (level design document) deferred by request.
+> Release state and the full remaining checklist live in [PROGRESS.md](PROGRESS.md).
 
 ---
 
 ## Status
 
 **Code-complete at 600 levels.** Playable end to end: 600 generated and
-solver-verified levels across 114 silhouettes and **ten** difficulty tiers, six
+solver-verified levels drawing on 64 of the 137 silhouettes in the library — the
+rest are open rectangles, which is what packing to four-fifths costs — across
+**ten** difficulty tiers, six
 themes, animation, hearts, hints, persistence, navigation, settings, first-run
-teaching, and an ads path that is implemented but switched off.
+teaching, a full audio layer, and an ads path that is implemented but switched off.
 
-What is *not* done is everything that needs your accounts or your assets — audio
+Boards are **packed**: every tier from easy to nightmare fills 79–90% of its
+playable area, averaging 88% across the 560 packed levels. The 40 shutter levels
+sit at 66% deliberately — see decision 86. Snake length rises monotonically across
+all ten tiers, 3.0 to 11.3 cells on average and 4.1 to 26.1 at the longest, which
+is the axis difficulty actually lives on here.
+
+What is _not_ done is everything that needs your accounts or your assets — audio
 files, an app icon, an AdMob account, a Play Console listing. Those are listed in
 [RELEASE.md](RELEASE.md) and [ADS_SETUP.md](ADS_SETUP.md).
 
 ## The mechanic (settled)
+
 Arrows are **snakes**: connected chains of cells with an arrowhead at one end.
 Tapping sends the snake out through its head; the body threads out along the trail
 the head clears. An arrow can leave **iff the straight ray from its head to the
@@ -24,18 +34,20 @@ edge is clear** — its own body never blocks it. A blocked tap changes nothing 
 **costs a heart**; five spent hearts fails the level.
 
 ### The load-bearing consequence
+
 **Tap order cannot lose a level.** A tap only ever removes a snake, and removing a
 snake can never block another, so a free arrow stays free. Greedy always works and
 a solvable board can never become stuck.
 
-Difficulty therefore lives entirely in **reading the board**. Wrong *reads*, not
-wrong *plans*, are the failure mode. Full proof and the difficulty model are in
+Difficulty therefore lives entirely in **reading the board**. Wrong _reads_, not
+wrong _plans_, are the failure mode. Full proof and the difficulty model are in
 [MECHANIC_ANALYSIS.md](MECHANIC_ANALYSIS.md).
 
 ### …and the one exception, added in Phase 15
+
 The paragraph above holds on **560 of the 600 levels**. The other 40 carry a
 `shuts` gate — a cell that is open while its colour is on the board and seals for
-good once the last of that colour leaves. That lets a tap *take a route away*,
+good once the last of that colour leaves. That lets a tap _take a route away_,
 which is the one thing that breaks monotonicity, so on those boards order matters,
 deadlock is real, and `GameStatus` has a `stuck` value for it.
 
@@ -43,10 +55,11 @@ The distinction is enforced, not merely intended: `analyze` reports a
 **`blunderRate`** — the share of legal taps that quietly lose the level — and the
 level tests assert it is above zero on every shutter board and exactly zero on
 every other one. Walls and `opens` gates are also available and are both fully
-monotone; they buy dependency *depth*, not risk.
+monotone; they buy dependency _depth_, not risk.
 
 ## Architecture decisions (locked for v0.1)
-1. **Level pipeline = hybrid generate-and-curate.** Shape mask + plan → generator → solver/validator → level JSON. Every shipped level is verified solvable *and* has its recorded solution replayed, in CI.
+
+1. **Level pipeline = hybrid generate-and-curate.** Shape mask + plan → generator → solver/validator → level JSON. Every shipped level is verified solvable _and_ has its recorded solution replayed, in CI.
 2. **Rendering = react-native-svg**, one `<Polyline>` per snake with rounded joins. Not Skia — only one arrow animates at a time.
 3. **Animation = Reanimated 4** (+ `react-native-worklets`). Release is a dash-window slide along body-plus-exit-ray.
 4. **State = Zustand (persistent) + `useReducer` (live board).** Live board state stays out of the global store.
@@ -56,6 +69,7 @@ monotone; they buy dependency *depth*, not risk.
 8. **Framework = Expo SDK 57 (managed) + expo-router + EAS**, TypeScript strict.
 
 ### Added in Phases 1–9
+
 9. **An arrow is a body, not a cell.** Validated as a connected, non-self-touching simple path.
 10. **Head direction is inferred from the last segment, never stored** — no second source of truth to desync.
 11. **An arrow never blocks itself.** Each segment vacates as the one ahead advances, which keeps spiral and hook shapes playable.
@@ -82,46 +96,49 @@ monotone; they buy dependency *depth*, not risk.
 32. **Oversized boards have a minimum cell size and pan instead of shrinking.** Fitting a 27x30 board to a phone gives ~12dp cells: unreadable and untappable. Cells stay at 26dp and the viewport scrolls.
 33. **Touch stays exact at every zoom level for free**, because the per-cell targets live inside the transformed view. No coordinate conversion by hand, which is where this normally breaks.
 34. **The grid is one tiled SVG pattern, not one node per cell.** An 810-cell board would otherwise cost more in grid nodes than in every arrow combined.
-35. **600 levels are grouped into 12 chapters**, matching the pack layout exactly so a chapter is also the unit of data loaded. A chapter opens once the previous one has been *started*, not finished — gating on completion would strand a player stuck on one board behind 550 levels they cannot touch.
+35. **600 levels are grouped into 12 chapters**, matching the pack layout exactly so a chapter is also the unit of data loaded. A chapter opens once the previous one has been _started_, not finished — gating on completion would strand a player stuck on one board behind 550 levels they cannot touch.
 36. **Chapter names are fixed, not derived.** Contents shift whenever the curriculum is retuned; a chapter a player remembers finishing must not silently rename itself between builds.
-37. **The app icon is generated from the game's own arrow geometry** (`tools/make-icons.ts`), rasterised with `pngjs` — a thick rounded line is a distance test, a head is three half-plane tests, and 4x4 supersampling handles the edges. It is centred on its *drawn* bounds rather than its path coordinates, because the stroke radius and arrowhead overhang by different amounts per axis.
+37. **The app icon is generated from the game's own arrow geometry** (`tools/make-icons.ts`), rasterised with `pngjs` — a thick rounded line is a distance test, a head is three half-plane tests, and 4x4 supersampling handles the edges. It is centred on its _drawn_ bounds rather than its path coordinates, because the stroke radius and arrowhead overhang by different amounts per axis.
 38. **The pan/zoom camera maths is a pure module** (`components/camera.ts`), because it runs as a worklet where a debugger is little help, and an off-by-one in the overhang lets a player lose a 27x30 board off-screen.
 39. **The win overlay waits 900ms.** The last snake threading out is the most satisfying moment in the game, and covering it instantly threw that away. The celebration fires immediately; the overlay follows.
 40. **Confetti is one shared value read by sixty derived styles**, not sixty animations. Each piece's path is projectile motion — launch angle, speed, gravity — on constants fixed at spawn, because linear fades read as a screensaver.
 41. **The celebration is derived from the win, not mirrored into state.** An `active` prop that goes false and true again on replay re-fires it; a separate nonce would have been a second signal meaning the same thing, and a second thing to get out of step.
-42. **Perfect-read streaks count replays.** The streak is a statement about how someone is playing *now* rather than a permanent record, which is what makes it worth chasing. It is only shown from two upward — announcing "streak: 1" on every clean level cheapens it.
+42. **Perfect-read streaks count replays.** The streak is a statement about how someone is playing _now_ rather than a permanent record, which is what makes it worth chasing. It is only shown from two upward — announcing "streak: 1" on every clean level cheapens it.
 43. **No double-tap gesture on the board, ever.** The board is covered edge to edge in tap targets, so a double-tap cannot be told apart from two deliberate taps on an arrow — and since a wrong tap costs a heart, that ambiguity was charging two hearts for one gesture. Fit-to-screen is a button. Any future board gesture must survive the same question.
 44. **Tap feedback comes from `resolveTap`, never from the safe-move set.** They answer different questions, and `findAllSafeMoves` returns nothing at all on an unsolvable board, so every tap would have played the collision sound.
 45. **`UNLOCK_ALL_LEVELS` is read in exactly one place** (`playableUpTo`). `highestUnlocked` stays pure and honest about real progress, so the flag cannot corrupt a save and turning it off needs no migration. While on, the menu and level select both show a TESTING badge — a build flag that looks like production is how one ships by accident.
 46. **The invisible tutorial is not fully possible here.** The GDD asks the design to teach with no text (§6), which works for rules a player can infer by watching. Nothing about a board of ropes reveals that the arrowhead is what matters. Three one-time coach cards, each fired by the situation it explains, are the smallest honest compromise.
 
 ### Added in Phases 15–17
-47. **Order is made to matter by taking a route away, not by moving an arrow.** The long-standing answer to "can this game have planning in it" was "only by letting blocked arrows move", which costs the no-dead-ends guarantee, the microsecond solver and every existing level. A gate that *shuts* achieves the same thing — a tap that adds a constraint — with no change to what a tap does and no change to any level that does not use one.
+
+47. **Order is made to matter by taking a route away, not by moving an arrow.** The long-standing answer to "can this game have planning in it" was "only by letting blocked arrows move", which costs the no-dead-ends guarantee, the microsecond solver and every existing level. A gate that _shuts_ achieves the same thing — a tap that adds a constraint — with no change to what a tap does and no change to any level that does not use one.
 48. **Gate polarity is one word, and it is the difference between two games.** `opens` is monotone: it blocks until its colour has left, so greedy still always works and it buys depth only. `shuts` is the inverse and breaks monotonicity on purpose. Both share all their machinery.
 49. **`stuck` is not folded into `failed`.** A player who deadlocks a shutter board still holds every heart, and showing them a spent-hearts screen would teach the wrong lesson about what went wrong. Separate status, separate overlay, and the fail copy's promise that "the board behind this is still winnable" is now conditional — it can be false, and the player can check.
 50. **A shutter board can be lost several taps before it looks lost**, so `isDoomed` runs after every move and surfaces the overlay early. It costs nothing on the 560 levels with no shutter: it returns false without looking at the board.
 51. **`solve` branches on `hasShutters`.** Kahn's peel without them, depth-first search memoised on the surviving arrow set with them, under a budget that reports `unknown` rather than `unsolvable`. An unproven board must never ship as a proved one.
 52. **The blocking graph must not skip self-edges for gates.** Skipping self is right for a body lying across its own ray and exactly wrong for an arrow whose own colour keys the gate in front of it. `castRay` had it right; the solver disagreed, and only a property test found it.
-53. **Colour is the one thing in this game that carries information.** It links an arrow to the gate it controls, so it is drawn from a colour-blind-safe set and gates carry a shape cue as well. It also makes arrows easier to tell apart, which makes a level *easier* — so a level only spends a colour where a gate earns it back.
-54. **Ten tiers, five colour pips.** Five tiers over 600 levels made "Hard" span a range wide enough to mean nothing. Ten bands are narrow enough that the label is a promise — but ten distinguishable dot colours do not exist in a palette that also works for colour-blind players, so the pips pair up and the tier *name* carries the precision.
+53. **Colour is the one thing in this game that carries information.** It links an arrow to the gate it controls, so it is drawn from a colour-blind-safe set and gates carry a shape cue as well. It also makes arrows easier to tell apart, which makes a level _easier_ — so a level only spends a colour where a gate earns it back.
+54. **Ten tiers, five colour pips.** Five tiers over 600 levels made "Hard" span a range wide enough to mean nothing. Ten bands are narrow enough that the label is a promise — but ten distinguishable dot colours do not exist in a palette that also works for colour-blind players, so the pips pair up and the tier _name_ carries the precision.
 55. **A failed snake start must not consume an arrow slot.** Invisible at bodies of 2–6 and ruinous at 5–14: on a 30x30 board most starts paint themselves into a corner, so boards came out at half their intended density. Fixing it took nightmare levels from 70 to 161 average blind mistakes.
-56. **A silhouette caps how hard a level can be, and capacity dominates islands.** Arrows in separate regions can never block each other, so a fragmenting shape raises how many are free at once; and a narrow shape on a 28x28 board simply holds fewer snakes. Filtering the demanding tiers on islands *alone* made them easier, because it left a pool of detailed but thin outlines. Both filters together, measured rather than declared.
+56. **A silhouette caps how hard a level can be, and capacity dominates islands.** Arrows in separate regions can never block each other, so a fragmenting shape raises how many are free at once; and a narrow shape on a 28x28 board simply holds fewer snakes. Filtering the demanding tiers on islands _alone_ made them easier, because it left a pool of detailed but thin outlines. Both filters together, measured rather than declared.
 57. **Glyphs are strokes, not bitmaps.** A `1` drawn at 16x16 is a two-pixel column: sampled to a 9-wide board it is either gone or four cells thick, and no single drawing survives both ends. A stroke is a distance function, so thickness is chosen at the target size — at least a cell wide, never wide enough to fill in the counter of an `O`.
 58. **Procedural shapes perforate the board rather than outlining it.** A bitmap says where the board ends; a honeycomb or a maze carves corridors through the middle, so snakes must bend constantly — a difficulty device dressed as decoration.
 59. **The two gate coach cards fire before the first tap**, unlike every other card, which explains something that has already happened. A gate cannot be inferred by watching, and a shutter would otherwise be met by losing a level with every heart still in hand.
 
 ### Added in the board-scale and touch pass
+
 60. **A `Pan` gesture with no activation threshold silently eats taps.** Gesture-handler cancels whatever is underneath the moment a pan claims the touch, and a pan with no offset claims it on the first pixel of movement — which every real tap has. This was the cause of "I have to tap more than once", and it looked like a rendering or hit-testing problem for a long time. `PAN_SLOP` is now shared between the pan's activation offset and the tap's `maxDistance`, so there is no band of movement that is neither.
 61. **Never mix React Native `Pressable`s with gesture-handler gestures over the same area.** The two touch systems do not negotiate. This is the second bug traced to that combination (the first charged two hearts for one double-tap), and the board now has no `Pressable` on it at all.
 62. **Board hit testing is arithmetic, not views.** One tap surface plus a cell lookup, instead of a view per occupied cell — a thousand fewer views on a 60x60 board, and it arbitrates correctly with pan and pinch. Near-misses within ~0.85 of a cell select the nearest snake, which is what makes a small cell tappable at all.
-63. **Press feedback is a shared value, not state.** An arrow dims on touch-*down*, read inside each snake's animated style. A `useState` would re-render a hundred-snake board twice per tap — to acknowledge a tap, which is the one thing that must not cost frames.
+63. **Press feedback is a shared value, not state.** An arrow dims on touch-_down_, read inside each snake's animated style. A `useState` would re-render a hundred-snake board twice per tap — to acknowledge a tap, which is the one thing that must not cost frames.
 64. **Taps during the exit animation are accepted, not dropped.** The old guard's stated reason — that the board was "mid-change" — was never true; `applyOutcome` runs when the tap is accepted, so only the drawing lags. Refusing them cost real taps, and slowing the animation to 720ms would have made every second tap vanish.
-65. **Board size and difficulty are not independent, and the coupling is violent.** Raising Medium from 14x14 to 30x30 multiplied its arrow count fivefold; `expectedBlindMistakes` grows faster than area, so a 40x40 Hard board measured **697** against a target of 45, and the top three tiers could not be generated at all. Big boards had to become *sparser* boards. Any size change requires re-deriving every fill and every blind target — `npm run levels:probe` does it in seconds instead of the half hour a full build now takes.
+65. **Board size and difficulty are not independent, and the coupling is violent.** Raising Medium from 14x14 to 30x30 multiplied its arrow count fivefold; `expectedBlindMistakes` grows faster than area, so a 40x40 Hard board measured **697** against a target of 45, and the top three tiers could not be generated at all. Big boards had to become _sparser_ boards. Any size change requires re-deriving every fill and every blind target — `npm run levels:probe` does it in seconds instead of the half hour a full build now takes.
 66. **Max zoom must have an absolute floor, not only a multiple of fit.** `3.5x fit` is generous on a board that nearly fits and meaningless on one that does not: a 60x60 board fits at 0.23, so the ceiling was 0.8 and the player could never see a cell at its designed size — on exactly the boards where reading one arrowhead matters most.
-67. **Sampling a periodic field at cell centres aliases catastrophically.** When a pattern's period is commensurate with the grid, every sample lands in the same phase: `starTiling` at 16x16 and `lattice` at 20x20 came out *completely empty*, every sample a hundredth below the threshold. Field shapes are supersampled like the bitmaps now, and a mask that still comes out near-empty falls back to the open board rather than producing an ungeneratable level.
+67. **Sampling a periodic field at cell centres aliases catastrophically.** When a pattern's period is commensurate with the grid, every sample lands in the same phase: `starTiling` at 16x16 and `lattice` at 20x20 came out _completely empty_, every sample a hundredth below the threshold. Field shapes are supersampled like the bitmaps now, and a mask that still comes out near-empty falls back to the open board rather than producing an ungeneratable level.
 68. **The repair pass has to scale with the board.** A fixed forty flips is right for a knot of four and hopeless for a knot of sixty; level 21 simply failed to build. It now flips a quarter of the knot per round, with a budget proportional to arrow count, and drops back to single flips for the last quarter of its rounds.
 
 ### Added in the UI pass
+
 69. **The play screen has one row of chrome, not two.** Back, settings and the hint count were three tap targets along the top edge of a screen whose only verb is "tap an arrow", and none of them was ever wanted mid-move. They are behind a single pause button now.
 70. **A pause menu is worth building even with no clock to stop.** "Pause" is a slight misnomer — nothing is running — but it is the word players look for when they want to stop and do something else, and a truer one would be accurate and useless.
 71. **Restart is not the primary action on the pause sheet.** It is the most destructive option there, and a sheet that opens with the destructive option highlighted trains people to tap it by reflex. Tapping the scrim resumes, because nobody opens a pause menu meaning to lose their place.
@@ -129,30 +146,51 @@ monotone; they buy dependency *depth*, not risk.
 73. **Three screens had each hand-rolled the same header**, including three copies of a `width: 44` spacer to fake optical centring against the back button. `ScreenHeader` centres on the layout instead, so the title does not shift depending on what is in the right-hand slot.
 
 ### Added in the performance pass
+
 74. **The engine is not the bottleneck and never was.** `npm run bench` puts every per-tap domain call on the worst board in the library under a hundredth of a millisecond. That is the dividend from keeping `game/` pure — it was written to be testable off-device and turns out to be cheap for the same reasons. Every real cost is in the renderer.
 75. **A broken `memo` has no symptoms.** `ArrowSnake`'s had been dead since the touch rewrite because the board passed it a fresh closure per arrow per render, so every tap re-rendered every snake. Nothing logged, nothing warned, no test failed — it was only slow. Props handed to a memoised component must be referentially stable, and that is now enforced by a render-counting test with a negative control rather than by hoping.
-76. **Nothing in the board may scale with cell count.** At 3,600 cells the two things that once did — the grid and the touch targets — are a single tiled `<Pattern>` and a single tap surface. The accessibility handles are per *arrow* and memoised on the arrow set.
+76. **Nothing in the board may scale with cell count.** At 3,600 cells the two things that once did — the grid and the touch targets — are a single tiled `<Pattern>` and a single tap surface. The accessibility handles are per _arrow_ and memoised on the arrow set.
 77. **A node budget is not a style decision.** Above 45 snakes arrows drop their shadow and highlight: full-length polylines that are most of the draw cost, carry no information, and are invisible on the boards big enough to trigger it. It lives in the renderer rather than the theme, because a theme says what an arrow looks like and this says what the renderer can afford to spend saying it.
-78. **Occupancy must be copied to the UI thread on every tap, not throttled.** A stale copy resolves a tap to an arrow that has already left, and the tap is silently dropped — so this is a correctness constraint wearing performance clothing.
+78. ~~**Occupancy must be copied to the UI thread on every tap, not throttled.**~~ **Reversed** — the copy is gone entirely. See decision 79.
+
+### Added in the density, audio and heart-sync pass
+
+79. **Hit testing does not belong on the UI thread.** Moving `arrowAtPoint` into a worklet was a performance fix for a problem that did not exist — `npm run bench` measures the lookup at under 0.01ms — and it cost correctness: a `useCallback` carrying `'worklet'` with a nested worklet closure over a shared array does not reliably workletize, and when it fails the gesture handler throws and **the tap silently does nothing**. The symptom reported was "the hearts do not go down", which is what a swallowed tap looks like from the outside. Hit testing is plain JS again, and `__tests__/components/heartsUi.test.tsx` drives the real gesture surface and asserts 5-4-3-2-1-0.
+80. **A silent no-op is the worst failure mode a gesture can have.** The reducer arithmetic was correct the whole time and every reducer test passed; nothing between the finger and the reducer had a test. A component test through the real tap surface would have caught this on the day it was introduced, and now does.
+81. **A build must not delete its output before it has a replacement.** `levels:build` cleared `src/data/levels/` at startup and rewrote it minutes later, so for the whole of that window Metro could not resolve `@data/levels` and the running dev server was broken — which is exactly how it was found. Stale packs are swept _after_ the new ones are written.
+82. **Proving a shutter board unsolvable costs the full search budget, and the generator makes dozens of doomed candidates per level.** One 23x25 shutter level was measured at **309 seconds on its own**, against ~100ms for the packed 50x50 boards either side of it. Candidates are screened at `SCREEN_BUDGET` (4,000 states) and only survivors are re-proved at the full 200,000 before shipping, which is what makes a small budget a scheduling decision rather than a loosening of the guarantee. The full build went from not finishing to about three minutes.
+83. **Coverage measured against the grid mostly reports which shape was chosen.** Shaped levels read as 48% full against the rectangle and 84% full against their own silhouette — identical to the free boards beside them, and looking it. A pumpkin cannot fill a rectangle, so the grid is the wrong denominator and the metric was inventing a problem that was not there.
+84. **The "usable fraction" of a mask depends on which grower runs, and using one number for both throttled the biggest tiers.** 0.6 describes a _random_ self-avoiding walk stranding pockets. `growPackedBoard` places centre-outward and reaches ~87%. Sizing packed plans at 0.6 made `arrowsFor` cap nightmare at 114 arrows on a board with room for 180.
+85. **Raising the minimum body length is not a density lever on its own.** It also divides the capacity cap, so the first attempt traded a 24% longer snake for 25% fewer of them and nightmare coverage went _down_, 77% to 72%. The two constants have to move together.
+86. **Packing the early levels raised the floor of the whole game.** "Dense across all difficulties" includes Easy, and it took the first fifty levels from a handful of expected blind mistakes to about 156 against 576 for the last fifty — the curve still climbs, at roughly 3.7x rather than 5x, but it starts much higher. Levels 1-20 are explicitly exempt and a test holds them under twelve.
+87. **`expectedBlindMistakes` cannot order the top four tiers, and that is a fact about the metric.** It models a player tapping at random, who never traces a snake, so it responds to how many arrows are free at once. At a fixed density longer snakes mean _fewer_ arrows, so the number falls as the board gets harder to read: the top four measure 674 / 624 / 519 / 592. They are ordered by snake length instead — monotone at every step, 3.0 to 11.3 average and 4.1 to 26.1 longest — which is the axis difficulty actually lives on here.
+88. **Shutter levels are the one deliberate exception to the density target.** A `shuts` gate asks the player to work out an _order_, and an order can only be read off a board sparse enough to see the dependencies in. Packing them would hide the single thing they exist to teach.
+89. **Every audio call is a no-op when the file is missing, and that is a build-time property rather than a runtime one.** Metro resolves `require` when it bundles, so a `try/catch` around a missing asset does not help — the app ships with a broken module that can take the native side down. The registry is explicit and starts empty; enabling a sound is uncommenting one line.
+90. **Voice limiting is what "no overlapping distortion" actually requires.** Two copies of one short effect a few milliseconds apart do not sound like two events, they sum and clip. This game produces that easily — several arrows can leave at once and a player can tap faster than a sound is long — so the same effect will not retrigger inside `RETRIGGER_GAP_MS`.
+91. **A mute and a volume of zero are not the same setting.** Someone who mutes music and later unmutes it expects their level back, not silence.
+92. **Volume is a five-step segmented control, not a slider.** A slider needs a native dependency, and adding one to this toolchain has broken it twice. Five steps is the resolution anyone actually uses.
 
 ### Reversed along the way
-- **The celebration was removed in the UI pass**, by request — `Celebration.tsx` and its sixty confetti pieces are gone. The 900ms win-overlay delay it shared the moment with was *kept*, and is now 1150ms: the particles were decoration, but the pause is what stops a modal landing on top of the last snake threading out. In git history at `acd4fa6`.
+
+- **The celebration was removed in the UI pass**, by request — `Celebration.tsx` and its sixty confetti pieces are gone. The 900ms win-overlay delay it shared the moment with was _kept_, and is now 1150ms: the particles were decoration, but the pause is what stops a modal landing on top of the last snake threading out. In git history at `acd4fa6`.
 - The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`. Phase 15 revisited the same goal and reached it by a different route — see decision 47.
 - A two-pass snake growth fallback (retry leftover corridors at a shorter minimum length) was written for the perforated shapes, then **removed**: the rebuild came back byte-identical, because arrow counts were already being met. The undershoot was structural, not density.
 - Filtering demanding tiers on **island count alone** was tried and **reverted** — it made the top tiers measurably easier. See decision 56.
 - The first curriculum declared arrow counts directly. 37 of 50 plans were physically impossible. Replaced with capacity-derived counts.
 
 ## Commands
-| Command | Purpose |
-|---|---|
-| `npm run verify` | typecheck + tests + level validation. Run before every commit |
-| `npm start` / `npm run start:tunnel` | Expo dev server (use tunnel on this machine — see below) |
-| `npm run levels:check` | prove every curriculum plan fits its shape |
-| `npm run levels:build` | regenerate all 50 levels (deterministic) |
-| `npm run levels:validate` | re-verify the level JSON on disk |
-| `npm run levels:preview` | render every theme to an HTML page |
+
+| Command                              | Purpose                                                       |
+| ------------------------------------ | ------------------------------------------------------------- |
+| `npm run verify`                     | typecheck + tests + level validation. Run before every commit |
+| `npm start` / `npm run start:tunnel` | Expo dev server (use tunnel on this machine — see below)      |
+| `npm run levels:check`               | prove every curriculum plan fits its shape                    |
+| `npm run levels:build`               | regenerate all 600 levels (deterministic, ~3 min)             |
+| `npm run levels:validate`            | re-verify the level JSON on disk                              |
+| `npm run levels:preview`             | render every theme to an HTML page                            |
 
 ## Dev environment notes
+
 Windows Firewall on this machine has **enabled Block rules for inbound `node.exe`**
 on the Public profile, and the Ethernet adapter is categorised Public — so Expo Go
 cannot reach the LAN dev server. The Wi-Fi adapter also has no DHCP lease
@@ -160,31 +198,42 @@ cannot reach the LAN dev server. The Wi-Fi adapter also has no DHCP lease
 [TESTING.md](TESTING.md).
 
 ## Testing build
+
 `UNLOCK_ALL_LEVELS` in `src/config/index.ts` is currently **true**. Every level is
 open, level select carries a jump-to-number box, and both the menu and level
 select show a TESTING badge. Set it to `false` for production; nothing else needs
 changing.
 
 ## Pending work
-- **You:** play through on device; report anything that feels wrong about pacing, board size, or the 5-heart budget. **Phases 15–17 are the ones to test** — gates, shutters, ten tiers, longer snakes, the expanded shape library.
-- **Phase 18 (not started):** UI/UX overhaul across all seven surfaces, including a pause menu, which does not exist yet. Includes removing the celebration effects.
-- **Phase 19 (not started):** the level design document / PDF covering all 600 levels. Two questions still open on its fields and format.
-- **Phase 20 (not started):** performance pass. Needs a real mid-range Android device to be worth doing.
-- **Assets:** audio files (`assets/audio/README.md`). Icons and splash are generated — rerun `npm run icons:build` after any brand change.
+
+Full breakdown, with the release checklist, in [PROGRESS.md](PROGRESS.md).
+
+- **You:** play through on device. The things to judge are pacing, whether the
+  packed boards read or overwhelm, and the 5-heart budget.
+- **Phase 19 (deferred by request):** the level design document covering all 600
+  levels. Two questions still open on its fields and format.
+- **Assets — the only hard blocker on a complete build:** 31 audio files
+  (`assets/audio/README.md`). Every call site is wired and the game is silent
+  until they exist. Icons and splash are generated — rerun `npm run icons:build`
+  after any brand change.
 - **Accounts:** AdMob ([ADS_SETUP.md](ADS_SETUP.md)), Play Console ([RELEASE.md](RELEASE.md)).
-- **Then:** validate the curve against real players before extending past 50 levels.
+- **Unproven on hardware:** the ads path has never run against a real SDK, and the
+  600-level library has never been played end to end by a person.
 
 ## Risks
-- **The curve is unvalidated by humans.** Every level is provably solvable and lands in its target band, but `expectedBlindMistakes` models a *random* tapper, not a real one. A real player reads partially — better than random, worse than perfect — so the true difficulty is somewhere below the model. Expect to retune `tools/curriculum.ts` after playtesting.
+
+- **The curve is unvalidated by humans.** Every level is provably solvable and lands in its target band, but `expectedBlindMistakes` models a _random_ tapper, not a real one. A real player reads partially — better than random, worse than perfect — so the true difficulty is somewhere below the model. Expect to retune `tools/curriculum.ts` after playtesting.
 - **Tracing difficulty is partly a rendering property.** Stroke weight, cell size, and corner radius change how hard a board feels. Retune the bands on device, not in the abstract.
 - **Large boards on small phones.** Mastery levels are 12×12; on a narrow screen cells get small. Worth checking on the smallest device you have.
 - **Ads are unexercised.** The code path is written but has never run against a real SDK, because installing it breaks Expo Go. First dev-client build is where that gets proven.
 
 ## Known issues / technical debt
-- Audio and ad services have no unit tests — both are thin I/O wrappers whose only real behaviour is degrading gracefully, which is exercised by the app running without either.
-- No component-level tests. The reducer, stores, storage and geometry are covered; the React tree is only covered by the bundle building and by manual testing.
+
+- Audio and ad services have no unit tests — both are thin I/O wrappers whose only real behaviour is degrading gracefully, which is exercised by the app running without either. **The audio layer has also never been heard**, because no file has ever been in the repo; what is proven is that its absence is harmless.
+- Component test coverage is thin but no longer absent: the board's tap surface and `ArrowSnake`'s memo are covered (`heartsUi`, `arrowSnakeMemo`). Every other screen is still covered only by the bundle building and by manual testing — and decision 79 is what that gap costs.
 - `npm audit` reports moderate advisories from the Expo dependency tree; none are in code paths this app uses.
 - The IDE's JSON schema flags `module: "preserve"` in `tsconfig.json`. Valid in TS 5.4+, inherited from `expo/tsconfig.base`; `tsc` accepts it.
 
 ---
-*Update discipline: append to Completed, adjust Pending, log any new decisions/risks after each approved phase.*
+
+_Update discipline: append to Completed, adjust Pending, log any new decisions/risks after each approved phase._

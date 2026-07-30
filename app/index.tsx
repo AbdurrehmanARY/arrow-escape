@@ -8,11 +8,12 @@
  *               the times it is not.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { IconButton, Screen, useTheme } from '@components';
+import { playMusic } from '@services/audio';
 import { LEVEL_COUNT } from '@data/levels';
 import { UNLOCK_ALL_LEVELS } from '@config';
 import { clearedCount, nextLevel, perfectCount, useProgressStore } from '@state/progressStore';
@@ -30,6 +31,12 @@ export default function MenuScreen() {
   const perfect = useMemo(() => perfectCount(records), [records]);
   const resume = useMemo(() => nextLevel(records, LEVEL_COUNT), [records]);
   const started = cleared > 0;
+
+  // The menu bed. Asking for a track already playing is a no-op, so returning to
+  // the menu from a level cross-fades once and repeat renders cost nothing.
+  useEffect(() => {
+    playMusic('menu');
+  }, []);
 
   return (
     <Screen scroll>

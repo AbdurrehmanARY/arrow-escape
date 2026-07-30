@@ -45,6 +45,7 @@ for (const tier of TIER_ORDER) {
       targetBlindMistakes: plan.targetBlindMistakes,
       attempts: 6,
       hearts: plan.hearts,
+      packed: true,
     },
     { id: plan.id, name: plan.name },
   );

@@ -45,4 +45,7 @@ coverage/
 /android
 
 # build output captured for inspection; the level packs themselves are committed
+# Build and verification transcripts, written by npm scripts when run to a file.
 /build.log
+/verify.log
+/jest-levels.log

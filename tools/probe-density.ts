@@ -40,17 +40,16 @@ interface Trial {
  * bodies are how a board gets dense without getting silly.
  */
 const TRIALS: readonly Trial[] = [
-  { size: 18, fill: 0.9, minLen: 4, maxLen: 10 },
-  { size: 20, fill: 0.9, minLen: 4, maxLen: 11 },
-  { size: 22, fill: 0.95, minLen: 4, maxLen: 12 },
-  { size: 24, fill: 0.95, minLen: 5, maxLen: 12 },
-  { size: 26, fill: 0.95, minLen: 5, maxLen: 12 },
-  { size: 26, fill: 1.0, minLen: 5, maxLen: 12 },
+  { size: 20, fill: 0.95, minLen: 4, maxLen: 10 },
+  { size: 30, fill: 0.95, minLen: 6, maxLen: 16 },
+  { size: 40, fill: 0.95, minLen: 8, maxLen: 22 },
+  { size: 50, fill: 0.95, minLen: 12, maxLen: 30 },
+  { size: 60, fill: 0.95, minLen: 16, maxLen: 40 },
 ];
 
 const SAMPLES = 4;
 /** Matches what `build-levels.ts` allows a large board, so the yield is realistic. */
-const ATTEMPTS = 40;
+const ATTEMPTS = 12;
 
 console.log('size   asked   arrows   actual fill   solvable   grew-fail  knot   ms/level');
 console.log('-'.repeat(78));
@@ -58,7 +57,7 @@ console.log('-'.repeat(78));
 for (const trial of TRIALS) {
   const capacity = maskCapacity(maskFor('free', trial.size, trial.size));
   const averageLength = (trial.minLen + trial.maxLen) / 2;
-  const arrowCount = Math.round((capacity * trial.fill) / averageLength);
+  const arrowCount = Math.min(200, Math.round((capacity * trial.fill) / (averageLength * 0.6)));
 
   let solved = 0;
   let cellsCovered = 0;
@@ -80,6 +79,7 @@ for (const trial of TRIALS) {
         attempts: ATTEMPTS,
         hearts: 5,
         stats,
+        packed: true,
       },
       { id: 0, name: 'probe' },
     );

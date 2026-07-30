@@ -59,8 +59,6 @@ export interface LevelPlan {
   readonly maxBodyLength: number;
   readonly targetBlindMistakes: number;
   readonly hearts: number;
-  /** Packed to roughly four-fifths coverage. See `isDenseLevel`. */
-  readonly dense: boolean;
   /**
    * A gate for the generator to try to place, if any.
    *
@@ -138,18 +136,28 @@ interface TierSpec {
  * all. `gateChance` is how often an `opens` gate is worth attempting; shutter
  * levels are placed deliberately rather than sampled — see `PLANNING_STEP`.
  */
+/**
+ * Largest board that can still be packed to the requested density.
+ *
+ * See `probe-density.ts`. Coverage achieved by the packer: 91% at 30x30, 88% at
+ * 40x40, 80% at 50x50, 72% at 60x60 — and the arrow count needed to do better at
+ * 60 runs past 250, which the renderer should not be asked to carry. Fifty is the
+ * point where density and size stop fighting.
+ */
+export const MAX_PACKED_SIZE = 50;
+
 const TIERS: Record<DifficultyTier, TierSpec> = {
   tutorial: {
     // Small and open on purpose. The only tier where a careless player should be
     // able to finish without losing a heart.
     minSize: 8,
     maxSize: 11,
-    minFill: 0.3,
-    maxFill: 0.4,
+    minFill: 0.95,
+    maxFill: 0.95,
     minLen: 2,
     maxLen: 4,
     minBlind: 1,
-    maxBlind: 3,
+    maxBlind: 4,
     hearts: 5,
     band: 1,
     gateChance: 0,
@@ -159,12 +167,12 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
     // of three arrows is not easy, it is empty -- there is nothing to read.
     minSize: 12,
     maxSize: 16,
-    minFill: 0.26,
-    maxFill: 0.35,
+    minFill: 0.95,
+    maxFill: 0.95,
     minLen: 2,
     maxLen: 5,
-    minBlind: 3,
-    maxBlind: 7,
+    minBlind: 4,
+    maxBlind: 14,
     hearts: 5,
     band: 1,
     gateChance: 0,
@@ -172,12 +180,12 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   casual: {
     minSize: 18,
     maxSize: 24,
-    minFill: 0.23,
-    maxFill: 0.31,
+    minFill: 0.95,
+    maxFill: 0.95,
     minLen: 3,
     maxLen: 8,
-    minBlind: 6,
-    maxBlind: 13,
+    minBlind: 14,
+    maxBlind: 45,
     hearts: 5,
     band: 2,
     gateChance: 0,
@@ -185,12 +193,12 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   medium: {
     minSize: 27,
     maxSize: 32,
-    minFill: 0.21,
-    maxFill: 0.28,
+    minFill: 0.95,
+    maxFill: 0.95,
     minLen: 3,
     maxLen: 11,
-    minBlind: 12,
-    maxBlind: 24,
+    minBlind: 40,
+    maxBlind: 110,
     hearts: 5,
     band: 2,
     gateChance: 0.15,
@@ -198,12 +206,12 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   tricky: {
     minSize: 32,
     maxSize: 37,
-    minFill: 0.21,
-    maxFill: 0.29,
+    minFill: 0.95,
+    maxFill: 0.95,
     minLen: 4,
     maxLen: 13,
-    minBlind: 20,
-    maxBlind: 38,
+    minBlind: 95,
+    maxBlind: 200,
     hearts: 5,
     band: 3,
     gateChance: 0.25,
@@ -211,27 +219,34 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   hard: {
     minSize: 37,
     maxSize: 42,
-    minFill: 0.25,
-    maxFill: 0.33,
+    minFill: 0.95,
+    maxFill: 0.95,
     minLen: 4,
     maxLen: 15,
-    minBlind: 34,
-    maxBlind: 62,
+    minBlind: 180,
+    maxBlind: 330,
     hearts: 5,
     band: 3,
     gateChance: 0.35,
   },
+  // The four tiers below all hit `MAX_ARROWS_PER_LEVEL`, which changes what the
+  // minimum length is *for*. On a small board it stops the generator scattering
+  // trivial two-cell stubs. Here the arrow count is already pinned, so coverage is
+  // exactly `180 x achieved body length / capacity` — and a higher floor is the
+  // only lever that raises it without putting more snakes on screen. Measured at
+  // the old floors these four came in at 77-78% of the playable area against a
+  // target of 80-90%; the floors below are what closes that gap for free.
   superHard: {
     // Past this size the board no longer fits a phone screen, and inspecting it
     // means panning and zooming. That is the tier's defining feature.
     minSize: 46,
     maxSize: 52,
-    minFill: 0.28,
-    maxFill: 0.37,
-    minLen: 5,
+    minFill: 0.95,
+    maxFill: 0.95,
+    minLen: 8,
     maxLen: 19,
-    minBlind: 56,
-    maxBlind: 100,
+    minBlind: 280,
+    maxBlind: 430,
     hearts: 5,
     band: 4,
     gateChance: 0.4,
@@ -239,12 +254,12 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   extremeHard: {
     minSize: 50,
     maxSize: 55,
-    minFill: 0.33,
-    maxFill: 0.42,
-    minLen: 5,
+    minFill: 0.95,
+    maxFill: 0.95,
+    minLen: 9,
     maxLen: 22,
-    minBlind: 92,
-    maxBlind: 158,
+    minBlind: 330,
+    maxBlind: 500,
     hearts: 5,
     band: 4,
     gateChance: 0.45,
@@ -252,12 +267,12 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   brutal: {
     minSize: 54,
     maxSize: 58,
-    minFill: 0.4,
-    maxFill: 0.5,
-    minLen: 6,
+    minFill: 0.95,
+    maxFill: 0.95,
+    minLen: 10,
     maxLen: 25,
-    minBlind: 150,
-    maxBlind: 235,
+    minBlind: 380,
+    maxBlind: 560,
     hearts: 5,
     band: 5,
     gateChance: 0.5,
@@ -265,12 +280,12 @@ const TIERS: Record<DifficultyTier, TierSpec> = {
   nightmare: {
     minSize: 57,
     maxSize: 60,
-    minFill: 0.46,
-    maxFill: 0.58,
-    minLen: 6,
+    minFill: 0.95,
+    maxFill: 0.95,
+    minLen: 11,
     maxLen: 28,
-    minBlind: 215,
-    maxBlind: 330,
+    minBlind: 430,
+    maxBlind: 650,
     hearts: 5,
     band: 5,
     gateChance: 0.55,
@@ -300,110 +315,6 @@ const PLANNING_FROM = 120;
 export function isPlanningLevel(id: number): boolean {
   return id >= PLANNING_FROM && id <= 590 && id % PLANNING_STEP === 0;
 }
-
-/**
- * Dense boards: roughly four cells in five carrying a snake.
- *
- * **Density and board size are in direct opposition, and the trade is physical
- * rather than a tuning failure.** A board is solvable only if its blocking graph is
- * acyclic, and an arrow can only move when its whole ray to the edge is clear — so
- * at fill `f`, an arrow with a ray of `L` cells is free with probability roughly
- * `(1 - f)^L`. Bigger boards mean longer rays, so at fixed density the chance that
- * *anything* on the board can ever move collapses exponentially with size.
- *
- * That is measured, not assumed. `npx tsx tools/probe-density.ts`, at the attempt
- * budget the real build allows:
- *
- * | board | best fill achieved | boards solvable |
- * |---|---|---|
- * | 20x20 | 76% | 4 of 4 |
- * | 24x24 | 76% | 4 of 4 |
- * | 30x30 | 73% | 2 of 4 |
- * | 40x40 | 65% | 1 of 4 |
- * | 50x50, 60x60 | — | **0 of 4** |
- *
- * So a dense level is a *small* level. `DENSE_MAX_SIZE` sits where the yield is
- * still comfortable; asking for four-fifths coverage of a 50x50 board does not
- * produce a hard level, it produces no level at all.
- *
- * They run from `DENSE_FROM` upward on their own cadence in every tier from Medium
- * on, so each of those tiers gets a run of them rather than the idea being saved
- * for the end. A dense 24x24 is a harder read than a sparse 40x40, which is exactly
- * why they belong in the middle of the game too.
- */
-const DENSE_STEP = 7;
-const DENSE_FROM = 60;
-const DENSE_MIN_SIZE = 18;
-const DENSE_MAX_SIZE = 24;
-/**
- * Asked-for fill, chosen from measurement rather than from the target.
- *
- * Self-avoiding growth always strands cells, so the generator lands roughly a
- * tenth below whatever it is asked for. Asking 93% is what actually produces the
- * **77-81% board coverage** the probe measures at these sizes — asking for 80%
- * would ship 72%, which is outside the band.
- */
-const DENSE_FILL = 0.93;
-/** Long enough to keep the arrow count renderable, short enough to still read. */
-const DENSE_MAX_BODY = 12;
-
-/** Tiers that carry dense levels. Below Medium a board this packed is not fair. */
-const DENSE_TIERS: ReadonlySet<DifficultyTier> = new Set<DifficultyTier>([
-  'medium',
-  'tricky',
-  'hard',
-  'superHard',
-  'extremeHard',
-  'brutal',
-  'nightmare',
-]);
-
-/** True if this level should be packed to roughly four-fifths coverage. */
-export function isDenseLevel(id: number, tier: DifficultyTier): boolean {
-  return id >= DENSE_FROM && id % DENSE_STEP === 0 && DENSE_TIERS.has(tier);
-}
-
-/**
- * Shapes a dense level may use: the ones that fill most of their grid.
- *
- * Fill is expressed as a share of the *silhouette*, but density is something a
- * player sees against the whole **board**. On a letter or a helix the mask is a
- * third of the grid, so packing it to 85% still leaves a board that looks mostly
- * empty — which is precisely what the first attempt shipped: dense levels averaging
- * 37% board coverage, with one at 10%.
- *
- * So a dense level needs a silhouette that is nearly all board to begin with. This
- * is measured rather than hand-listed for the same reason the fragmenting set is:
- * a new shape classifies itself, and capacity at a given size is not something to
- * judge by eye.
- *
- * The bar is high enough that in practice only the open rectangle clears it, and
- * that is a deliberate concession rather than an oversight. A wider bar was tried:
- * at 70% it admitted circle, butterfly, ghost, dice and shield, and dense levels
- * shipped at **54% average board coverage** — because 93% of a shield-shaped mask
- * is only 65% of the grid the player is looking at. There is no fill that fixes
- * that; the mask simply is not the board.
- *
- * So a dense level is a full rectangle, and its variety comes from size and aspect
- * instead of silhouette. Four-fifths coverage was the requirement; a recognisable
- * outline was not.
- */
-/**
- * Board size at which shape properties are measured.
- *
- * Shared by the dense-shape and fragmenting-shape filters so both classify a
- * silhouette against the same yardstick. Declared here because it is used by the
- * first of them, and a module-level const cannot be read before its definition.
- */
-const REFERENCE_SIZE = 18;
-
-const DENSE_MIN_SHAPE_CAPACITY = 0.9;
-
-const DENSE_SHAPES: readonly ShapeName[] = SHAPE_NAMES.filter((name) => {
-  const mask = maskFor(name, REFERENCE_SIZE, REFERENCE_SIZE);
-  const fill = maskCapacity(mask) / (REFERENCE_SIZE * REFERENCE_SIZE);
-  return fill >= DENSE_MIN_SHAPE_CAPACITY;
-});
 
 /**
  * How the tier mix shifts across the game.
@@ -590,27 +501,6 @@ const PLANNING_QUALIFIERS: readonly string[] = [
   'Final-Door',
 ];
 
-/**
- * Names for boards packed to four-fifths coverage.
- *
- * Worth signalling, like the planning levels: a dense board is a different kind of
- * work, and a player who opens one wants to know that before they start counting.
- */
-const DENSE_QUALIFIERS: readonly string[] = [
-  'Packed',
-  'Crowded',
-  'Teeming',
-  'Choked',
-  'Swarming',
-  'Brimming',
-  'Thronged',
-  'Crammed',
-  'Heaving',
-  'Jammed',
-  'Bristling',
-  'Overrun',
-];
-
 /** Names for levels carrying an ordinary (opening) gate. */
 const GATED_QUALIFIERS: readonly string[] = [
   'Locked',
@@ -639,7 +529,24 @@ function shapeLabel(shape: ShapeName): string {
  * plan overshoots. Growth paints itself into corners and abandons pockets too
  * small to hold another body, so raw capacity is always an overestimate.
  */
-const USABLE_FRACTION = 0.6;
+export const USABLE_FRACTION = 0.6;
+
+/**
+ * The same figure for a **packed** board, which is nearly every level.
+ *
+ * `growPackedBoard` places centre-outward and does not strand pockets the way a
+ * random walk does; measured across the shipped library it fills about 87% of the
+ * playable area. Sizing those plans at 0.6 was not merely pessimistic, it was the
+ * binding constraint on the four biggest tiers: `arrowsFor` capped nightmare at
+ * 114 arrows when the board had room for 180, and the tier came in at 72% against
+ * a target of 80-90%.
+ *
+ * Still short of the measured 87%, because this figure decides how much snake to
+ * *ask* for and asking for slightly less than will fit is the safe direction — the
+ * packer keeps what it can place and the level is simply a little sparser, where
+ * overshooting wastes attempts on plans that cannot be met.
+ */
+export const PACKED_USABLE_FRACTION = 0.85;
 
 /**
  * Hard ceiling on how many snakes one level may contain.
@@ -647,16 +554,18 @@ const USABLE_FRACTION = 0.6;
  * Nothing in the difficulty model wants this — by every metric, more arrows is
  * more difficulty. It exists for the two things the model does not see.
  *
- * **Rendering.** Each snake is three or four SVG nodes, and a 60x60 board at the
- * fill its tier asks for would want close to three hundred of them. That is a
- * thousand nodes on a mid-range phone, redrawn on every tap.
+ * **Rendering.** Each snake is three or four SVG nodes — arrows past
+ * `SIMPLIFY_ABOVE_ARROWS` drop their shadow and highlight, which is most of the
+ * cost. A packed 50x50 board wants about 180 of them, which is the most this
+ * renderer should be asked to carry; the untuned figure at full coverage on 60x60
+ * is past 250 and climbing.
  *
  * **Patience.** Clearing 300 snakes on one board is not a harder puzzle than
  * clearing 110, it is the same puzzle four times over. Difficulty on the big
  * boards comes from tracing long snakes through a tangle, which is what the raised
  * body lengths are for.
  */
-const MAX_ARROWS_PER_LEVEL = 110;
+const MAX_ARROWS_PER_LEVEL = 180;
 
 /**
  * Turn a fill fraction into an arrow count the shape can actually hold.
@@ -679,11 +588,16 @@ function arrowsFor(
   minLen: number,
   maxLen: number,
   floor = 5,
+  usable = USABLE_FRACTION,
 ): number {
   const capacity = maskCapacity(maskFor(shape, rows, cols));
   const averageLength = (minLen + maxLen) / 2;
-  const byFill = Math.floor((capacity * fill) / averageLength);
-  const byCapacity = Math.floor((capacity * USABLE_FRACTION) / minLen);
+  // Divided by a fraction of the aspiration, because a packed walk rarely reaches
+  // its target: it runs out of room and is kept anyway, so the achieved average is
+  // roughly 60% of what was asked. Sizing off the aspiration leaves the board short
+  // of arrows and short of coverage.
+  const byFill = Math.floor((capacity * fill) / (averageLength * 0.6));
+  const byCapacity = Math.floor((capacity * usable) / minLen);
   return Math.max(1, Math.min(Math.max(floor, byFill), byCapacity, MAX_ARROWS_PER_LEVEL));
 }
 
@@ -717,6 +631,24 @@ function pickTier(
  * detailed silhouette on a 7x7 grid is unreadable mush, so bitmaps only appear
  * once there are enough cells to carry them.
  */
+/**
+ * How often a level uses a silhouette instead of the whole grid.
+ *
+ * This is the dial where two requirements pull against each other, and there is no
+ * setting that satisfies both.
+ *
+ * Density is measured against the **grid**, because that is what a player sees. A
+ * silhouette only occupies part of the grid — a letter or a helix is a third of it
+ * — so packing that mask to 93% still leaves a board that looks half empty. With
+ * shapes on every level, measured coverage came out at 50% average against a
+ * target of 80–90%.
+ *
+ * So most levels are now the open rectangle, and shaped ones are a deliberate
+ * minority where the silhouette is the point. Raise this for more variety of
+ * outline; lower it for more levels that look packed. It cannot buy both.
+ */
+const SHAPED_LEVEL_SHARE = 0.25;
+
 function shapePoolFor(size: number, demanding: boolean): readonly ShapeName[] {
   if (size <= 9) return ['free', 'diamond', 'circle', 'cross', 'ring', 'free'];
 
@@ -759,6 +691,14 @@ function isFineDetailShape(name: ShapeName): boolean {
  */
 const MAX_ISLANDS_FOR_HARD_TIERS = 2;
 const MIN_CAPACITY_FOR_HARD_TIERS = 0.55;
+
+/**
+ * Board size at which shape properties are measured.
+ *
+ * A silhouette's capacity and how many islands it leaves are both size-dependent,
+ * so both filters classify against the same yardstick rather than each picking one.
+ */
+const REFERENCE_SIZE = 18;
 
 const FRAGMENTING_SHAPES: ReadonlySet<ShapeName> = new Set(
   SHAPE_NAMES.filter((name) => {
@@ -804,7 +744,6 @@ function buildOnboarding(): LevelPlan[] {
       maxBodyLength: maxLen,
       targetBlindMistakes: Number(blind.toFixed(1)),
       hearts: 5,
-      dense: false,
     });
   }
 
@@ -828,14 +767,18 @@ function buildMainRun(): LevelPlan[] {
     const tier: DifficultyTier = id > 590 ? 'nightmare' : pickTier(rng, weightsFor(id));
     const spec = TIERS[tier];
 
-    const dense = isDenseLevel(id, tier);
-
     // Level 600 is the largest board in the game.
     let size = id === 600 ? spec.maxSize : Math.round(lerp(rng, spec.minSize, spec.maxSize));
 
-    // A dense board is a *small* board, and that is physics rather than a
-    // compromise — see `isDenseLevel`.
-    if (dense) size = Math.min(size, Math.round(lerp(rng, DENSE_MIN_SIZE, DENSE_MAX_SIZE)));
+    // Density has a reach, and past it the board simply cannot be filled: covering
+    // four-fifths of a 60x60 grid needs upwards of 250 snakes, which is past what
+    // the renderer should carry and past what the walk can place before the board
+    // closes up. Measured coverage falls from 88% at 40x40 to 72% at 60x60.
+    //
+    // Since density was set as the highest priority, board size yields to it. The
+    // largest boards are 50 a side rather than 60 — still four screens, still
+    // needing zoom and pan, and now actually packed.
+    size = Math.min(size, MAX_PACKED_SIZE);
 
     // Planning levels are capped well below their tier's usual size. Proving a
     // shutter board solvable is a search rather than a graph peel, and the cost of
@@ -848,16 +791,32 @@ function buildMainRun(): LevelPlan[] {
     // levels of itself. The skip loop matters now that the pool differs level to
     // level — a demanding tier draws from a smaller set, so the same cursor value
     // can land on the same shape two levels running even though it advanced.
-    const pool = dense ? DENSE_SHAPES : shapePoolFor(size, spec.minBlind >= DEMANDING_MIN_BLIND);
-    let shape = pool[shapeCursor % pool.length]!;
-    shapeCursor += 1;
-    for (let skip = 0; skip < pool.length && shape === lastShape; skip += 1) {
+    let shape: ShapeName;
+    if (rng() < SHAPED_LEVEL_SHARE) {
+      const pool = shapePoolFor(size, spec.minBlind >= DEMANDING_MIN_BLIND);
       shape = pool[shapeCursor % pool.length]!;
       shapeCursor += 1;
+      for (let skip = 0; skip < pool.length && shape === lastShape; skip += 1) {
+        shape = pool[shapeCursor % pool.length]!;
+        shapeCursor += 1;
+      }
+    } else {
+      shape = 'free';
     }
     lastShape = shape;
 
-    const fill = dense ? DENSE_FILL : lerp(rng, spec.minFill, spec.maxFill);
+    // Shutter levels are not packed (see `build-levels.ts`), so they need a fill
+    // that suits an open board rather than the packing target every other level
+    // uses. They are the one deliberate exception to the density target, and the
+    // reason is the mechanic rather than the generator: a `shuts` gate asks the
+    // player to work out an *order*, and an order can only be read off a board
+    // sparse enough to see the dependencies in. Packing these would hide the one
+    // thing they exist to teach.
+    //
+    // Raised from a quarter now that the search is bounded (`SCREEN_BUDGET`) and
+    // proving a candidate no longer costs minutes — but deliberately still well
+    // under the packing target.
+    const fill = planning ? 0.45 : lerp(rng, spec.minFill, spec.maxFill);
     // Drift the blind-mistake target upward across the game inside each tier, so
     // a late Hard level is harder than an early one without changing tier.
     const drift = (id - 20) / 580;
@@ -866,11 +825,7 @@ function buildMainRun(): LevelPlan[] {
     // Slight rectangular variation so not every board is a perfect square. Dense
     // boards lean on this harder: they are all the same silhouette, so size and
     // proportion are the only things left to tell them apart.
-    const stretch = dense
-      ? Math.round(lerp(rng, 0, 6))
-      : rng() < 0.25
-        ? Math.round(lerp(rng, 1, 3))
-        : 0;
+    const stretch = rng() < 0.3 ? Math.round(lerp(rng, 1, 4)) : 0;
     const rows = size;
     const cols = size + stretch;
 
@@ -880,40 +835,42 @@ function buildMainRun(): LevelPlan[] {
     // arrow count renderable at four-fifths coverage, but a snake longer than about
     // a dozen cells on a 24-wide board wraps the whole thing and stops reading as a
     // shape at all.
-    const maxLen = planning
-      ? Math.min(spec.maxLen, 9)
-      : dense
-        ? Math.min(spec.maxLen, DENSE_MAX_BODY)
-        : spec.maxLen;
-    const minLen = Math.min(dense ? Math.max(spec.minLen, 4) : spec.minLen, maxLen);
+    const maxLen = planning ? Math.min(spec.maxLen, 9) : spec.maxLen;
+    const minLen = Math.min(spec.minLen, maxLen);
 
-    // A dense board is already asking a lot. Adding a gate on top means two
-    // mechanics competing for the same attention, and neither getting it.
-    const gate: GatePlan | undefined = dense
-      ? undefined
-      : planning
-        ? { mode: 'shuts', groupCount: 1, cellsPerGroup: 1 + Math.floor(rng() * 2) }
-        : rng() < spec.gateChance
-          ? {
-              mode: 'opens',
-              groupCount: rng() < 0.3 ? 2 : 1,
-              cellsPerGroup: 1 + Math.floor(rng() * 3),
-            }
-          : undefined;
+    const gate: GatePlan | undefined = planning
+      ? { mode: 'shuts', groupCount: 1, cellsPerGroup: 1 + Math.floor(rng() * 2) }
+      : rng() < spec.gateChance
+        ? {
+            mode: 'opens',
+            groupCount: rng() < 0.3 ? 2 : 1,
+            cellsPerGroup: 1 + Math.floor(rng() * 3),
+          }
+        : undefined;
 
     plans.push({
       id,
-      name: nameFor(id, shape, planning, gate !== undefined, dense),
+      name: nameFor(id, shape, planning, gate !== undefined),
       tier,
       shape,
       rows,
       cols,
-      arrowCount: arrowsFor(shape, rows, cols, fill, minLen, maxLen),
+      // Shutter levels are the only ones grown at random rather than packed, so
+      // they are the only ones the conservative fraction still describes.
+      arrowCount: arrowsFor(
+        shape,
+        rows,
+        cols,
+        fill,
+        minLen,
+        maxLen,
+        5,
+        planning ? USABLE_FRACTION : PACKED_USABLE_FRACTION,
+      ),
       minBodyLength: minLen,
       maxBodyLength: maxLen,
       targetBlindMistakes: Number(blind.toFixed(1)),
       hearts: spec.hearts,
-      dense,
       ...(gate ? { gate } : {}),
     });
   }
@@ -928,17 +885,10 @@ function buildMainRun(): LevelPlan[] {
  * a board plays by a different rule, and a player who has just lost one without
  * spending a heart deserves to have been warned by something.
  */
-function nameFor(
-  id: number,
-  shape: ShapeName,
-  planning: boolean,
-  gated: boolean,
-  dense: boolean,
-): string {
+function nameFor(id: number, shape: ShapeName, planning: boolean, gated: boolean): string {
   if (id === 600) return 'Last Word';
   if (planning)
     return `${PLANNING_QUALIFIERS[id % PLANNING_QUALIFIERS.length]} ${shapeLabel(shape)}`;
-  if (dense) return `${DENSE_QUALIFIERS[id % DENSE_QUALIFIERS.length]} ${shapeLabel(shape)}`;
   if (gated) return `${GATED_QUALIFIERS[id % GATED_QUALIFIERS.length]} ${shapeLabel(shape)}`;
   return `${QUALIFIERS[(id * 7) % QUALIFIERS.length]} ${shapeLabel(shape)}`;
 }

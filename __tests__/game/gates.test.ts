@@ -36,6 +36,7 @@ import {
   parseAscii,
   renderAscii,
   resolveTap,
+  SCREEN_BUDGET,
   solve,
   solveBruteForce,
   startSession,
@@ -324,6 +325,83 @@ describe('a `shuts` gate', () => {
 
     expect(castRay(board, initial, 0).blockedBy).toBe('nothing');
     expect(solve(board, initial)).toEqual({ kind: 'solved', solution: [0] });
+  });
+});
+
+describe('a bounded search', () => {
+  // The generator screens candidates at `SCREEN_BUDGET` rather than the full
+  // `SEARCH_BUDGET`, because proving a shutter board *unsolvable* means exhausting
+  // the search and one level was measured at 309 seconds on its own. That is only
+  // a safe trade if a small budget can never turn into a wrong answer, so these
+  // pin the one property the level pipeline actually rests on.
+
+  it('never calls an unproven board solvable', () => {
+    // A budget of one state cannot get past the opening position, so every verdict
+    // here has to be `unknown` — never `solved`, and never `unsolvable` either.
+    const { board, initial } = shutsBoard();
+    const outcome = solve(board, initial, { budget: 1 });
+
+    expect(outcome.kind).toBe('unknown');
+    expect(isSolvable(board, initial, { budget: 1 })).toBe(false);
+  });
+
+  it('treats "out of budget" as doomed, so an unproven board is never played on', () => {
+    // `isDoomed` drives an offer to restart. Erring towards `true` costs the player
+    // a dialog; erring towards `false` leaves them on a board that cannot be won.
+    const { board, initial } = shutsBoard();
+    expect(isDoomed(board, initial)).toBe(false);
+    expect(isDoomed(board, initial, { budget: 1 })).toBe(true);
+  });
+
+  it('gives the same verdict as an unbounded search on hundreds of random boards', () => {
+    // The claim being tested is one-directional: a bounded search may answer
+    // `unknown` where a full one is definite, but it must never contradict it.
+    const rng = seededRandom(31337);
+    let bounded = 0;
+    let deferred = 0;
+
+    for (let trial = 0; trial < 300; trial += 1) {
+      // 6x6 with up to nine arrows, against a budget of five states, because the
+      // test needs both arms to fire: on a 4x4 board a dozen states settles
+      // everything, and the "ran out" half of the claim would go unchecked.
+      const level = randomGatedLevel(
+        rng,
+        { rows: 6, cols: 6, arrowCount: 3 + Math.floor(rng() * 7), maxBodyLength: 4 },
+        'shuts',
+      );
+      const built = buildLevel(level);
+      if (!built.ok) continue;
+      const { board, initial } = built.value;
+      if (!board.hasShutters) continue;
+
+      const full = solve(board, initial).kind;
+      const small = solve(board, initial, { budget: 5 }).kind;
+
+      if (small === 'unknown') {
+        deferred += 1;
+        continue;
+      }
+      if (small !== full) {
+        throw new Error(
+          `bounded search contradicted the full one (bounded=${small}, full=${full}):\n` +
+            renderAscii(board, initial),
+        );
+      }
+      bounded += 1;
+    }
+
+    // Both arms have to be exercised or the test proves nothing: some boards must
+    // have been decided within twelve states, and some must have run out.
+    expect(bounded).toBeGreaterThan(0);
+    expect(deferred).toBeGreaterThan(0);
+  });
+
+  it('excludes unproven moves from the blunder rate rather than guessing at them', () => {
+    // `blunderRate` means "share of the taps on offer that provably lose". A move
+    // the search could not settle is neither a trap nor safe, so it leaves the
+    // denominator — which is why a tighter budget must not drag the number around.
+    const { board, initial } = shutsBoard();
+    expect(analyze(board, initial, { budget: SCREEN_BUDGET }).blunderRate).toBeCloseTo(0.25, 6);
   });
 });
 

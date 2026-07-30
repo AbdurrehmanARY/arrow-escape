@@ -15,11 +15,14 @@
  */
 
 import type { DifficultyTier } from '../src/game/codec';
-import { CURRICULUM, isOversized } from './curriculum';
+import {
+  CURRICULUM,
+  isOversized,
+  isPlanningLevel,
+  PACKED_USABLE_FRACTION,
+  USABLE_FRACTION,
+} from './curriculum';
 import { maskCapacity, maskFor } from './shapes';
-
-/** Fraction of a mask a random self-avoiding fill can realistically use. */
-const USABLE_FRACTION = 0.6;
 
 const verbose = process.argv.includes('--verbose');
 
@@ -33,7 +36,14 @@ let biggest = 0;
 for (const plan of CURRICULUM) {
   const mask = maskFor(plan.shape, plan.rows, plan.cols);
   const capacity = maskCapacity(mask);
-  const usable = Math.floor(capacity * USABLE_FRACTION);
+  // Which grower will run decides how much of the mask is reachable: a packed
+  // board places centre-outward and strands far less than a random walk. Imported
+  // from `curriculum.ts` rather than restated, because the two drifting apart is
+  // how a plan gets rejected here that the generator could have met — or worse,
+  // accepted here and then burned thousands of attempts failing.
+  const usable = Math.floor(
+    capacity * (isPlanningLevel(plan.id) ? USABLE_FRACTION : PACKED_USABLE_FRACTION),
+  );
   const need = plan.arrowCount * plan.minBodyLength;
   const ok = need <= usable;
 

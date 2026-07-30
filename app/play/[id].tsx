@@ -39,13 +39,12 @@ import {
   findAllSafeMoves,
   findSafeMove,
   isDoomed,
-  resolveTap,
 } from '@game';
 import { LEVEL_COUNT, levelById, tierOf } from '@data/levels';
 import { TIER_LABELS } from '@game/codec';
 import { WIN_OVERLAY_DELAY_MS } from '@config';
 import { availability, preload, showRewarded } from '@services/ads';
-import { playSfx } from '@services/audio';
+import { playMusic, playSfx, playSting } from '@services/audio';
 import { gameReducer, initGameState } from '@state/gameReducer';
 import { useHintStore } from '@state/hintStore';
 import { useOnboardingStore, type CoachMoment } from '@state/onboardingStore';
@@ -189,7 +188,25 @@ export default function PlayScreen() {
 
   useEffect(() => {
     setLastPlayed(levelId);
+    playMusic('gameplay');
   }, [levelId, setLastPlayed]);
+
+  /**
+   * One warning when the last heart is reached, and only one.
+   *
+   * Keyed on the count rather than fired from the tap, so it cannot double up when
+   * a tap is delivered twice — and so restarting back to five and losing four again
+   * genuinely re-arms it.
+   */
+  const warnedRef = useRef(false);
+  useEffect(() => {
+    if (state.session.heartsLeft === 1 && !warnedRef.current) {
+      warnedRef.current = true;
+      playSfx('lastHeartWarning');
+    } else if (state.session.heartsLeft > 1) {
+      warnedRef.current = false;
+    }
+  }, [state.session.heartsLeft]);
 
   // Save the moment a level is cleared, not when the overlay is dismissed —
   // otherwise a player who closes the app on the win screen loses the level.
@@ -197,7 +214,8 @@ export default function PlayScreen() {
     if (status !== 'won') return;
 
     completeLevel(levelId, state.session.mistakes, state.session.heartsLeft);
-    playSfx('win');
+    playSfx('levelComplete');
+    playSting('victory');
     if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     // Only the overlay is delayed, so the board clearing is visible before
@@ -208,7 +226,8 @@ export default function PlayScreen() {
 
   useEffect(() => {
     if (status !== 'failed' && status !== 'stuck') return;
-    playSfx('fail');
+    playSfx(status === 'stuck' ? 'gameOver' : 'outOfHearts');
+    playSting('failure');
     if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   }, [status, haptics]);
 
@@ -251,6 +270,7 @@ export default function PlayScreen() {
    */
   const lastTap = useRef<{ index: number; at: number }>({ index: -1, at: 0 });
 
+
   /**
    * Stable across renders, deliberately.
    *
@@ -264,6 +284,19 @@ export default function PlayScreen() {
     [],
   );
 
+  /**
+   * Tapping an arrow: dispatch, and nothing else.
+   *
+   * Stable across renders, and that matters more than it looks. This reaches the
+   * board's tap gesture, and a gesture object rebuilt on every tap has to be
+   * re-attached by gesture-handler mid-interaction — its own source of dropped
+   * touches. So it depends on the level, not on the board state.
+   *
+   * Sound and haptics are *not* fired here. They used to be, which forced this
+   * callback to read the live board so it could ask `resolveTap` what had
+   * happened. The reducer already records that as `lastOutcome`, so the feedback
+   * is driven from there instead — see the effect below.
+   */
   const onTapArrow = useCallback(
     (index: number) => {
       if (!built?.ok) return;
@@ -274,28 +307,33 @@ export default function PlayScreen() {
 
       setHintedArrow(undefined);
       setHintNotice(undefined);
-
-      // Ask the rules what this tap does, rather than guessing from the safe-move
-      // set. `findAllSafeMoves` answers a different question (is this move safe,
-      // not is it legal), returns nothing at all on an unsolvable board, and costs
-      // a solve per tap for information `resolveTap` already has.
-      const board = built.value.board;
-      const outcome = resolveTap(board, state.session.state, index);
-
-      dispatch({ type: 'tap', board, arrowIndex: index });
-
-      // Fired here rather than from an effect, because an effect would also fire
-      // on mount and on restart, which reads as phantom noise.
-      if (outcome.kind === 'blocked') {
-        playSfx('blocked');
-        if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      } else if (outcome.kind === 'escaped') {
-        playSfx('release');
-        if (haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
+      dispatch({ type: 'tap', board: built.value.board, arrowIndex: index });
     },
-    [built, state.session.state, haptics],
+    [built],
   );
+
+  /**
+   * Sound and haptics for whatever the last tap did.
+   *
+   * Keyed on the tap counter rather than on the outcome, because two identical
+   * blocked taps in a row produce equal outcomes and must still both be felt.
+   * The `taps === 0` guard is what stops it firing on mount and on restart, which
+   * would read as phantom noise.
+   */
+  useEffect(() => {
+    if (state.taps === 0) return;
+    const outcome = state.lastOutcome;
+    if (outcome?.kind === 'blocked') {
+      playSfx('collision');
+      playSfx('heartLost');
+      if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    } else if (outcome?.kind === 'escaped') {
+      playSfx('arrowRelease');
+      if (haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    // `lastOutcome` is deliberately absent: the tap counter is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.taps, haptics]);
 
   const doRestart = useCallback(() => {
     if (!built?.ok) return;
@@ -333,7 +371,7 @@ export default function PlayScreen() {
     if (!spendHint()) return;
     setHintedArrow(hint.arrowIndex);
     setHintNotice(`This one can reach the edge.`);
-    playSfx('tap');
+    playSfx('hintUsed');
   }, [built, hintsAvailable, spendHint, state.session.state, status]);
 
   const onEarnHint = useCallback(async () => {
@@ -401,7 +439,10 @@ export default function PlayScreen() {
         maxHearts={state.session.maxHearts}
         arrowsLeft={state.session.state.remaining}
         arrowsTotal={built.value.board.arrows.length}
-        onPause={() => setPaused(true)}
+        onPause={() => {
+          playSfx('pause');
+          setPaused(true);
+        }}
       />
 
       <View style={styles.boardWrap}>
@@ -525,8 +566,12 @@ export default function PlayScreen() {
         arrowsTotal={built.value.board.arrows.length}
         heartsLeft={state.session.heartsLeft}
         maxHearts={state.session.maxHearts}
-        onResume={() => setPaused(false)}
+        onResume={() => {
+          playSfx('resume');
+          setPaused(false);
+        }}
         onRestart={() => {
+          playSfx('levelRestart');
           setPaused(false);
           onRestartPressed();
         }}

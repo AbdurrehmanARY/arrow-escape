@@ -76,6 +76,28 @@ export type SolveOutcome =
 export const SEARCH_BUDGET = 200_000;
 
 /**
+ * Budget for screening a *candidate* board, as opposed to proving a shipped one.
+ *
+ * Two orders of magnitude smaller, and the reason is a build that stopped
+ * finishing. Proving a board unsolvable means exhausting the search, so every bad
+ * shutter candidate costs the full budget — and the generator produces dozens per
+ * level. Measured: one 23x25 shutter level took **309 seconds on its own**, while
+ * every packed board around it took under 110ms.
+ *
+ * Screening cheaply is not a loss of rigour, because it is not the last word: a
+ * candidate that survives is re-proved at the full `SEARCH_BUDGET` before it is
+ * written (see `tools/build-levels.ts`). The only thing a small budget discards is
+ * boards whose solution is hard to *find* — which is a fair description of a level
+ * no player could read either.
+ */
+export const SCREEN_BUDGET = 4_000;
+
+/** Bounds on a single solve. Omitted, the full `SEARCH_BUDGET` applies. */
+export interface SolveOptions {
+  readonly budget?: number;
+}
+
+/**
  * Who blocks whom, computed from the current layout.
  *
  * `blockedBy[y]` — arrows sitting on y's head-ray, plus, where that ray crosses a
@@ -267,9 +289,9 @@ function peel(
  * The single entry point the level validator and the hint system both call, so
  * "solvable" means the same thing everywhere in the project.
  */
-export function solve(board: Board, state: BoardState): SolveOutcome {
+export function solve(board: Board, state: BoardState, options?: SolveOptions): SolveOutcome {
   if (isCleared(state)) return { kind: 'solved', solution: [] };
-  if (board.hasShutters) return searchSolve(board, state);
+  if (board.hasShutters) return searchSolve(board, state, options?.budget ?? SEARCH_BUDGET);
   return peel(board, state).outcome;
 }
 
@@ -292,7 +314,7 @@ export function solve(board: Board, state: BoardState): SolveOutcome {
  * answer without backtracking, because "take the move that forecloses nothing" is
  * exactly the right instinct here.
  */
-function searchSolve(board: Board, state: BoardState): SolveOutcome {
+function searchSolve(board: Board, state: BoardState, budget: number): SolveOutcome {
   const seen = new Set<string>();
   const path: number[] = [];
   let visited = 0;
@@ -313,7 +335,7 @@ function searchSolve(board: Board, state: BoardState): SolveOutcome {
 
   const search = (current: BoardState): boolean => {
     if (isCleared(current)) return true;
-    if (visited >= SEARCH_BUDGET) {
+    if (visited >= budget) {
       exhausted = true;
       return false;
     }
@@ -339,7 +361,7 @@ function searchSolve(board: Board, state: BoardState): SolveOutcome {
   if (exhausted) {
     return {
       kind: 'unknown',
-      reason: `search gave up after ${SEARCH_BUDGET} states without finding a winning order`,
+      reason: `search gave up after ${budget} states without finding a winning order`,
     };
   }
   return { kind: 'unsolvable', reason: 'no tap order clears this board' };
@@ -353,8 +375,8 @@ function searchSolve(board: Board, state: BoardState): SolveOutcome {
  * proved at build time — and off-device it is exactly the answer the validator
  * needs to reject a candidate.
  */
-export function isSolvable(board: Board, state: BoardState): boolean {
-  return solve(board, state).kind === 'solved';
+export function isSolvable(board: Board, state: BoardState, options?: SolveOptions): boolean {
+  return solve(board, state, options).kind === 'solved';
 }
 
 /**
@@ -369,10 +391,10 @@ export function isSolvable(board: Board, state: BoardState): boolean {
  * Lives here rather than in `rules.ts` because it needs the solver, and the rules
  * module must not depend on it.
  */
-export function isDoomed(board: Board, state: BoardState): boolean {
+export function isDoomed(board: Board, state: BoardState, options?: SolveOptions): boolean {
   if (!board.hasShutters) return false;
   if (isCleared(state)) return false;
-  return solve(board, state).kind !== 'solved';
+  return solve(board, state, options).kind !== 'solved';
 }
 
 /**
@@ -477,6 +499,7 @@ export interface DifficultyMetrics {
 function trace(
   board: Board,
   state: BoardState,
+  options?: SolveOptions,
 ): {
   outcome: SolveOutcome;
   frontierSizes: number[];
@@ -485,7 +508,7 @@ function trace(
 } {
   if (!board.hasShutters) return { ...peel(board, state), blunderRate: 0 };
 
-  const outcome = solve(board, state);
+  const outcome = solve(board, state, options);
   const frontierSizes: number[] = [];
   const aliveCounts: number[] = [];
   if (outcome.kind !== 'solved') {
@@ -514,13 +537,24 @@ function trace(
     if (moves.length > 0 && index % stepStride === 0) {
       const sample = moves.slice(0, BLUNDER_SAMPLE_MOVES);
       let blunders = 0;
+      let judged = 0;
       for (const candidate of sample) {
         const result = resolveTap(board, current, candidate);
         if (result.kind !== 'escaped') continue;
-        if (isDoomed(board, applyOutcome(current, result))) blunders += 1;
+        // Judged one at a time rather than through `isDoomed`, because a move the
+        // search could not settle inside the budget is genuinely unknown — and this
+        // number means "share of the taps on offer that provably lose". Counting an
+        // unproven move as a trap would inflate it; counting it as safe would hide
+        // one. Leaving it out of the denominator does neither.
+        const verdict = solve(board, applyOutcome(current, result), options).kind;
+        if (verdict === 'unknown') continue;
+        judged += 1;
+        if (verdict !== 'solved') blunders += 1;
       }
-      blunderShareTotal += blunders / sample.length;
-      steps += 1;
+      if (judged > 0) {
+        blunderShareTotal += blunders / judged;
+        steps += 1;
+      }
     }
 
     current = applyOutcome(current, resolveTap(board, current, move));
@@ -597,7 +631,11 @@ function countCrowding(board: Board, state: BoardState): number {
 }
 
 /** Measure a level. Used by the generator to score candidates before curation. */
-export function analyze(board: Board, state: BoardState): DifficultyMetrics {
+export function analyze(
+  board: Board,
+  state: BoardState,
+  options?: SolveOptions,
+): DifficultyMetrics {
   const arrowCount = state.remaining;
   const boardArea = board.cellCount;
 
@@ -615,7 +653,7 @@ export function analyze(board: Board, state: BoardState): DifficultyMetrics {
     totalTurns += countTurns(board, i);
   }
 
-  const { outcome, frontierSizes, aliveCounts, blunderRate } = trace(board, state);
+  const { outcome, frontierSizes, aliveCounts, blunderRate } = trace(board, state, options);
   const solvable = outcome.kind === 'solved';
   const solutionLength = outcome.kind === 'solved' ? outcome.solution.length : 0;
 

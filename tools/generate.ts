@@ -36,8 +36,25 @@ import {
   legalMoves,
   renderAscii,
   resolveTap,
+  SCREEN_BUDGET,
 } from '../src/game';
 import { maskCapacity, maskFor, type ShapeName } from './shapes';
+
+/**
+ * Screening, not proving.
+ *
+ * Everything in this file is judging a *candidate*, and a candidate is cheap to
+ * throw away. Only shutter boards are affected — every other board is peeled, not
+ * searched — but on those the difference is the whole build: one shutter level was
+ * measured at 309 seconds against ~100ms for the packed boards either side of it,
+ * because proving a board unsolvable means exhausting the search and the generator
+ * makes dozens of doomed candidates per level.
+ *
+ * Whatever survives is re-solved at the full budget in `build-levels.ts` before it
+ * is written, so this trades away only boards that are hard to *find* an answer
+ * for — which is the kind of level worth losing.
+ */
+const SCREEN_BUDGET_OPTIONS = { budget: SCREEN_BUDGET } as const;
 
 /** Deterministic PRNG so a level library rebuilds byte-identically. */
 export function mulberry32(seed: number): () => number {
@@ -67,6 +84,14 @@ export interface GenerateOptions {
   readonly gate?: GateRequest;
   /** Filled in as attempts run, for the density probe. Tooling only. */
   readonly stats?: GenerateStats;
+  /**
+   * Pack the board centre-outward instead of growing it at random.
+   *
+   * The only way to reach four-fifths coverage and stay solvable — see
+   * `growPackedBoard`. Costs nothing on a sparse board but changes the character
+   * of the layout, so it is opt-in rather than the default.
+   */
+  readonly packed?: boolean;
 }
 
 /**
@@ -223,6 +248,225 @@ function scoreCandidate(metrics: DifficultyMetrics, options: GenerateOptions): n
   // and trivial to trace however many arrows are on it.
   const bendPenalty = Math.max(0, 1.1 - metrics.avgTurns);
   return mistakeGap * 2 + arrowGap + bendPenalty;
+}
+
+/** Walks tried from one start cell before giving up on it. See `tryPlaceAt`. */
+const PACK_RETRIES = 4;
+
+/**
+ * Shortest snake a packed board will accept.
+ *
+ * Two cells is the shortest thing the rules recognise as an arrow — it needs a
+ * neck to point from. On a board being filled to four-fifths, taking the two-cell
+ * scraps is what closes the last gaps.
+ */
+const PACK_MIN_BODY = 2;
+
+/**
+ * Grow a densely packed board that is solvable by construction, centre outward.
+ *
+ * The other approach — grow a board, then work out whether it can be solved — has
+ * a hard ceiling, and it was measured rather than guessed: at four-fifths coverage
+ * it produced nothing playable at all above about 30x30, because the chance a
+ * *random* dense board has an acyclic blocking graph collapses exponentially with
+ * size. Reversing arrows to unpick the knot claws some of it back and then stops.
+ *
+ * This turns the problem around. Snakes are placed from the middle of the board
+ * outward, and each new one is kept only if it has an end whose ray to the edge is
+ * clear of everything placed *so far*. That single rule is enough, because of how
+ * the two orders line up:
+ *
+ * - Placement runs centre outward, so when a snake is placed, the occupied cells
+ *   are all more central than it is and its outward ray crosses empty space.
+ * - **The peel order is exactly the reverse of the placement order.** When that
+ *   snake is tapped, the arrows still on the board are precisely those placed
+ *   before it — the ones its ray was checked against.
+ *
+ * So the check made at placement time is the same check the rules make at play
+ * time, and a board built this way cannot contain a blocking cycle. There is
+ * nothing to verify afterwards and nothing to repair.
+ *
+ * Dense boards peel from the outside in, which is what a player discovers anyway;
+ * this simply builds them in the order that makes that true.
+ */
+function growPackedBoard(
+  rng: () => number,
+  options: GenerateOptions,
+  maskCells: readonly number[],
+  owner: Int32Array,
+): readonly ArrowSpec[] | undefined {
+  const { rows, cols, arrowCount, minBodyLength, maxBodyLength } = options;
+
+  owner.fill(-2);
+  for (const cell of maskCells) owner[cell] = -1;
+
+  // Centre first. Ties are shuffled so two levels of the same size do not lay
+  // their snakes down in the same order.
+  const starts = [...maskCells];
+  shuffle(starts, rng);
+  const distanceToEdge = (cell: number): number => {
+    const r = Math.floor(cell / cols);
+    const c = cell % cols;
+    return Math.min(r, rows - 1 - r, c, cols - 1 - c);
+  };
+  starts.sort((a, b) => distanceToEdge(b) - distanceToEdge(a));
+
+  const arrows: ArrowSpec[] = [];
+  const scratch: number[] = [];
+
+  /** Does this end have a clear run to the edge over everything placed so far? */
+  const rayIsClear = (head: number, neck: number, index: number): boolean => {
+    const dr = Math.floor(head / cols) - Math.floor(neck / cols);
+    const dc = (head % cols) - (neck % cols);
+    let r = Math.floor(head / cols) + dr;
+    let c = (head % cols) + dc;
+
+    while (r >= 0 && r < rows && c >= 0 && c < cols) {
+      const occupant = owner[r * cols + c]!;
+      // -1 free, -2 outside the shape. Outside is not a wall: the mask only says
+      // where snakes may be grown, and an arrow leaves straight through it.
+      if (occupant >= 0 && occupant !== index) return false;
+      r += dr;
+      c += dc;
+    }
+    return true;
+  };
+
+  for (const start of starts) {
+    if (arrows.length >= arrowCount) break;
+    if (owner[start] !== -1) continue;
+    if (!tryPlaceAt(start)) continue;
+  }
+
+  /**
+   * Grow and keep a snake from this cell, retrying the walk a few times.
+   *
+   * The retry matters more as the board fills. A self-avoiding walk is random, so
+   * one attempt from a good cell can wander into a pocket and come out too short,
+   * or finish with both ends facing into the crowd. Trying again from the same
+   * start costs almost nothing and is the difference between leaving a hole and
+   * filling it — on a 60x60 board it is worth several percent of coverage.
+   */
+  function tryPlaceAt(start: number): boolean {
+    for (let attempt = 0; attempt < PACK_RETRIES; attempt += 1) {
+      if (growOne(start)) return true;
+    }
+    return false;
+  }
+
+  function growOne(start: number): boolean {
+    const index = arrows.length;
+    const body: number[] = [start];
+    owner[start] = index;
+
+    const target =
+      minBodyLength + Math.floor(rng() * Math.max(1, maxBodyLength - minBodyLength + 1));
+
+    let head = start;
+    while (body.length < target) {
+      const r = Math.floor(head / cols);
+      const c = head % cols;
+
+      scratch.length = 0;
+      if (r > 0 && owner[head - cols] === -1) scratch.push(head - cols);
+      if (r + 1 < rows && owner[head + cols] === -1) scratch.push(head + cols);
+      if (c > 0 && owner[head - 1] === -1) scratch.push(head - 1);
+      if (c + 1 < cols && owner[head + 1] === -1) scratch.push(head + 1);
+      if (scratch.length === 0) break;
+
+      // Warnsdorff's rule: step into the cell with the *fewest* onward options.
+      //
+      // A purely random self-avoiding walk is fine when there is room, and hopeless
+      // once the board is filling — it wanders into the open middle and strands
+      // pockets behind it, so long snakes rarely finish and coverage stalls. Taking
+      // the most constrained neighbour first makes the walk hug the frontier and
+      // consume awkward corners while they are still reachable. It is the classic
+      // knight's-tour heuristic, and it is what turns a 60x60 board from three-fifths
+      // covered into four-fifths.
+      //
+      // Ties are still broken by reservoir sample, so the shape stays varied rather
+      // than becoming a deterministic boustrophedon.
+      let chosen = -1;
+      let bestFreedom = 5;
+      let seen = 0;
+      for (const next of scratch) {
+        const nr = Math.floor(next / cols);
+        const nc = next % cols;
+        let touches = 0;
+        let freedom = 0;
+        if (nr > 0) {
+          if (owner[next - cols] === index) touches += 1;
+          if (owner[next - cols] === -1) freedom += 1;
+        }
+        if (nr + 1 < rows) {
+          if (owner[next + cols] === index) touches += 1;
+          if (owner[next + cols] === -1) freedom += 1;
+        }
+        if (nc > 0) {
+          if (owner[next - 1] === index) touches += 1;
+          if (owner[next - 1] === -1) freedom += 1;
+        }
+        if (nc + 1 < cols) {
+          if (owner[next + 1] === index) touches += 1;
+          if (owner[next + 1] === -1) freedom += 1;
+        }
+        if (touches !== 1) continue;
+
+        if (freedom < bestFreedom) {
+          bestFreedom = freedom;
+          seen = 1;
+          chosen = next;
+        } else if (freedom === bestFreedom) {
+          seen += 1;
+          if (Math.floor(rng() * seen) === 0) chosen = next;
+        }
+      }
+      if (chosen === -1) break;
+
+      owner[chosen] = index;
+      body.push(chosen);
+      head = chosen;
+    }
+
+    const release = (): void => {
+      for (const cell of body) owner[cell] = -1;
+    };
+
+    // The requested length is an *aspiration*, not a requirement.
+    //
+    // Rejecting a short walk is right on a sparse board, where the length range is
+    // the design. On a packed one it is the main thing standing between the board
+    // and full coverage: a walk that runs out of room after six cells has still
+    // filled six cells, and throwing it away leaves a hole that nothing else can
+    // reach either. Asking for long snakes and keeping whatever arrives covers far
+    // more than insisting on long snakes and abandoning the corners.
+    if (body.length < PACK_MIN_BODY) {
+      release();
+      return false;
+    }
+
+    // Either end may carry the head. Take whichever has a clear run; if neither
+    // does, this snake cannot be peeled in its turn, so drop it and free the cells
+    // for a shape that can.
+    const first = body[0]!;
+    const last = body[body.length - 1]!;
+    let ordered: number[] | undefined;
+    if (rayIsClear(last, body[body.length - 2]!, index)) ordered = [...body].reverse();
+    else if (rayIsClear(first, body[1]!, index)) ordered = body;
+
+    if (!ordered) {
+      release();
+      return false;
+    }
+
+    arrows.push({
+      id: `a${arrows.length}`,
+      body: ordered.map((cell) => [Math.floor(cell / cols), cell % cols]),
+    });
+    return true;
+  }
+
+  return arrows.length >= Math.ceil(arrowCount * 0.5) ? arrows : undefined;
 }
 
 /**
@@ -485,7 +729,11 @@ function addGates(
   const built = buildLevel(level);
   if (!built.ok) return undefined;
 
-  const baselineDepth = analyze(built.value.board, built.value.initial).dependencyDepth;
+  const baselineDepth = analyze(
+    built.value.board,
+    built.value.initial,
+    SCREEN_BUDGET_OPTIONS,
+  ).dependencyDepth;
 
   // Gate cells have to be free: `buildLevel` rejects a gate sitting on an arrow.
   const occupied = new Set<number>();
@@ -555,9 +803,9 @@ function addGates(
     if (!rebuilt.ok) continue;
 
     const { board, initial } = rebuilt.value;
-    if (!isSolvable(board, initial)) continue;
+    if (!isSolvable(board, initial, SCREEN_BUDGET_OPTIONS)) continue;
 
-    const metrics = analyze(board, initial);
+    const metrics = analyze(board, initial, SCREEN_BUDGET_OPTIONS);
     if (request.mode === 'shuts') {
       if (metrics.blunderRate <= 0) continue;
     } else if (metrics.dependencyDepth <= baselineDepth) {
@@ -591,7 +839,9 @@ export function generateLevel(
   for (let attempt = 0; attempt < options.attempts; attempt += 1) {
     if (options.stats) options.stats.attempts += 1;
 
-    const arrows = growBoard(rng, options, maskCells, owner);
+    const arrows = options.packed
+      ? growPackedBoard(rng, options, maskCells, owner)
+      : growBoard(rng, options, maskCells, owner);
     if (!arrows) {
       if (options.stats) options.stats.growthFailed += 1;
       continue;
@@ -613,7 +863,7 @@ export function generateLevel(
     // blocking cycle. On the rare board where it stalls, fall back to the older
     // flip-the-knot repair, which is still the better tool on sparse boards where
     // it converges in a handful of rounds.
-    let playable = orientForSolvability(rng, level);
+    let playable = options.packed ? level : orientForSolvability(rng, level);
     if (!playable) {
       const outward = orientOutward(level);
       playable = repairBoard(rng, outward, Math.max(40, arrows.length * 2));
@@ -625,7 +875,7 @@ export function generateLevel(
 
     let built = buildLevel(playable);
     if (!built.ok) continue;
-    if (!isSolvable(built.value.board, built.value.initial)) {
+    if (!isSolvable(built.value.board, built.value.initial, SCREEN_BUDGET_OPTIONS)) {
       if (options.stats) options.stats.unsolvable += 1;
       continue;
     }
@@ -648,7 +898,7 @@ export function generateLevel(
     }
 
     const { board, initial } = built.value;
-    const metrics = analyze(board, initial);
+    const metrics = analyze(board, initial, SCREEN_BUDGET_OPTIONS);
     const score = scoreCandidate(metrics, options);
 
     if (!best || score < best.score) {

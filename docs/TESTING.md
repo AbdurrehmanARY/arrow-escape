@@ -1,38 +1,49 @@
 # Testing ArrowPath
 
-Two parts: the automated checks (desktop, under a minute) and playing it on your
-phone.
+Two parts: the automated checks (desktop, about fifteen minutes now) and playing it
+on your phone.
 
 ---
 
-## 1. Automated — 40 seconds
+## 1. Automated — about 15 minutes
 
 ```bash
 npm run verify
 ```
 
-Runs three things in order:
+**It used to take 40 seconds.** Nearly all of the new time is one test sweep that
+solves all 600 boards, and the boards are now packed to four-fifths — roughly 70,000
+arrows against 20,000 before. Solving is still microseconds per board; there is just
+a great deal more board. If you want the fast signal while working, run
+`npx jest --testPathIgnorePatterns data/levels` and it is back under a minute.
 
-| Step | What it proves |
-|---|---|
-| `tsc --noEmit` | the whole project typechecks under `strict` |
-| `eslint` | no lint errors anywhere |
-| `jest` | 237 tests — rules, solver, gates, geometry, camera, reducer, stores, storage, and all 600 levels |
-| `levels:validate` | re-reads the packs *from disk* and re-solves all 600 |
+| Step              | What it proves                                                                                                            | Time |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `tsc --noEmit`    | the whole project typechecks under `strict`                                                                               | ~30s |
+| `eslint`          | no lint errors anywhere                                                                                                   | ~1m  |
+| `jest`            | 246 tests — rules, solver, gates, geometry, camera, reducer, stores, storage, the board's tap surface, and all 600 levels | ~13m |
+| `levels:validate` | re-reads the packs _from disk_ and re-solves all 600                                                                      | ~1m  |
 
 Expect:
 
 ```
-Test Suites: 15 passed, 15 total
-Tests:       237 passed, 237 total
+Test Suites: 16 passed, 16 total
+Tests:       246 passed, 246 total
 ...
 All levels decode, all are solvable, all recorded solutions verified.
 
   tier          count   blind mistakes: min / avg / max
-  tutorial        28      1.1 /    1.8 /    2.6
+  tutorial        29      1.4 /   11.0 /   32.3
   ...
-  nightmare       20    148.0 /  309.6 /  539.4
+  nightmare       22     92.2 /  592.0 /  762.5
 ```
+
+Two numbers in that table look wrong and are not. `brutal` averages _fewer_ blind
+mistakes than `hard`, and the top four tiers do not order among themselves. That
+metric models a player tapping **at random**, so it responds to how many arrows are
+free at once — and at a fixed density, longer snakes mean fewer arrows. The top
+tiers are ordered by snake length instead, which rises at every step from 3.0 cells
+to 11.3. See decision 87 in [PROJECT_MEMORY.md](PROJECT_MEMORY.md).
 
 The level check runs against the packs on disk rather than the generator's memory,
 on purpose. The generator could be perfect and a level still be broken by a bad
@@ -43,7 +54,7 @@ Other useful commands:
 ```bash
 npm run test:coverage    # coverage, thresholds enforced on src/game
 npm run levels:check     # prove every curriculum plan fits its shape
-npm run levels:build     # regenerate all 600 levels (deterministic, ~6 min)
+npm run levels:build     # regenerate all 600 levels (deterministic, ~3 min)
 npm run levels:probe     # sample one level per tier, to re-derive difficulty targets
 npm run bench            # time the per-tap hot paths against the shipped levels
 npm run levels:preview   # render every theme to preview.html
@@ -81,7 +92,7 @@ Scan the QR with **Expo Go** from the Play Store.
 <summary>What it is fixing, and why the tunnel was not enough</summary>
 
 **Problem 1 — the firewall is actively refusing connections.** There are two
-*enabled Block rules* for inbound `node.exe`. These get created when someone
+_enabled Block rules_ for inbound `node.exe`. These get created when someone
 clicks "Cancel" on the "Allow Node.js to communicate on these networks?" popup.
 Once a Block rule exists, Windows never asks again — it silently refuses every
 connection, forever.
@@ -139,8 +150,9 @@ faster, because only changed modules are re-sent.
    like two different mechanics depending where the arrow sat. Worth checking
    directly: clear an arrow sitting on the board edge, then one on the far side of
    a big board, and see whether they read as the same action.
+
 3. **Tap a blocked snake on purpose.** It lurches forward and recoils, turns red,
-   the *blocker* turns orange, and a heart drains. The board is otherwise
+   the _blocker_ turns orange, and a heart drains. The board is otherwise
    untouched.
 4. **Spend all five hearts.** The fail screen appears and says the board was still
    winnable — because on every level without a shutter gate, it is. Check that
@@ -148,7 +160,7 @@ faster, because only changed modules are re-sent.
 5. **Clear a level.** Confetti fires, **"Congratulations!"** pops in — or
    **"Perfect!"** if you did not misread once — and the win screen follows a beat
    later, so you see the last snake leave before anything covers it. The victory
-   *sound* is wired but silent: there are still no audio files in the build.
+   _sound_ is wired but silent: there are still no audio files in the build.
 6. **Clear two in a row cleanly** — the win screen starts showing a perfect-read
    streak from two upward.
 7. **Open the record screen** (★ on the menu, or tap the stat tiles) to see how
@@ -189,14 +201,13 @@ shut, and nothing crosses it. Clear every arrow of that colour and it opens by
 itself. It becomes a dashed outline when open.
 
 - Tapping an arrow whose path crosses a shut gate costs a heart, and the message
-  should name the colour — *"A red gate is closed"*, not *"Blocked by a0"*.
+  should name the colour — _"A red gate is closed"_, not _"Blocked by a0"_.
 - These levels can never be lost by tapping in the wrong order.
 
 **Shutter gates (`shuts`)** — the inverse, and **the only rule in the game that can
 cost you a level without costing you a heart.** They start open and seal for good
-once the last arrow of their colour leaves. Level names warn you: *Sealed*,
-**Shuttered**, *One-Way*, *Closing*. Levels 120, 132, 144, … every twelfth up to
-588.
+once the last arrow of their colour leaves. Level names warn you: _Sealed_,
+**Shuttered**, _One-Way_, _Closing_. Levels 120, 132, 144, … every twelfth up to 588.
 
 What to check, in order of how badly it would matter:
 
@@ -206,7 +217,7 @@ What to check, in order of how badly it would matter:
 2. That screen should appear **as soon as the level is unwinnable**, not when the
    board finally runs out of taps. If you can keep tapping after sealing yourself
    out, tell me.
-3. Play one properly — send the arrows that need to cross the gate out *first*.
+3. Play one properly — send the arrows that need to cross the gate out _first_.
    It should feel like a genuinely different puzzle from every other level.
 
 ### The curve
@@ -219,40 +230,73 @@ colour pips pair them up (two tiers per colour).
 - **After level 20 the difficulty is deliberately mixed.** An Easy board can
   follow a Super Hard one. That is the design — tell me if it feels random rather
   than refreshing.
-- **Snakes are much longer than before** — up to fourteen cells in the top tiers,
-  where they used to stop at six. This is the single biggest change to how a board
-  feels. If tracing has gone from hard to hopeless, that is the number to tell me
-  about.
+- **Snakes are much longer than before** — averaging eleven cells in the top tiers
+  and reaching twenty-six, where they used to stop at six. This is the single
+  biggest change to how a board feels, and it is now also what separates the top
+  four tiers from each other. If tracing has gone from hard to hopeless, that is
+  the number to tell me about.
 - **Jump ahead** from level select to sample the tiers. Try something in the 300s,
   something in the 500s, and level 600.
 
-### Dense boards — new
+### Dense boards — now every board
 
-**46 levels are packed to roughly four cells in five** (71–83% of the board
-covered), spread from Medium up through Nightmare. Their names say so: *Packed*,
-*Crowded*, *Teeming*, *Choked*, *Jammed*.
+**This is the biggest change in the build, and the main thing to judge.**
 
-Two things about them are deliberate and worth knowing before you judge them:
+Density used to be a special case: 46 levels packed to four-fifths, all of them
+small rectangles, because at that density on a big board nothing could move. That
+limit turned out to be a property of _how_ the boards were generated rather than of
+the game. Generating at random and checking gave **zero** playable 50×50 boards;
+building them centre-outward and keeping each snake only when it still has a way
+out gives about nine in ten, because the order it is built in is exactly the order
+it comes apart in.
 
-- **They are small boards — 18 to 24 a side, always a plain rectangle.** That is a
-  hard limit, not a shortcut. An arrow can only move when its whole ray to the edge
-  is clear, so at fixed density the chance that *anything* on the board can move
-  collapses exponentially as the board grows. Measured: four in four solvable at
-  24x24, **none at all** at 50x50 or 60x60. Four-fifths coverage on a 60x60 board
-  does not make a hard level, it makes no level.
-- **They carry no gates.** A dense board already asks for full attention; two
-  mechanics competing for it means neither gets it.
+So now **almost every board is packed**:
 
-What to check: do they feel like *meaningful congestion* — where you have to find
-the one snake with a way out and work inward — or just visual noise? That is the
-distinction that decides whether they are worth keeping, and it is the one thing I
-cannot measure from here.
+| Tier        | Fill | Avg snake | Longest |
+| ----------- | ---- | --------- | ------- |
+| tutorial    | 78%  | 3.0       | 4.1     |
+| easy        | 87%  | 3.4       | 5.0     |
+| casual      | 89%  | 4.8       | 7.9     |
+| medium      | 90%  | 5.8       | 10.9    |
+| tricky      | 90%  | 6.9       | 12.8    |
+| hard        | 87%  | 7.6       | 14.4    |
+| superHard   | 81%  | 10.3      | 18.0    |
+| extremeHard | 81%  | 10.9      | 21.4    |
+| brutal      | 80%  | 11.0      | 23.5    |
+| nightmare   | 79%  | 11.3      | 26.1    |
+
+Measured against the **playable area** — the silhouette, not the rectangle around
+it. A pumpkin cannot fill a grid.
+
+**What to check, in order of how much it matters:**
+
+1. **Do the packed boards read, or are they noise?** The intended feeling is
+   meaningful congestion: you find the one snake with a way out and work inward. If
+   instead it reads as a wall of colour you tap at hopefully, say so — the fill
+   numbers are one constant and they can come down.
+2. **Levels 21–50 specifically.** Packing the early game raised its floor a long
+   way; the first fifty levels went from a handful of expected misreads to about 156. Levels 1–20 are deliberately still gentle. If the game now gets hard at
+   level 25 rather than level 100, that is the thing to report.
+3. **Do the top four tiers feel different from each other?** They are all about
+   50×50 and differ only in snake length and how often a gate appears, because
+   density and board size fight past 50 a side. If Nightmare feels like Super Hard
+   with a different label, the fix is to let those boards grow — at the cost of the
+   fill numbers above.
+4. **Shutter levels are deliberately sparse** (66%), and are the ones named for
+   planning. An order can only be worked out on a board open enough to see the
+   dependencies in. They should feel like a different _kind_ of level, not a
+   thinner one.
 
 ### Shapes
 
-**114 silhouettes**, up from 74. New this phase: the alphabet (A–Z), digits, maths
-symbols, and a set of *procedural* patterns — mandala, honeycomb, maze, knotwork,
-star tiling, double helix, galaxy.
+**137 silhouettes in the library**, of which **64 appear in the shipped 600**. The
+gap is the price of density: a silhouette can only ever fill part of its grid, so
+three levels in four are now open rectangles and the shape rotation has fewer slots
+to spend. If the boards feel same-y, that ratio is the dial — say so and it moves.
+
+New this phase: the alphabet (A–Z), digits, maths symbols, and a set of
+_procedural_ patterns — mandala, honeycomb, maze, knotwork, star tiling, double
+helix, galaxy.
 
 The procedural ones are different in kind from the rest: instead of outlining the
 board they perforate it, so snakes have to thread through corridors and bend
@@ -286,6 +330,26 @@ What to check: tap fast, tap two different arrows in quick succession, tap while
 one is still flying, tap right at the edge of a snake, and tap while zoomed all the
 way in and all the way out. Every one should register first time.
 
+### Hearts — the bug you reported
+
+**Fixed, and the cause was a swallowed tap rather than a broken counter.** In the
+performance pass I moved the hit test onto the UI thread. It did not reliably
+compile as a worklet, and when it fails the gesture handler throws and the tap does
+nothing at all — which from the outside is indistinguishable from hearts that will
+not go down. The reducer had been right the whole time; nothing was reaching it.
+
+The hit test is plain JavaScript again, where it measures under a hundredth of a
+millisecond anyway, and there is now a test that drives the real tap surface and
+walks the count 5 → 4 → 3 → 2 → 1 → 0.
+
+Worth confirming by hand, since this is the path that had no coverage before:
+
+1. **Tap the same blocked arrow five times.** The count should fall by exactly one
+   each time and the fail screen should appear on the fifth.
+2. **Tap an arrow with a clear run.** No heart should be spent.
+3. **Tap empty board.** Nothing should happen — no heart, no flash.
+4. **Tap a blocked arrow while another is mid-flight.** Still exactly one heart.
+
 ### Oversized boards
 
 Almost every level past Easy is now bigger than your screen. On those:
@@ -302,7 +366,7 @@ Almost every level past Easy is now bigger than your screen. On those:
   fit-to-screen, so on a 60×60 board the closest you could get was 80% of the
   designed cell size.
 - Board sizes are now roughly **Medium 30×30, Hard 40×40, Super Hard 50×50,
-  Nightmare 60×60**. Big boards are deliberately *sparser* than the old small ones
+  Nightmare 60×60**. Big boards are deliberately _sparser_ than the old small ones
   — a 30×30 Medium holds around twenty-five snakes, not eighty. If Medium feels
   empty rather than spacious, say so; the fill is one number per tier.
 
@@ -327,6 +391,14 @@ one in Noodles, to see how much of the difficulty is the single-colour rule.
   the challenge by design; it is there for accessibility.
 - **Confirm restart** — only prompts once you have actually tapped something.
 - **Reset all progress** — confirms first, then genuinely wipes everything.
+- **Volume — new.** Three five-step controls under Sound: Master, Music and
+  Effects, plus the existing Music and Sound-effects switches. **They will do
+  nothing audible**, because there are no audio files in the build; the screen says
+  so rather than leaving you wondering. What is worth checking is that the settings
+  persist across a force-quit, since that part is real.
+
+  Five steps rather than a slider on purpose: a slider needs a native dependency,
+  and adding one to this toolchain has broken it twice.
 
 ### Hints
 
@@ -340,11 +412,11 @@ check: nothing in the game should ever be blocked behind an ad.
 
 ## 4. What is deliberately missing
 
-| Missing | Why | Where it is described |
-|---|---|---|
-| **Sound** | audio files are the one thing I cannot generate. The game runs silent and gains sound the moment they are dropped in | `assets/audio/README.md` |
-| **App icon** | still Expo's placeholder | [RELEASE.md](RELEASE.md) |
-| **Working ads** | needs your AdMob account and a dev-client build | [ADS_SETUP.md](ADS_SETUP.md) |
+| Missing         | Why                                                                                                                  | Where it is described        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| **Sound**       | audio files are the one thing I cannot generate. The game runs silent and gains sound the moment they are dropped in | `assets/audio/README.md`     |
+| **App icon**    | still Expo's placeholder                                                                                             | [RELEASE.md](RELEASE.md)     |
+| **Working ads** | needs your AdMob account and a dev-client build                                                                      | [ADS_SETUP.md](ADS_SETUP.md) |
 
 None of these block playing or testing the game.
 
@@ -433,21 +505,20 @@ desktop than to spend twenty minutes wondering why the phone is odd.
 
 Level data needs no special step. The 600 levels are committed JSON under
 `src/data/levels/`, so they are bundled like any other module — but that is also
-why a stale Metro cache can serve *old levels* after a rebuild, which looks like
+why a stale Metro cache can serve _old levels_ after a rebuild, which looks like
 the generator having done nothing. `npm run levels:build` then `npm run
 start:clear`, in that order.
 
 ### Symptom table
 
-
-| Symptom | Fix |
-|---|---|
-| Expo Go: "Failed to download remote update" | The phone cannot reach the dev server, or the 10 MB bundle timed out. Run `scripts/fix-dev-network.ps1` as admin, then `npm start` |
-| Metro can't resolve `@game` / `@components` | `npx expo start --clear` to reset the cache |
-| **Expo Go closes outright, no error screen** | A *native* crash — almost always a package version Expo Go was not built against. Run `npx expo install --check`, then `npx expo install --fix` |
-| A dark "Something broke" screen with a stack trace | A *JavaScript* error, and the message names the file. Send me the text |
-| `[Worklets] Mismatch between JavaScript code version and Worklets Babel plugin version` | A stale Metro cache — see below. `npm run start:clear` |
-| Any error naming two different versions of the same package | Same cause. `npm run start:clear` |
-| Red screen, anything else | Screenshot it — the stack trace names the file |
-| Board looks cramped on a small phone | Expected on 12×12 mastery levels; tell me and I'll cap the cell size |
-| Expo Go says the SDK is unsupported | Update Expo Go; this project is on SDK 57 |
+| Symptom                                                                                 | Fix                                                                                                                                             |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Expo Go: "Failed to download remote update"                                             | The phone cannot reach the dev server, or the 10 MB bundle timed out. Run `scripts/fix-dev-network.ps1` as admin, then `npm start`              |
+| Metro can't resolve `@game` / `@components`                                             | `npx expo start --clear` to reset the cache                                                                                                     |
+| **Expo Go closes outright, no error screen**                                            | A _native_ crash — almost always a package version Expo Go was not built against. Run `npx expo install --check`, then `npx expo install --fix` |
+| A dark "Something broke" screen with a stack trace                                      | A _JavaScript_ error, and the message names the file. Send me the text                                                                          |
+| `[Worklets] Mismatch between JavaScript code version and Worklets Babel plugin version` | A stale Metro cache — see below. `npm run start:clear`                                                                                          |
+| Any error naming two different versions of the same package                             | Same cause. `npm run start:clear`                                                                                                               |
+| Red screen, anything else                                                               | Screenshot it — the stack trace names the file                                                                                                  |
+| Board looks cramped on a small phone                                                    | Expected on 12×12 mastery levels; tell me and I'll cap the cell size                                                                            |
+| Expo Go says the SDK is unsupported                                                     | Update Expo Go; this project is on SDK 57                                                                                                       |

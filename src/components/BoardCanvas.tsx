@@ -27,7 +27,7 @@
  *               on exactly one answer.
  */
 
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
@@ -231,15 +231,14 @@ function BoardCanvasInner({
    * wrong arrow costs a heart and a too-eager hit test would spend it for you.
    */
   const arrowAtPoint = useCallback(
-    (x: number, y: number, cells: readonly number[]): number => {
-      'worklet';
+    (x: number, y: number): number => {
       const col = Math.floor((x - originX) / cellSize);
       const row = Math.floor((y - originY) / cellSize);
 
       const occupantAt = (r: number, c: number): number => {
-        'worklet';
         if (r < 0 || r >= rows || c < 0 || c >= cols) return EMPTY;
-        return cells[r * cols + c] ?? EMPTY;
+        const owner = state.occupancy[r * cols + c] ?? EMPTY;
+        return owner !== EMPTY && state.alive[owner] === 1 ? owner : EMPTY;
       };
 
       const direct = occupantAt(row, col);
@@ -268,8 +267,31 @@ function BoardCanvasInner({
 
       return best;
     },
-    [rows, cols, cellSize, originX, originY],
+    [state, rows, cols, cellSize, originX, originY],
   );
+
+  const handleTapAt = useCallback(
+    (x: number, y: number) => {
+      const index = arrowAtPoint(x, y);
+      if (index !== EMPTY) onTapArrow(index);
+    },
+    [arrowAtPoint, onTapArrow],
+  );
+
+  const markPressed = useCallback(
+    (x: number, y: number) => {
+      // eslint-disable-next-line react-hooks/immutability -- stable shared value
+      pressedArrow.value = arrowAtPoint(x, y);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shared value is stable
+    [arrowAtPoint],
+  );
+
+  const clearPressed = useCallback(() => {
+    // eslint-disable-next-line react-hooks/immutability -- stable shared value
+    pressedArrow.value = EMPTY;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shared value is stable
+  }, []);
 
   /**
    * Which arrow is currently under a finger, for press feedback.
@@ -281,25 +303,6 @@ function BoardCanvasInner({
    */
   const pressedArrow = useSharedValue(EMPTY);
 
-  /**
-   * Occupancy, in a form a worklet can read.
-   *
-   * `BoardState.occupancy` is an `Int32Array`, which does not cross to the UI
-   * thread, so this is a plain-array copy kept in step with it. Copying a few
-   * thousand integers once per tap is nothing next to what it buys: the hit test
-   * runs entirely on the UI thread, so an arrow lights up under the finger even
-   * while the JS thread is busy resolving the previous move.
-   *
-   * A cell holds `EMPTY` the moment its arrow leaves, so this needs no separate
-   * liveness check.
-   */
-  const occupancy = useSharedValue<number[]>([]);
-  useEffect(() => {
-    occupancy.value = Array.from(state.occupancy);
-    // `occupancy` is a stable shared value; listing it would make this a hook
-    // argument that the effect then mutates, which the compiler rightly rejects.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
 
   /**
    * The board's tap gesture.
@@ -317,24 +320,20 @@ function BoardCanvasInner({
         .maxDuration(900)
         .onBegin((event) => {
           'worklet';
-          pressedArrow.value = arrowAtPoint(event.x, event.y, occupancy.value);
+          runOnJS(markPressed)(event.x, event.y);
         })
         .onEnd((event, success) => {
           'worklet';
           if (!success) return;
-          const index = arrowAtPoint(event.x, event.y, occupancy.value);
-          if (index !== EMPTY) runOnJS(onTapArrow)(index);
+          runOnJS(handleTapAt)(event.x, event.y);
         })
         // Fires however the gesture ends — tapped, cancelled, or stolen by the pan.
         // Anything less than "always" leaves an arrow stuck looking pressed.
         .onFinalize(() => {
           'worklet';
-          pressedArrow.value = EMPTY;
+          runOnJS(clearPressed)();
         }),
-    // The two shared values are stable and deliberately absent: listing them would
-    // make them hook arguments that the worklets then write to.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [arrowAtPoint, onTapArrow],
+    [handleTapAt, markPressed, clearPressed],
   );
 
   /**

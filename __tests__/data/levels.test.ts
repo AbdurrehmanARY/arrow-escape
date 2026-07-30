@@ -157,15 +157,66 @@ describe('the difficulty mix', () => {
     }
   });
 
-  it('orders the tiers by actual measured difficulty', () => {
-    // The tiers are named by intent; this checks the generator delivered on it.
-    const averages = TIER_ORDER.map((tier) => {
+  /**
+   * Average blind mistakes per tier, in tier order.
+   *
+   * Shared by the two assertions below, which between them replace a single
+   * "monotone across all ten tiers" check. That check was right while board size
+   * was what separated the tiers, and became wrong when density was made the
+   * priority: `MAX_PACKED_SIZE` caps every board at 50x50, so the top four tiers
+   * are all the same size and differ only in how long their snakes are.
+   *
+   * `expectedBlindMistakes` cannot see that difference. It models a player tapping
+   * **at random**, who never traces a snake, so the metric responds to how many
+   * arrows are free at once — and at a fixed density, longer snakes mean *fewer*
+   * arrows, which pushes the number down even as the board gets harder to read.
+   * The top four measure 674 / 624 / 519 / 592: not monotone, and not a defect.
+   *
+   * So difficulty is checked on both axes separately, and the snake-length one
+   * below is the stronger claim of the two.
+   */
+  const blindByTier = TIER_ORDER.map((tier) => {
+    const rows = byTier(tier);
+    return rows.reduce((sum, m) => sum + m.metrics.expectedBlindMistakes, 0) / rows.length;
+  });
+
+  it('orders the tiers by measured difficulty, up to where board size stops growing', () => {
+    // Tutorial through superHard: 89 cells to 2,207, and the metric tracks it.
+    const growing = blindByTier.slice(0, TIER_ORDER.indexOf('superHard') + 1);
+    for (let i = 1; i < growing.length; i += 1) {
+      expect(growing[i]!).toBeGreaterThan(growing[i - 1]!);
+    }
+  });
+
+  it('keeps the four capped tiers well clear of the tiers below them', () => {
+    // They no longer order cleanly among themselves, for the reason above. What
+    // must remain true is that all four are decisively harder than the run of the
+    // game beneath them — otherwise "Nightmare" is a label with nothing behind it.
+    const capped = blindByTier.slice(TIER_ORDER.indexOf('superHard'));
+    const lower = blindByTier.slice(0, TIER_ORDER.indexOf('superHard'));
+    const lowerMean = lower.reduce((sum, v) => sum + v, 0) / lower.length;
+
+    for (const value of capped) expect(value).toBeGreaterThan(lowerMean * 1.5);
+  });
+
+  it('lengthens its snakes monotonically across every tier', () => {
+    // The axis the top tiers actually vary on, and the one difficulty lives on in
+    // this game: reading a board means tracing a snake through a tangle. Both the
+    // average and the longest snake rise at every single step, tutorial to
+    // nightmare — 3.0 to 11.3 cells, and 4.1 to 26.1.
+    const lengths = TIER_ORDER.map((tier) => {
       const rows = byTier(tier);
-      return rows.reduce((sum, m) => sum + m.metrics.expectedBlindMistakes, 0) / rows.length;
+      const bodies = rows.map((m) => m.level.arrows.map((arrow) => arrow.body.length));
+      return {
+        mean:
+          bodies.reduce((sum, b) => sum + b.reduce((a, n) => a + n, 0) / b.length, 0) / rows.length,
+        longest: bodies.reduce((sum, b) => sum + Math.max(...b), 0) / rows.length,
+      };
     });
 
-    for (let i = 1; i < averages.length; i += 1) {
-      expect(averages[i]!).toBeGreaterThan(averages[i - 1]!);
+    for (let i = 1; i < lengths.length; i += 1) {
+      expect(lengths[i]!.mean).toBeGreaterThan(lengths[i - 1]!.mean);
+      expect(lengths[i]!.longest).toBeGreaterThan(lengths[i - 1]!.longest);
     }
   });
 
@@ -198,7 +249,12 @@ describe('the difficulty mix', () => {
     const mean = (rows: typeof measured) =>
       rows.reduce((sum, m) => sum + m.metrics.expectedBlindMistakes, 0) / rows.length;
 
-    expect(mean(lastFifty)).toBeGreaterThan(mean(firstFifty) * 5);
+    // Was 5x. The multiple came down because the *floor* rose, not because the
+    // ceiling fell: packing the early levels to four-fifths of their board — which
+    // is what "dense across all difficulties" means — took the first fifty from a
+    // handful of blind mistakes to about 156, while the last fifty sit at 576.
+    // Levels 1-20 are still gentle, and the test above holds them there.
+    expect(mean(lastFifty)).toBeGreaterThan(mean(firstFifty) * 3);
   });
 
   it('ends on the hardest tier', () => {
@@ -252,8 +308,14 @@ describe('dense levels', () => {
   it('stays within what the renderer can afford', () => {
     // Density is bought with long snakes rather than many of them. Hundreds of
     // arrows on one board is a frame-rate problem, not a harder puzzle.
+    //
+    // 180 is `MAX_ARROWS_PER_LEVEL` in `tools/curriculum.ts` — restated rather than
+    // imported, because this file tests what *shipped* and importing the generator's
+    // own constant would make the assertion agree with itself by construction. It
+    // was 110 while only a handful of levels were dense; now that nearly every
+    // board is packed it is the generator's cap that has to be enforced here.
     for (const id of packed) {
-      expect(levelById(id)!.arrows.length).toBeLessThanOrEqual(110);
+      expect(levelById(id)!.arrows.length).toBeLessThanOrEqual(180);
     }
   });
 });

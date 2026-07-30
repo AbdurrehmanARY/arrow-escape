@@ -21,8 +21,19 @@ import { loadSlice, saveSlice, STORAGE_KEYS } from '@services/storage';
 import { DEFAULT_THEME_ID } from '@theme';
 
 interface PersistedSettings {
+  /**
+   * Music and effects on/off.
+   *
+   * Kept alongside the volumes rather than folded into them, because a mute and a
+   * volume of zero are different intentions: someone who mutes music and unmutes
+   * it later expects their level back, not silence.
+   */
   readonly music: boolean;
   readonly sfx: boolean;
+  /** 0..1. Scales everything, including the category volumes below. */
+  readonly masterVolume: number;
+  readonly musicVolume: number;
+  readonly sfxVolume: number;
   readonly haptics: boolean;
   /** Swap animations for instant state changes. Accessibility and low-end perf. */
   readonly reducedMotion: boolean;
@@ -46,6 +57,12 @@ interface SettingsState extends PersistedSettings {
 const DEFAULTS: PersistedSettings = {
   music: true,
   sfx: true,
+  // Music sits under effects by default: it plays continuously, and a bed at the
+  // same level as the sounds it is meant to sit behind is the commonest way a
+  // mobile game ends up muted entirely.
+  masterVolume: 1,
+  musicVolume: 0.7,
+  sfxVolume: 1,
   haptics: true,
   reducedMotion: false,
   confirmRestart: true,
@@ -57,11 +74,27 @@ function persist(state: PersistedSettings): void {
   void saveSlice(STORAGE_KEYS.settings, state);
 }
 
+/**
+ * A saved volume, or the default.
+ *
+ * Clamped rather than trusted: a save written by another build, or edited by hand,
+ * must not be able to set a gain above one — that is where clipping comes from,
+ * and it would be baked into the player's settings with no obvious way back.
+ */
+function volume(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : fallback;
+}
+
 /** Strip anything unknown, so a save from another build cannot inject a bad value. */
 function sanitise(data: PersistedSettings): PersistedSettings {
   return {
     music: Boolean(data.music),
     sfx: Boolean(data.sfx),
+    masterVolume: volume(data.masterVolume, DEFAULTS.masterVolume),
+    musicVolume: volume(data.musicVolume, DEFAULTS.musicVolume),
+    sfxVolume: volume(data.sfxVolume, DEFAULTS.sfxVolume),
     haptics: Boolean(data.haptics),
     reducedMotion: Boolean(data.reducedMotion),
     confirmRestart: Boolean(data.confirmRestart),
