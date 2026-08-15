@@ -36,6 +36,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
+import { playSfx } from '@services/audio';
 import { typography, type Palette } from '@theme';
 
 export type CelebrationIntensity = 'normal' | 'perfect';
@@ -56,6 +57,15 @@ export interface CelebrationProps {
 
 /** How long a piece stays on screen. Long enough to read, short enough not to wait. */
 const DURATION_MS = 1600;
+
+/**
+ * How long after the burst starts the sound plays.
+ *
+ * Not zero. Pieces stagger their launch by up to 16% of the run, so the burst is
+ * at its widest a moment after `active` flips — and a firework heard before it is
+ * seen reads as a mistimed sound rather than as the same event.
+ */
+const SOUND_DELAY_MS = 140;
 
 interface Piece {
   /** Launch direction, radians, measured from straight up. */
@@ -125,6 +135,12 @@ function CelebrationInner({
     if (!active || reducedMotion) return;
     progress.value = 0;
     progress.value = withTiming(1, { duration: DURATION_MS, easing: Easing.linear });
+
+    // Reduced motion silences this too, and that is the point rather than an
+    // oversight: with no confetti on screen the sound describes something that is
+    // not happening.
+    const timer = setTimeout(() => playSfx('fireworks'), SOUND_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [active, reducedMotion, progress]);
 
   if (!active || reducedMotion) return null;
