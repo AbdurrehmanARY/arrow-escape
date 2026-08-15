@@ -5,6 +5,8 @@
  * Responsibilities:
  *               - `clampTranslation` — keep the board reachable.
  *               - `fitScale` / `clampScale` — the zoom range.
+ *               - `focalTranslation` — keep the focal point stationary during pinch.
+ *               - `translationBounds` — clamp targets for `withDecay`.
  * Notes:        Pure, and separate from the component, for two reasons. It is the
  *               part that is easy to get subtly wrong — an off-by-one in the
  *               overhang lets a player flick a 27x30 board into empty space and
@@ -82,4 +84,49 @@ export function clampScale(value: number, fit: number, maxZoom: number): number 
   'worklet';
   const ceiling = Math.max(fit * maxZoom, MIN_MAX_SCALE);
   return Math.min(ceiling, Math.max(fit, value));
+}
+
+/**
+ * Adjust translation so the focal point stays stationary while scale changes.
+ *
+ * During a pinch, the point between the player's fingers should stay in the same
+ * place on screen. Without this correction, zooming drifts toward or away from
+ * the board centre, which makes it impossible to zoom into a specific corner.
+ *
+ * `focalOffset` is the distance from the viewport centre to the focal point,
+ * i.e. `focalScreenPos - viewportSize / 2`. `oldTranslate` and `oldScale` are the
+ * values before this frame's pinch update.
+ */
+export function focalTranslation(
+  focalOffset: number,
+  oldTranslate: number,
+  oldScale: number,
+  newScale: number,
+): number {
+  'worklet';
+  // The content point under the focal position:
+  //   contentPoint = (focalOffset - oldTranslate) / oldScale
+  // After scaling, to keep that point at the same screen position:
+  //   focalOffset = contentPoint * newScale + newTranslate
+  //   newTranslate = focalOffset - contentPoint * newScale
+  const contentPoint = (focalOffset - oldTranslate) / oldScale;
+  return focalOffset - contentPoint * newScale;
+}
+
+/**
+ * Translation bounds for one axis, used as the `clamp` argument for `withDecay`.
+ *
+ * Returns `[min, max]`. When the board is smaller than the viewport both are 0,
+ * pinning it to centre. When larger, the board may pan exactly to its edge.
+ */
+export function translationBounds(
+  contentSize: number,
+  viewportSize: number,
+  scale: number,
+): [number, number] {
+  'worklet';
+  const scaled = contentSize * scale;
+  if (scaled <= viewportSize) return [0, 0];
+  const limit = (scaled - viewportSize) / 2;
+  return [-limit, limit];
 }

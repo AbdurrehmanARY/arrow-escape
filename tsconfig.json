@@ -16,6 +16,21 @@
       "@game": [
         "./src/game/index.ts"
       ],
+      "@render/*": [
+        "./src/render/*"
+      ],
+      "@challenge": [
+        "./src/challenge/index.ts"
+      ],
+      "@league": [
+        "./src/league/index.ts"
+      ],
+      "@league/*": [
+        "./src/league/*"
+      ],
+      "@challenge/*": [
+        "./src/challenge/*"
+      ],
       "@game/*": [
         "./src/game/*"
       ],

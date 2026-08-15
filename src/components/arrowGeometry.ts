@@ -57,9 +57,16 @@ export function cellCentre(
   };
 }
 
-/** `"x,y x,y ..."` for an SVG `points` attribute. */
-export const toPointsAttr = (points: readonly Point[]): string =>
-  points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+/** `"x,y x,y ..."` for an SVG `points` attribute. Optimized to avoid heap string allocations. */
+export function toPointsAttr(points: readonly Point[]): string {
+  let res = '';
+  for (let i = 0; i < points.length; i += 1) {
+    const p = points[i]!;
+    if (i > 0) res += ' ';
+    res += `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+  }
+  return res;
+}
 
 /** Shift every point by `dx`/`dy`. Used for the shadow and highlight passes. */
 export const offsetPoints = (points: readonly Point[], dx: number, dy: number): Point[] =>
@@ -204,17 +211,20 @@ export function computeBoardLayout(
   maxHeight: number,
   minCellSize: number,
 ): BoardLayout {
-  const fitted = fitCellSize(rows, cols, padCells, maxWidth, maxHeight);
+  // Enforce a minimum padding of 1.0 cell so arrows never touch the board edge,
+  // regardless of what the theme declares.
+  const pad = Math.max(1.0, padCells);
+  const fitted = fitCellSize(rows, cols, pad, maxWidth, maxHeight);
   const cellSize = Math.max(minCellSize, fitted);
-  const width = cellSize * (cols + padCells * 2);
-  const height = cellSize * (rows + padCells * 2);
+  const width = cellSize * (cols + pad * 2);
+  const height = cellSize * (rows + pad * 2);
 
   return {
     cellSize,
     width,
     height,
-    originX: cellSize * padCells,
-    originY: cellSize * padCells,
+    originX: cellSize * pad,
+    originY: cellSize * pad,
     oversized: width > maxWidth + 0.5 || height > maxHeight + 0.5,
   };
 }
