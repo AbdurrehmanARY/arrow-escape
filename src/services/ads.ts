@@ -20,6 +20,8 @@
  *               To enable for real, see `docs/ADS_SETUP.md`.
  */
 
+import { NativeModules, TurboModuleRegistry } from 'react-native';
+
 import { AD_UNIT_IDS, USE_TEST_ADS } from '@config';
 
 export type AdAvailability =
@@ -56,16 +58,49 @@ let sdkChecked = false;
 let rewarded: RewardedAdLike | undefined;
 let loaded = false;
 
+/**
+ * Is the *native* half of the ads SDK in this binary?
+ *
+ * Asked before the JS package is required, and that order is the whole point.
+ * The JS package reaches for its native module with
+ * `TurboModuleRegistry.getEnforcing`, which **throws** when the module is absent —
+ * and it does so lazily, on first property access rather than at `require`. A
+ * `try/catch` around the `require` therefore catches nothing, which is exactly how
+ * this file came to crash the app on launch while claiming to degrade gracefully.
+ *
+ * `TurboModuleRegistry.get` is the non-throwing sibling: it returns null instead.
+ * Asking it first means the JS package is never even loaded unless the native side
+ * is there to answer it.
+ *
+ * This state is normal and will happen again: installing the npm package and
+ * building the native binary are two separate steps, and between them the JS
+ * expects a module the app does not have.
+ */
+function hasNativeAds(): boolean {
+  try {
+    if (TurboModuleRegistry.get('RNGoogleMobileAdsModule') != null) return true;
+    // Older, non-TurboModule registration. Cheap to check and harmless if absent.
+    return NativeModules['RNGoogleMobileAdsModule'] != null;
+  } catch {
+    return false;
+  }
+}
+
 /** Resolve the SDK once, tolerating its absence. */
 function loadSdk(): AdsModule | undefined {
   if (sdkChecked) return sdk;
   sdkChecked = true;
 
+  if (!hasNativeAds()) {
+    // No native module: Expo Go, or a build made before the package was added.
+    sdk = undefined;
+    return sdk;
+  }
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     sdk = require('react-native-google-mobile-ads') as AdsModule;
   } catch {
-    // Expected in Expo Go and in any build that has not added the native module.
     sdk = undefined;
   }
   return sdk;

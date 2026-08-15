@@ -20,6 +20,8 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
+import { useSheetSound, withClick } from './sound';
+
 interface ActionProps {
   palette: Palette;
   label: string;
@@ -34,7 +36,7 @@ function Action({ palette, label, onPress, primary = false, disabled = false }: 
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={onPress}
+      onPress={withClick(onPress)}
       style={({ pressed }) => [
         styles.action,
         {
@@ -56,11 +58,22 @@ function Sheet({
   palette,
   children,
   visible,
+  sound = false,
 }: {
   palette: Palette;
   children: React.ReactNode;
   visible: boolean;
+  /**
+   * Announce this sheet with `popupOpen` / `popupClose`.
+   *
+   * Off by default, because most sheets here already have a voice: the win sheet
+   * arrives behind `levelComplete` and the fail sheet behind `outOfHearts`. Only
+   * the sheets with nothing of their own to say — the confirmations — turn it on.
+   */
+  sound?: boolean;
 }) {
+  useSheetSound(visible, sound);
+
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={styles.scrim}>
@@ -267,7 +280,7 @@ export const ConfirmDialog = memo(function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Sheet palette={palette} visible={visible}>
+    <Sheet palette={palette} visible={visible} sound>
       <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
       <Text style={[styles.body, { color: palette.textMuted }]}>{message}</Text>
       <View style={styles.actions}>

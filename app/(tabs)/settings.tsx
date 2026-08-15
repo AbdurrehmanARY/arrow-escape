@@ -15,15 +15,35 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { ConfirmDialog, Screen, ScreenHeader, useTheme } from '@components';
+import { ConfirmDialog, Screen, ScreenHeader, useTheme, withClick } from '@components';
 import { APP_VERSION } from '@config';
-import { hasAudioAssets } from '@services/audio';
+import { hasAudioAssets, playSfx, type SfxName } from '@services/audio';
 import { clearAll } from '@services/storage';
+import { accountEmail, useAuthStore } from '@state/authStore';
 import { useHintStore } from '@state/hintStore';
 import { useOnboardingStore } from '@state/onboardingStore';
 import { useProgressStore } from '@state/progressStore';
 import { useSettingsStore } from '@state/settingsStore';
 import { MIN_TOUCH_TARGET, radius, spacing, THEMES, typography, type Palette } from '@theme';
+
+/**
+ * Change a setting, then make the sound — in that order, and not the other way.
+ *
+ * Every other button in the app clicks *before* its handler, because a handler
+ * that navigates can unmount the caller. The controls on this screen are the one
+ * exception, and for a specific reason: they change the mixer the sound is about
+ * to be played through. Turning "Sound effects" back on, or raising a volume from
+ * zero, would fire its confirmation into a mixer that is still muted — so the one
+ * control whose whole purpose is to make the game audible would be the one that
+ * gave no sign of working.
+ *
+ * The timeout is what lets the store update and `_layout`'s effect push the new
+ * settings down before anything is played.
+ */
+function audible(change: () => void, name: SfxName): void {
+  change();
+  setTimeout(() => playSfx(name), 0);
+}
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -33,6 +53,7 @@ export default function SettingsScreen() {
   const resetHints = useHintStore((state) => state.resetHints);
   const resetOnboarding = useOnboardingStore((state) => state.resetOnboarding);
   const [confirmReset, setConfirmReset] = useState(false);
+  const email = useAuthStore((state) => accountEmail({ session: state.session }));
 
   const audioAvailable = hasAudioAssets();
 
@@ -64,7 +85,7 @@ export default function SettingsScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
                   accessibilityLabel={`${theme.name} theme`}
-                  onPress={() => settings.set('themeId', theme.id)}
+                  onPress={withClick(() => settings.set('themeId', theme.id))}
                   style={({ pressed }) => [
                     styles.themeCard,
                     {
@@ -168,6 +189,60 @@ export default function SettingsScreen() {
           />
         </Section>
 
+        <Section palette={palette} title="Account">
+          {/*
+            The address, not a hardcoded "Not connected".
+
+            This row said "Not connected" unconditionally — it was written before
+            sign-in worked and never read the session, so it kept saying it while
+            an account was connected. A status row that cannot be wrong about the
+            one thing it reports is worth the two lines it takes to derive it.
+          */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={email ? `Account, signed in as ${email}` : 'Account, not connected'}
+            onPress={withClick(() => router.push('/account'))}
+            style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+          >
+            <Text style={[styles.linkLabel, { color: palette.text }]}>Account</Text>
+            <Text
+              style={[styles.linkValue, { color: email ? palette.accent : palette.textFaint }]}
+              numberOfLines={1}
+            >
+              {email ?? 'Not connected'} ›
+            </Text>
+          </Pressable>
+        </Section>
+
+        {/*
+          Rows from the reference design whose features do not exist yet.
+
+          Built now because the layout was asked for now, and marked "Soon" rather
+          than left looking live. A settings row that responds to a tap by doing
+          nothing is indistinguishable from a broken one, and the player cannot tell
+          which — so each of these says plainly that it is not ready.
+
+          Wiring one up later is replacing `soon` with an `onPress`.
+        */}
+        <Section palette={palette} title="Store">
+          <SoonRow palette={palette} label="Remove ads" detail="No purchases yet" />
+          <SoonRow palette={palette} label="Restore purchases" detail="Nothing to restore" />
+        </Section>
+
+        <Section palette={palette} title="Language">
+          <SoonRow palette={palette} label="Language" detail="English only" />
+        </Section>
+
+        <Section palette={palette} title="Feedback">
+          <SoonRow palette={palette} label="Rate us" detail="Needs a store listing" />
+          <SoonRow palette={palette} label="Write us" detail="Soon" />
+        </Section>
+
+        <Section palette={palette} title="Legal">
+          <SoonRow palette={palette} label="Privacy policy" detail="Soon" />
+          <SoonRow palette={palette} label="Terms of service" detail="Soon" />
+        </Section>
+
         <Section palette={palette} title="About">
           <Text style={[styles.about, { color: palette.textMuted }]}>ArrowPath {APP_VERSION}</Text>
           <Text style={[styles.hint, { color: palette.textFaint }]}>
@@ -177,7 +252,7 @@ export default function SettingsScreen() {
 
           <Pressable
             accessibilityRole="button"
-            onPress={() => setConfirmReset(true)}
+            onPress={withClick(() => setConfirmReset(true))}
             style={({ pressed }) => [
               styles.danger,
               { borderColor: palette.danger },
@@ -250,7 +325,7 @@ function VolumeControl({
               accessibilityRole="button"
               accessibilityLabel={`${label} ${Math.round(step * 100)} percent`}
               accessibilityState={{ selected: step === active }}
-              onPress={() => onChange(step)}
+              onPress={() => audible(() => onChange(step), 'buttonClick')}
               style={({ pressed }) => [
                 styles.volumeStep,
                 {
@@ -275,6 +350,36 @@ function VolumeControl({
           );
         })}
       </View>
+    </View>
+  );
+}
+
+/**
+ * A row that is present, legible and explicitly not ready.
+ *
+ * Not a `Pressable` with a no-op handler: something that looks tappable and does
+ * nothing teaches a player the app is broken. This is visibly inert instead, and
+ * says why.
+ */
+function SoonRow({
+  palette,
+  label,
+  detail,
+}: {
+  palette: Palette;
+  label: string;
+  detail: string;
+}) {
+  return (
+    <View
+      accessible
+      accessibilityRole="button"
+      accessibilityState={{ disabled: true }}
+      accessibilityLabel={`${label}, ${detail}`}
+      style={styles.linkRow}
+    >
+      <Text style={[styles.linkLabel, { color: palette.textFaint }]}>{label}</Text>
+      <Text style={[styles.linkValue, { color: palette.textFaint }]}>{detail}</Text>
     </View>
   );
 }
@@ -323,7 +428,7 @@ function Toggle({
       </View>
       <Switch
         value={value && !disabled}
-        onValueChange={onChange}
+        onValueChange={() => audible(onChange, 'toggle')}
         disabled={disabled}
         accessibilityLabel={label}
         trackColor={{ false: palette.border, true: palette.accent }}
@@ -370,6 +475,14 @@ const styles = StyleSheet.create({
   toggleLabel: { ...typography.body, fontWeight: '700' },
   toggleDetail: { ...typography.small, marginTop: 2, lineHeight: 17 },
 
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+  },
+  linkLabel: { ...typography.body },
+  linkValue: { ...typography.small },
   about: { ...typography.body, fontWeight: '700' },
 
   danger: {

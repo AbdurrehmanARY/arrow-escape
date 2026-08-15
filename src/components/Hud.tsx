@@ -19,7 +19,10 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
+import { MIN_TOUCH_TARGET, type Palette, radius, spacing, tabularNums, typography } from '@theme';
+
+import { Springy, useGlow } from './Pressable';
+import { withClick } from './sound';
 
 export interface HudProps {
   palette: Palette;
@@ -63,6 +66,11 @@ function HudInner({
   return (
     <View style={styles.hud}>
       <View style={styles.hudRow}>
+        {/*
+          Deliberately not wrapped in `withClick`: the play screen answers this
+          press with `pause`, and a generic click underneath it would be two
+          sounds for one tap.
+        */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Pause"
@@ -115,6 +123,7 @@ function HudInner({
         <Text style={[styles.progressLabel, { color: palette.textFaint }]}>
           {cleared}/{arrowsTotal}
         </Text>
+        {/* tabular figures: this counts up mid-level and must not shift the bar. */}
       </View>
     </View>
   );
@@ -148,20 +157,24 @@ export const PillButton = memo(function PillButton({
   const borderColor = primary || active ? palette.accent : palette.border;
   const color = primary ? palette.textOnAccent : active ? palette.text : palette.textMuted;
 
+  // The one action a screen most wants tapped carries the strongest elevation;
+  // everything else rests. See `glow` in `@theme`.
+  const elevation = useGlow(palette.accent, primary ? 'primary' : 'rest');
+
   return (
-    <Pressable
+    <Springy
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={({ pressed }) => [
+      onPress={withClick(onPress)}
+      style={[
         styles.pill,
         { backgroundColor: background, borderColor },
-        pressed && styles.pillPressed,
+        (primary || active) && elevation,
       ]}
     >
       {icon ? <Text style={[styles.pillIcon, { color }]}>{icon}</Text> : null}
       <Text style={[styles.pillLabel, { color }]}>{label}</Text>
-    </Pressable>
+    </Springy>
   );
 });
 
@@ -198,7 +211,7 @@ const styles = StyleSheet.create({
   },
   track: { flexGrow: 1, height: 3, borderRadius: radius.pill, overflow: 'hidden' },
   fill: { height: 3, borderRadius: radius.pill },
-  progressLabel: { ...typography.tiny, fontVariant: ['tabular-nums'] },
+  progressLabel: { ...typography.tiny, ...tabularNums },
 
   pill: {
     flexDirection: 'row',

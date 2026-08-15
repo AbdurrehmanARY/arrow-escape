@@ -49,3 +49,10 @@ coverage/
 /build.log
 /verify.log
 /jest-levels.log
+
+# JetBrains IDE settings — local to one machine.
+.idea/
+
+# Claude Code local settings and scratch files.
+.claude/settings.local.json
+.claude/*.tmp.*

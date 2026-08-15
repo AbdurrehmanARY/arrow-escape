@@ -1,85 +1,163 @@
 /**
- * app/index.tsx — the main menu.
+ * app/(tabs)/index.tsx — Home.
  *
- * Purpose:      Get the player into a level in one tap, and show what they have
- *               done so far.
- * Notes:        "Play" continues to the first level they have not cleared, which
- *               is almost always what they want. Level select is one tap away for
- *               the times it is not.
+ * Purpose:      Get the player into a level in one tap, and put the two recurring
+ *               things — leagues and today's challenge — where they cannot be
+ *               missed.
+ * Notes:        Laid out to the reference design: a streak chip at the top, two
+ *               summary cards side by side, the wordmark and current level in the
+ *               middle, and one large Play button.
+ *
+ *               **The cards are live, not decoration.** Leagues shows the real
+ *               score and tier; Challenge shows today's date and whether it is
+ *               done. A card that always says the same thing is a button wearing a
+ *               costume, and players learn to stop looking at it within a day.
+ *
+ *               Level select moved off this screen — it is reachable from Play's
+ *               long tail rather than competing with it. Rank and record live in
+ *               the Collection tab now, which is why the old stat row is gone.
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { IconButton, Screen, useTheme } from '@components';
+import { Screen, useTheme, withClick } from '@components';
 import { playMusic } from '@services/audio';
-import { LEVEL_COUNT } from '@data/levels';
-import { UNLOCK_ALL_LEVELS } from '@config';
-import { clearedCount, nextLevel, perfectCount, useProgressStore } from '@state/progressStore';
+import { challengeFor, today } from '@challenge';
+import { TIER_LABELS } from '@game/codec';
+import { LEVEL_COUNT, tierOf } from '@data/levels';
+import { clearedCount, nextLevel, useProgressStore } from '@state/progressStore';
 import { useHintStore } from '@state/hintStore';
-import { MIN_TOUCH_TARGET, radius, spacing, typography } from '@theme';
+import { isDayWon, statsOf, useChallengeStore } from '@state/challengeStore';
+import { arrowsFor, leagueForArrows } from '@league';
+import { arrowsThisWeek, useLeagueStore } from '@state/leagueStore';
+import { MIN_TOUCH_TARGET, radius, spacing, typography, type Palette } from '@theme';
 
-export default function MenuScreen() {
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+] as const;
+
+export default function HomeScreen() {
   const router = useRouter();
   const { palette } = useTheme();
 
   const records = useProgressStore((state) => state.records);
   const hints = useHintStore((state) => state.available);
+  const challengeRecords = useChallengeStore((state) => state.records);
+  const leagueWeeks = useLeagueStore((state) => state.weeks);
+
+  const now = useMemo(() => today(), []);
+  // A lazy state initialiser rather than `useMemo`: the React Compiler treats
+  // `Date.now()` in a render body as impure wherever it appears, and it is right —
+  // two renders a frame apart would disagree. State is read once, at mount.
+  const [nowMs] = useState(() => Date.now());
+  const stats = useMemo(() => statsOf({ records: challengeRecords }, now), [challengeRecords, now]);
+  // Derived, like every other count in this project — a stored "done today" flag
+  // would survive midnight and quietly lie.
+  const challengeDone = isDayWon({ records: challengeRecords }, now);
 
   const cleared = useMemo(() => clearedCount(records), [records]);
-  const perfect = useMemo(() => perfectCount(records), [records]);
   const resume = useMemo(() => nextLevel(records, LEVEL_COUNT), [records]);
   const started = cleared > 0;
 
+  // The same weekly score the Leagues tab shows — derived from the shared domain
+  // rather than recomputed here, so the two can never disagree.
+  const score = arrowsFor(arrowsThisWeek({ weeks: leagueWeeks }, nowMs), stats.won);
+  const league = leagueForArrows(score);
+
+  const todayLevel = challengeFor(now);
+  const todayTier = todayLevel === undefined ? undefined : tierOf(todayLevel);
+
   // The menu bed. Asking for a track already playing is a no-op, so returning to
-  // the menu from a level cross-fades once and repeat renders cost nothing.
+  // Home from a level cross-fades once and repeat renders cost nothing.
   useEffect(() => {
     playMusic('menu');
   }, []);
 
   return (
     <Screen scroll>
-      <View style={styles.header}>
-        <View style={styles.hintChip}>
-          <Text style={[styles.hintGlyph, { color: palette.accent }]}>💡</Text>
-          <Text style={[styles.hintCount, { color: palette.text }]}>{hints}</Text>
+      {/* ---- Streak chip ------------------------------------------------ */}
+      <View style={styles.chipRow}>
+        <View style={[styles.chip, { backgroundColor: palette.surface }]}>
+          <Text style={[styles.chipGlyph, { color: palette.accent }]}>▲</Text>
+          <Text style={[styles.chipValue, { color: palette.text }]}>{stats.currentStreak}</Text>
         </View>
-        <View style={styles.headerActions}>
-          <IconButton
-            palette={palette}
-            glyph="★"
-            label="Your record"
-            onPress={() => router.push('/stats')}
-          />
-          <IconButton
-            palette={palette}
-            glyph="⚙"
-            label="Settings"
-            onPress={() => router.push('/settings')}
-          />
+        <View style={[styles.chip, { backgroundColor: palette.surface }]}>
+          <Text style={[styles.chipGlyph, { color: palette.accent }]}>💡</Text>
+          <Text style={[styles.chipValue, { color: palette.text }]}>{hints}</Text>
         </View>
       </View>
 
-      {UNLOCK_ALL_LEVELS ? (
-        <View style={[styles.testingBadge, { borderColor: palette.accent }]}>
-          <Text style={[styles.testingBadgeText, { color: palette.accent }]}>
-            TESTING BUILD · every level unlocked
-          </Text>
-        </View>
-      ) : null}
+      {/* ---- The two cards ---------------------------------------------- */}
+      <View style={styles.cards}>
+        <Card
+          palette={palette}
+          title="Leagues"
+          subtitle={league.name}
+          onPress={() => router.push('/leagues')}
+        >
+          <View style={[styles.emblem, { backgroundColor: palette.accentMuted }]}>
+            <Text style={[styles.emblemGlyph, { color: palette.accent }]}>◆</Text>
+          </View>
+          <View style={[styles.pill, { backgroundColor: palette.surfaceRaised }]}>
+            <Text style={[styles.pillText, { color: palette.text }]}>{score}</Text>
+          </View>
+        </Card>
 
-      <View style={styles.hero}>
-        <Text style={[styles.wordmark, { color: palette.text }]}>ArrowPath</Text>
-        <Text style={[styles.tagline, { color: palette.textMuted }]}>
-          Every arrow wants out. Only some of them can go.
+        <Card
+          palette={palette}
+          title="Challenge"
+          subtitle={`${MONTHS[now.month - 1]} ${now.day}`}
+          onPress={() => router.push('/challenge')}
+        >
+          <View
+            style={[
+              styles.emblem,
+              { backgroundColor: challengeDone ? palette.success : palette.accentMuted },
+            ]}
+          >
+            <Text
+              style={[
+                styles.emblemGlyph,
+                { color: challengeDone ? palette.textOnAccent : palette.accent },
+              ]}
+            >
+              ♛
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.pill,
+              { backgroundColor: challengeDone ? palette.surfaceRaised : palette.accent },
+            ]}
+          >
+            <Text
+              style={[
+                styles.pillText,
+                { color: challengeDone ? palette.textMuted : palette.textOnAccent },
+              ]}
+            >
+              {challengeDone ? 'Done' : todayTier ? TIER_LABELS[todayTier] : 'Play'}
+            </Text>
+          </View>
+        </Card>
+      </View>
+
+      {/* ---- Wordmark ---------------------------------------------------- */}
+      <View style={styles.brand}>
+        <Text style={[styles.wordmark, { color: palette.text }]}>
+          <Text style={{ color: palette.accent }}>▲</Text>rrows
         </Text>
+        <Text style={[styles.levelLine, { color: palette.accent }]}>Level {resume}</Text>
       </View>
 
+      {/* ---- Play -------------------------------------------------------- */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={started ? `Continue to level ${resume}` : 'Play level 1'}
-        onPress={() => router.push(`/play/${resume}`)}
+        onPress={withClick(() => router.push(`/play/${resume}`))}
         style={({ pressed }) => [
           styles.play,
           { backgroundColor: palette.accent },
@@ -89,109 +167,112 @@ export default function MenuScreen() {
         <Text style={[styles.playLabel, { color: palette.textOnAccent }]}>
           {started ? 'Continue' : 'Play'}
         </Text>
-        <Text style={[styles.playSub, { color: palette.textOnAccent }]}>Level {resume}</Text>
       </Pressable>
 
       <Pressable
         accessibilityRole="button"
-        onPress={() => router.push('/levels')}
-        style={({ pressed }) => [
-          styles.secondary,
-          { backgroundColor: palette.surfaceRaised, borderColor: palette.border },
-          pressed && styles.pressed,
-        ]}
+        onPress={withClick(() => router.push('/levels'))}
+        style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
       >
-        <Text style={[styles.secondaryLabel, { color: palette.text }]}>All levels</Text>
+        <Text style={[styles.secondaryLabel, { color: palette.textMuted }]}>
+          All levels · {cleared} of {LEVEL_COUNT} cleared
+        </Text>
       </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Your record"
-        onPress={() => router.push('/stats')}
-        style={({ pressed }) => [styles.stats, pressed && styles.pressed]}
-      >
-        <Stat palette={palette} value={`${cleared}/${LEVEL_COUNT}`} label="cleared" />
-        <Stat palette={palette} value={String(perfect)} label="perfect reads" />
-      </Pressable>
-
-      <Text style={[styles.footnote, { color: palette.textFaint }]}>
-        Tap an arrow whose head has a clear straight run to the edge. Misread it and it costs a
-        heart — but the board itself can never be ruined.
-      </Text>
     </Screen>
   );
 }
 
-function Stat({
+function Card({
   palette,
-  value,
-  label,
+  title,
+  subtitle,
+  onPress,
+  children,
 }: {
-  palette: ReturnType<typeof useTheme>['palette'];
-  value: string;
-  label: string;
+  palette: Palette;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <View style={[styles.stat, { borderColor: palette.border }]}>
-      <Text style={[styles.statValue, { color: palette.text }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: palette.textFaint }]}>{label}</Text>
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${subtitle}`}
+      onPress={withClick(onPress)}
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: palette.surface },
+        pressed && styles.pressed,
+      ]}
+    >
+      <Text style={[styles.cardTitle, { color: palette.text }]}>{title}</Text>
+      <Text style={[styles.cardSubtitle, { color: palette.textMuted }]}>{subtitle}</Text>
+      {children}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerActions: { flexDirection: 'row', gap: spacing.sm },
-  hintChip: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  hintGlyph: { fontSize: 16 },
-  hintCount: { ...typography.heading },
-
-  testingBadge: {
-    marginTop: spacing.lg,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: radius.pill,
+  chipRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingVertical: 3,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
   },
-  testingBadgeText: { ...typography.tiny, letterSpacing: 0.6 },
+  chipGlyph: { fontSize: 15 },
+  chipValue: { ...typography.body, fontWeight: '800' },
 
-  hero: { marginTop: spacing.xl, marginBottom: spacing.xxl },
-  wordmark: { ...typography.display, letterSpacing: -0.8 },
-  tagline: { ...typography.body, marginTop: spacing.xs, lineHeight: 21 },
+  cards: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
+  card: {
+    flex: 1,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  cardTitle: { ...typography.heading, fontWeight: '800' },
+  cardSubtitle: { ...typography.small },
+  emblem: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: spacing.sm,
+  },
+  emblemGlyph: { fontSize: 32, fontWeight: '800' },
+  pill: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    minWidth: 84,
+    alignItems: 'center',
+  },
+  pillText: { ...typography.body, fontWeight: '700' },
+
+  brand: { alignItems: 'center', marginTop: spacing.xxl, marginBottom: spacing.xxl },
+  wordmark: { ...typography.display, fontSize: 42, letterSpacing: -0.5 },
+  levelLine: { ...typography.title, fontWeight: '800', marginTop: spacing.xs },
 
   play: {
-    minHeight: 76,
-    borderRadius: radius.lg,
+    height: 64,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
+    marginHorizontal: spacing.xl,
   },
-  playLabel: { ...typography.title },
-  playSub: { ...typography.small, opacity: 0.85, marginTop: 1 },
+  playLabel: { ...typography.title, fontWeight: '800' },
+  pressed: { opacity: 0.75 },
 
   secondary: {
-    minHeight: MIN_TOUCH_TARGET + 8,
-    marginTop: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
+    minHeight: MIN_TOUCH_TARGET,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: spacing.md,
   },
-  secondaryLabel: { ...typography.body, fontWeight: '700' },
-  pressed: { opacity: 0.65 },
-
-  stats: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
-  stat: {
-    flexGrow: 1,
-    flexBasis: 0,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  statValue: { ...typography.title, fontVariant: ['tabular-nums'] },
-  statLabel: { ...typography.tiny, marginTop: 2 },
-
-  footnote: { ...typography.small, marginTop: spacing.xl, lineHeight: 19 },
+  secondaryLabel: { ...typography.small },
 });

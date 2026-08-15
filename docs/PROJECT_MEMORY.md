@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 21 — density, heart synchronisation, audio system. Phase 19 (level design document) deferred by request.
+> **Last updated:** end of Phase 22 — the board renders on Skia; frame drops on large boards resolved on device. Phase 19 (level design document) deferred by request.
 > Release state and the full remaining checklist live in [PROGRESS.md](PROGRESS.md).
 
 ---
@@ -21,9 +21,15 @@ sit at 66% deliberately — see decision 86. Snake length rises monotonically ac
 all ten tiers, 3.0 to 11.3 cells on average and 4.1 to 26.1 at the longest, which
 is the axis difficulty actually lives on here.
 
-What is _not_ done is everything that needs your accounts or your assets — audio
-files, an app icon, an AdMob account, a Play Console listing. Those are listed in
-[RELEASE.md](RELEASE.md) and [ADS_SETUP.md](ADS_SETUP.md).
+Audio is **fully wired**: 27 effects and 4 music beds, every one of them reached by
+a real moment in the game. The files themselves are synthesised placeholders, so
+what is missing is a composer rather than any code.
+
+What is _not_ done is everything that needs your accounts or your assets — a Play
+Store listing set, an AdMob account, a Supabase project and Google OAuth clients,
+and artwork to replace the generated icon. Those are listed in
+[RELEASE.md](RELEASE.md), [ADS_SETUP.md](ADS_SETUP.md) and
+[AUTH_SETUP.md](AUTH_SETUP.md).
 
 ## The mechanic (settled)
 
@@ -60,7 +66,7 @@ monotone; they buy dependency _depth_, not risk.
 ## Architecture decisions (locked for v0.1)
 
 1. **Level pipeline = hybrid generate-and-curate.** Shape mask + plan → generator → solver/validator → level JSON. Every shipped level is verified solvable _and_ has its recorded solution replayed, in CI.
-2. **Rendering = react-native-svg**, one `<Polyline>` per snake with rounded joins. Not Skia — only one arrow animates at a time.
+2. ~~**Rendering = react-native-svg**, one `<Polyline>` per snake with rounded joins. Not Skia — only one arrow animates at a time.~~ **Superseded — see decision 99.** The premise held; the scale it was decided at did not. Rendering is Skia, and "only one arrow animates at a time" is now the reason it is cheap.
 3. **Animation = Reanimated 4** (+ `react-native-worklets`). Release is a dash-window slide along body-plus-exit-ray.
 4. **State = Zustand (persistent) + `useReducer` (live board).** Live board state stays out of the global store.
 5. **Storage = AsyncStorage**, versioned envelope, corruption-safe.
@@ -170,8 +176,42 @@ monotone; they buy dependency _depth_, not risk.
 91. **A mute and a volume of zero are not the same setting.** Someone who mutes music and later unmutes it expects their level back, not silence.
 92. **Volume is a five-step segmented control, not a slider.** A slider needs a native dependency, and adding one to this toolchain has broken it twice. Five steps is the resolution anyone actually uses.
 
+### Added in the development-build pass
+
+93. **Expo Go and a development build are both kept, and neither replaces the other.** Expo Go is faster for gameplay and level work and needs no build step; a development build is the only way to run anything native, which is the whole ads path. Installing `expo-dev-client` changes what bare `expo start` targets, so `start:go` and `dev` exist as explicit scripts and the default is not relied on.
+94. **`expo-dev-client` is a `dependency`, not a `devDependency`, and it still does not ship.** Autolinking reads `dependencies`, so moving it would break the debug build it exists for. It stays out of release builds because `expo-dev-launcher`'s Gradle wiring is `debugImplementation`; a release build only picks it up if `expo.devlauncher.configureInRelease=true`, which is not set. Verified in the package's own `android/build.gradle` rather than inferred from the docs, which do not say.
+95. **`newArchEnabled` was an invalid property, not a setting.** The New Architecture is always on in SDK 55+ and cannot be disabled, so the flag failed config-schema validation while doing nothing. Removing it changed no behaviour — but it was one of two `expo-doctor` failures standing between this project and a native build.
+96. **`expo-audio` needs `expo-asset` and Expo Go was hiding it.** Expo Go bundles `expo-asset` already, so the missing peer dependency was invisible; outside Expo Go — which is precisely what a development build is — it can crash. This is the class of bug development builds exist to surface, and it was found by `npx expo-doctor` before a single build ran.
+97. **`npx expo-doctor` is the gate for native builds, the way `npm run verify` is for the JS.** It caught both of the above in one run. Worth running after any dependency or app-config change, not just before a release.
+98. **Every EAS script goes through `npx --yes eas-cli@latest`, never a bare `eas`.** EAS CLI is a separate program rather than a project dependency, so `eas` is only on PATH after a global install — and a script that assumes one fails with `'eas' is not recognized` on a clean machine, which is exactly what happened. `npx eas` does not work either: the package is `eas-cli`, and `npx eas` fails with "could not determine executable to run". The npx form needs no installation and is the alternative Expo documents; putting it inside npm scripts answers the docs' own caveat about having to remember it.
+
+### Added in the Skia migration
+
+99. **The board renders on a Skia canvas, not in SVG.** Decision 2 chose `react-native-svg` and explicitly rejected Skia, on the reasoning that "only one arrow animates at a time". That premise was never wrong — it is still true, and it is now the _argument for_ Skia rather than against it. What changed underneath it was scale: boards went from 12x12 with ~20 arrows to 50x54 with 180, and a 180-arrow board was roughly 1,600 native nodes. Everything at rest is now recorded into one `SkPicture` and replayed as a single draw; only the handful of arrows actually moving get a node each.
+100. **The symptom that justified the rewrite was frame cost tracking _visible_ content, not board size.** Dragging was fine zoomed in on a big board and dropped frames zoomed out — the fingerprint of per-node rasterisation, since zooming out brings every remaining arrow inside the viewport. Two cheaper fixes were tried first and measured on device; neither helped, which is what turned Skia from a guess into a conclusion.
+101. **The camera moved inside the canvas.** It was a transform on an `Animated.View` wrapping the whole level — up to 1456x1352dp. It is now a matrix on a Skia `<Group>`, so panning replays the same picture through a different transform and nothing is re-laid-out or re-rasterised. This is also what retired `renderToHardwareTextureAndroid`: there is no longer an oversized view to promote to a layer.
+102. **Press feedback is an overlay, never a picture re-record.** Touch-down fires on every gesture including the start of a pan. Pulling the touched arrow out of the static picture to dim it would mean re-recording all 180 arrows per touch — exactly the per-touch cost the architecture exists to remove. Painting the board colour over it at partial alpha costs one extra draw and no re-record.
+103. **A Skia canvas cannot be tested, so everything that can be decided without a GPU is decided outside it.** `scene.ts`, `hitTest.ts` and `timings.ts` are pure TypeScript with no Skia import — the same rule `src/game/` follows, for a sharper reason: an SVG tree can be rendered in Jest and queried, and a canvas answers no questions. Skia also cannot be loaded in Jest at all (`Cannot use import statement outside a module`), so anything left inside the renderer becomes permanently untestable.
+104. **The riskiest part of the migration was hit testing, not drawing.** Under SVG the tap surface sat _inside_ the transformed view, so a touch arrived already in board coordinates and no conversion existed to get wrong. A Skia matrix does not move the view, so the inverse is now applied by hand. Getting it wrong does not crash and does not look broken — it selects the arrow _next to_ the one aimed at, costs a heart, and reads as the game cheating. `hitTesting.test.ts` asserts the round trip at every zoom and pan a player can reach.
+105. **The arrowhead needs its own transform, because trimming a path does not move it.** The body is drawn by trimming, so its visible window slides along geometry that never moves; the head is a separate filled shape and stays put unless translated. Left alone the body threads out from under a stationary head — reported as "the arrow goes but not its head". It is translated along the same forward vector by the same distance the trim window has advanced.
+106. **`react-native-svg` is gone entirely.** Nothing in the project imported it once the board moved, and no dependency needed it. Removing it took the JS bundle from 6.1MB to 5.9MB and takes its native library out of the APK — the more meaningful saving, since Skia's own native code added ~42MB to a universal APK.
+
+### Added in the sound-wiring pass
+
+107. **Twenty of the thirty-one bundled sounds were never played by anything.** They were declared, bundled, gain-balanced and mixed — and no code path reached them. Nothing reports this: an unplayed sound is indistinguishable from a quiet game, and `hasAudioAssets()` was true the whole time because it counts files, not call sites. The registry describing a sound and the app firing it are two separate pieces of work, and finishing the first one looks exactly like finishing both.
+108. **The click belongs in the shared primitives, not at the call sites.** `buttonClick` reaches ~60 buttons through five components — `PillButton`, `IconButton`, `Action`, `Secondary` and the tab bar's one `screenListeners` — rather than through sixty `playSfx` calls next to sixty `onPress`. A rule that every new button must remember to make a noise is a rule that silently decays; wiring the primitive means a screen gets it by using the standard button.
+109. **Sound fires before the handler, except where the handler is the mixer.** A handler that navigates can unmount the caller mid-call, so `withClick` plays first. The settings screen is the deliberate exception: its controls change the mixer the sound is about to play through, so enabling "Sound effects" or raising a volume from zero would fire its own confirmation into a still-muted mixer — the one control whose purpose is to make the game audible would be the only one giving no sign of working. `audible()` defers those by a macrotask.
+110. **A win can have four things to say at once, and said together they are one loud noise.** A first clean clear of a tier-ending level that also earns an award fires `levelComplete`, `starCollect`, `achievement` and `difficultyUnlocked`. They are spaced `FANFARE_GAP_MS` apart so they can be counted, and the sequence is cancelled on unmount so tapping Next does not carry the rest of it into the next level.
+111. **"Was this the first time?" has to be read before the write, not after.** `difficultyUnlocked` is keyed on `timesCleared === 0` sampled *before* `completeLevel` runs, and awards are counted either side of `recordResult`. Both are derived rather than stored — which is the right design and means the only honest way to detect a change is to measure across the mutation.
+112. **The board reports touches; the screen decides what they sound like.** `SkiaBoard` gained `onPressArrow` and `onTapEmpty` rather than a `playSfx` import. This is the same separation the tap handler already documented, and it keeps the renderer free of an `expo-audio` dependency that Jest cannot load.
+113. **A tap that hits nothing is not the same event as a tap that is blocked.** `wrongMove` fires on empty board, `collision` on a blocked arrow. They differ in what they cost the player — nothing versus a heart — and using one sound for both would teach that a missed tap costs a life.
+114. **The hint notice was being set and never rendered.** `setHintNotice` had four call sites and its state variable was underscore-prefixed and unused, so tapping Hint with none left did nothing visible at all — indistinguishable from a dead button. Found while looking for somewhere honest to put `notification`, which is now the sound that accompanies it.
+115. **`levelRestart` belonged to the restart, not to one of the four buttons that cause one.** It was fired from the pause menu's handler, so restarting from the Restart pill, the confirm dialog or either failure overlay was silent. It lives in `doRestart` now — the single place a restart actually happens.
+116. **`countdown` was left unwired, deliberately.** There is no countdown anywhere in this game: no pre-level timer, no turn clock, no claim window. Every candidate site was either a per-minute display where a sound would be noise, or an existing moment that already has a voice. Inventing a trigger to reach a round number would have put a sound somewhere it is not earned, which is how an app starts to feel cheap.
+
 ### Reversed along the way
 
+- **The SVG render layer was deleted in the Skia migration** — `BoardCanvas.tsx`, `ArrowSnake.tsx` and `BoardViewport.tsx`, along with `arrowSnakeMemo`, `heartsUi` and `hintGlow`, which all asserted against a mocked SVG element tree that no longer exists. `heartsUi` was the test that caught the swallowed-tap bug; its coverage is partially replaced by `__tests__/render/heartsThroughSkia.test.tsx`, which exercises the same chain minus the gesture-handler wiring. That gap is real and recorded here rather than glossed over.
 - **The celebration was removed in the UI pass**, by request — `Celebration.tsx` and its sixty confetti pieces are gone. The 900ms win-overlay delay it shared the moment with was _kept_, and is now 1150ms: the particles were decoration, but the pause is what stops a modal landing on top of the last snake threading out. In git history at `acd4fa6`.
 - The `slide-and-stop` rule variant was built, tested, then **removed** once the reference screenshots settled the mechanic. In git history at `b725e00`. Phase 15 revisited the same goal and reached it by a different route — see decision 47.
 - A two-pass snake growth fallback (retry leftover corridors at a shorter minimum length) was written for the perforated shapes, then **removed**: the rebuild came back byte-identical, because arrow counts were already being met. The undershoot was structural, not density.
@@ -212,10 +252,13 @@ Full breakdown, with the release checklist, in [PROGRESS.md](PROGRESS.md).
   packed boards read or overwhelm, and the 5-heart budget.
 - **Phase 19 (deferred by request):** the level design document covering all 600
   levels. Two questions still open on its fields and format.
-- **Assets — the only hard blocker on a complete build:** 31 audio files
-  (`assets/audio/README.md`). Every call site is wired and the game is silent
-  until they exist. Icons and splash are generated — rerun `npm run icons:build`
-  after any brand change.
+- **Assets:** all 31 audio files exist and all 31 are now played, but every one is
+  **synthesised by `npm run sounds:build`, not recorded or composed** — clean and
+  plain, in the register of early system sounds. Replacing any is dropping a file
+  in and changing one line of `audioAssets.ts`. Icons and splash are likewise
+  generated; rerun `npm run icons:build` after any brand change. The genuinely
+  missing artwork is the **Play Store listing set** — 512×512 icon, 1024×500
+  feature graphic, screenshots — which cannot be generated and blocks submission.
 - **Accounts:** AdMob ([ADS_SETUP.md](ADS_SETUP.md)), Play Console ([RELEASE.md](RELEASE.md)).
 - **Unproven on hardware:** the ads path has never run against a real SDK, and the
   600-level library has never been played end to end by a person.
@@ -229,7 +272,8 @@ Full breakdown, with the release checklist, in [PROGRESS.md](PROGRESS.md).
 
 ## Known issues / technical debt
 
-- Audio and ad services have no unit tests — both are thin I/O wrappers whose only real behaviour is degrading gracefully, which is exercised by the app running without either. **The audio layer has also never been heard**, because no file has ever been in the repo; what is proven is that its absence is harmless.
+- The ad service has no unit tests — a thin I/O wrapper whose only real behaviour is degrading gracefully, which is exercised by the app running without it. `services/audio.ts` is the same, but the layer *above* it is now covered: `__tests__/components/sound.test.tsx` pins `withClick`'s ordering and `useSheetSound`'s edge-triggering, which sit under every button in the app and whose failure mode is silence — something no other test would notice.
+- **The mix has never been heard on a device.** Every sound is wired, spaced and gain-balanced on reasoning rather than on listening: `SFX_GAIN` was written before any file existed, and the fanfare spacing is an estimate. Expect to retune both on hardware — particularly `wrongMove`, which fires on any tap that misses and is the most likely to be found annoying.
 - Component test coverage is thin but no longer absent: the board's tap surface and `ArrowSnake`'s memo are covered (`heartsUi`, `arrowSnakeMemo`). Every other screen is still covered only by the bundle building and by manual testing — and decision 79 is what that gap costs.
 - `npm audit` reports moderate advisories from the Expo dependency tree; none are in code paths this app uses.
 - The IDE's JSON schema flags `module: "preserve"` in `tsconfig.json`. Valid in TS 5.4+, inherited from `expo/tsconfig.base`; `tsc` accepts it.

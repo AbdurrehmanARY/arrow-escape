@@ -55,7 +55,16 @@ const dottedBoard: BoardStyle = {
   dotRatio: 0.058,
   lineRatio: 0.02,
   cornerRadius: 20,
-  padCells: 0.5,
+  // Three cells of margin around the playable area, up from one. At one cell the
+  // outermost arrows sat almost against the board's own edge — the stroke is
+  // roughly a fifth of a cell wide, so a single cell of clearance read as none
+  // once the board was panned to a boundary.
+  //
+  // This is board space, not screen space. On a large level it costs a little more
+  // panning and no legibility. On a board small enough to fit, it necessarily
+  // costs cell size — the margin has to come out of the same viewport — which is
+  // why `MIN_CELL_SIZE` matters more at this value than it did at one.
+  padCells: 3.0,
 };
 
 /**
@@ -92,6 +101,7 @@ const paperPalette: Palette = {
   arrowBlocked: '#C8453F',
   arrowBlocker: '#D98324',
   arrowSafe: '#2E9E63',
+  arrowHinted: '#E8960F',
 
   surface: '#F7F5F0',
   surfaceRaised: '#FFFFFF',
@@ -127,6 +137,7 @@ const midnightPalette: Palette = {
   arrowBlocked: '#F0716B',
   arrowBlocker: '#EFA94A',
   arrowSafe: '#4FCB8B',
+  arrowHinted: '#F5A623',
 
   surface: '#1A1F33',
   surfaceRaised: '#232A42',
@@ -145,6 +156,63 @@ const midnightPalette: Palette = {
   dangerMuted: '#3B2028',
   heart: '#F0555A',
   heartSpent: '#323A54',
+};
+
+/**
+ * Kinetic Neon — near-black, with a violet-to-cyan accent.
+ *
+ * The one theme designed chrome-first rather than board-first. Its accent pair is
+ * a *gradient* in the interface — buttons, progress, selected states — and the
+ * board takes the cyan end of it, because a board cannot be a gradient without
+ * the arrows losing the one thing they must never lose: being identical to each
+ * other except where the rules say otherwise.
+ *
+ * Two decisions here are about legibility rather than looks, and both cost some
+ * of the intended drama:
+ *
+ * - **No glow on the arrows.** Glow is the signature of this look, and it is
+ *   applied to the interface only. `SIMPLIFY_ABOVE_ARROWS` already strips shadow
+ *   and gloss above 45 arrows because a full-length stroke effect per arrow is
+ *   what made the SVG renderer drop frames; adding a blur per arrow would spend
+ *   exactly the budget the Skia migration bought back.
+ * - **The arrows are near-white, not neon.** A violet arrow on a near-black board
+ *   is a beautiful screenshot and a hard read at 34dp, and reading the board is
+ *   the entire game. The neon lives in the accents, where nothing is being traced.
+ */
+const kineticNeonPalette: Palette = {
+  wall: '#2A3350',
+  groupColors: DARK_GROUP_COLORS,
+  scheme: 'dark',
+  background: '#0A0E1A',
+  board: '#131826',
+  boardBorder: '#1B2233',
+  pattern: '#232B42',
+
+  arrow: '#F5F7FF',
+  arrowShadow: 'rgba(0, 0, 0, 0.55)',
+  arrowHighlight: 'rgba(255, 255, 255, 0.18)',
+  arrowBlocked: '#FF4D5E',
+  arrowBlocker: '#FFC53D',
+  arrowSafe: '#34E29A',
+  arrowHinted: '#2FE6E6',
+
+  surface: '#131826',
+  surfaceRaised: '#1B2233',
+  border: 'rgba(255, 255, 255, 0.08)',
+
+  text: '#F5F7FF',
+  textMuted: '#9BA3BF',
+  textFaint: '#545B73',
+  textOnAccent: '#0A0E1A',
+
+  accent: '#7C5CFF',
+  accentMuted: '#231C47',
+  success: '#34E29A',
+  successMuted: '#10331F',
+  danger: '#FF4D5E',
+  dangerMuted: '#3A1620',
+  heart: '#FF4D5E',
+  heartSpent: '#2A3047',
 };
 
 const noodlePalette: Palette = {
@@ -182,6 +250,7 @@ const boldPalette: Palette = {
   arrowBlocked: '#D62828',
   arrowBlocker: '#8B4000',
   arrowSafe: '#0B6E4F',
+  arrowHinted: '#E8960F',
 
   surface: '#FBE28A',
   surfaceRaised: '#FDF0C0',
@@ -217,6 +286,7 @@ const blueprintPalette: Palette = {
   arrowBlocked: '#FF7B7B',
   arrowBlocker: '#FFC46B',
   arrowSafe: '#6BFFB0',
+  arrowHinted: '#FFD54F',
 
   surface: '#0F3E60',
   surfaceRaised: '#154D75',
@@ -295,7 +365,7 @@ export const THEMES: readonly Theme[] = [
       headHalfWidthRatio: 0.34,
       shadow: false,
     },
-    board: { ...dottedBoard, pattern: 'none', cornerRadius: 14, padCells: 0.4 },
+    board: { ...dottedBoard, pattern: 'none', cornerRadius: 14 },
   },
   {
     id: 'blueprint',
@@ -338,6 +408,29 @@ export const THEMES: readonly Theme[] = [
       shadow: false,
     },
     board: { ...dottedBoard, pattern: 'crosses', lineRatio: 0.022, cornerRadius: 8 },
+  },
+  {
+    id: 'kineticNeon',
+    name: 'Kinetic Neon',
+    description:
+      'Near-black with a violet-to-cyan accent. The arrows stay near-white so a dense board is still readable.',
+    palette: kineticNeonPalette,
+    arrow: {
+      ...classicArrow,
+      head: 'triangle',
+      tail: 'round',
+      join: 'round',
+      // Slightly slimmer than Paper. On a near-black board a light stroke blooms
+      // optically — it reads heavier than the same weight on white — so it is
+      // taken down a little to keep the daylight between neighbouring snakes that
+      // tracing depends on.
+      strokeRatio: 0.19,
+      headHalfWidthRatio: 0.3,
+      // No shadow: against near-black it does nothing but cost a stroke.
+      shadow: false,
+      highlight: false,
+    },
+    board: { ...dottedBoard, pattern: 'dots', dotRatio: 0.05, cornerRadius: 20 },
   },
 ] as const;
 

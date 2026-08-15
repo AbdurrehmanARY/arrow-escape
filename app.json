@@ -19,7 +19,17 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.abdurrehmanary.arrowpath",
-      "versionCode": 1
+      "versionCode": 14,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,13 +48,34 @@
             "backgroundColor": "#0E1120"
           }
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-secure-store",
+      "@react-native-google-signin/google-signin"
     ],
     "scheme": "arrowpath",
-    "newArchEnabled": true,
     "androidStatusBar": {
       "backgroundColor": "#EEEBE4",
       "barStyle": "dark-content"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fdc07c4e-af7e-4cec-8b5a-945d54c6b849"
+      },
+      "supabase": {
+        "url": "https://otaoosekzkgzwspmdgfj.supabase.co",
+        "anonKey": "sb_publishable_JPJbVOlZ7pSrP055-O7f4A_DnApYwqJ"
+      },
+      "google": {
+        "webClientId": "920357438418-5v1bpaavm7ssqsgfsomsghosnrf0b7qp.apps.googleusercontent.com"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fdc07c4e-af7e-4cec-8b5a-945d54c6b849"
     }
   }
 }

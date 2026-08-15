@@ -50,12 +50,34 @@ export interface GameState {
    */
   readonly departing: readonly number[];
   readonly highlight: BlockHighlight | undefined;
+  /**
+   * Every arrow that has been blocked this attempt, and everything that blocked
+   * one — kept for the rest of the level rather than cleared on the next tap.
+   *
+   * `highlight` above is the *momentary* record: it drives the shake and it is
+   * replaced by the next failed tap. These two are the *standing* one, and they
+   * exist because a collision is a fact the player needs to keep. A flash that
+   * has already faded cannot be re-read, so a player who looks away mid-animation
+   * has lost the only feedback the game gave them about a pair they misjudged.
+   *
+   * It cannot grow without bound: five failed taps ends the level, so at most five
+   * pairs are ever marked. That is what makes "until the level ends" affordable —
+   * on a fifty-arrow board it is ten arrows at the very worst.
+   *
+   * An arrow can appear in both, and legitimately does: the thing that blocked you
+   * once may be the thing you misjudge next.
+   */
+  readonly blockedArrows: readonly number[];
+  readonly blockerArrows: readonly number[];
   /** The most recent outcome, so the view can react without diffing state. */
   readonly lastOutcome: MoveOutcome | undefined;
-  /** Player-facing explanation of what just happened. */
-  readonly message: string;
   /** Taps made this attempt, including failed ones. Feeds the level summary. */
   readonly taps: number;
+}
+
+/** Append `value` if it is not already present. Keeps the marks a set in spirit. */
+function withValue(list: readonly number[], value: number): readonly number[] {
+  return list.includes(value) ? list : [...list, value];
 }
 
 export type GameAction =
@@ -66,16 +88,15 @@ export type GameAction =
   | { readonly type: 'clearHighlight' }
   | { readonly type: 'restart'; readonly initial: BoardState; readonly hearts: number };
 
-const OPENING_MESSAGE = 'Find a head with a clear run to the edge.';
-
 /** Fresh state for a level, used both on entry and on Restart. */
 export function initGameState(initial: BoardState, hearts: number): GameState {
   return {
     session: startSession(initial, hearts),
     departing: [],
     highlight: undefined,
+    blockedArrows: [],
+    blockerArrows: [],
     lastOutcome: undefined,
-    message: OPENING_MESSAGE,
     taps: 0,
   };
 }
@@ -105,20 +126,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const { session, outcome } = tapArrow(board, state.session, arrowIndex);
       if (outcome.kind === 'invalid') return state;
 
-      const id = board.arrows[arrowIndex]?.id ?? '?';
-
       if (outcome.kind === 'blocked') {
         return {
           ...state,
           session,
           lastOutcome: outcome,
           taps: state.taps + 1,
+          // The standing marks. Deliberately never cleared by a later tap — only a
+          // restart wipes them, because they describe what happened in *this*
+          // attempt and the attempt is what ends.
+          blockedArrows: withValue(state.blockedArrows, arrowIndex),
+          blockerArrows: withValue(state.blockerArrows, outcome.blockerIndex),
           highlight: {
             blocked: arrowIndex,
             blocker: outcome.blockerIndex,
             nonce: (state.highlight?.nonce ?? 0) + 1,
           },
-          message: session.status === 'failed' ? 'Out of hearts.' : blockedMessage(board, outcome),
         };
       }
 
@@ -129,30 +152,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         taps: state.taps + 1,
         departing: [...state.departing, arrowIndex],
         highlight: undefined,
-        message: session.status === 'won' ? 'Board clear.' : `"${id}" had a clear run.`,
       };
     }
 
     default:
       return state;
   }
-}
-
-/**
- * Say what stopped the arrow, in the player's terms.
- *
- * Three different things can block a ray now, and they call for three different
- * responses from the player — wait for another snake, give up on that arrow
- * entirely, or clear a colour first. A single generic message would charge a heart
- * and explain nothing, which is the version of this game nobody would keep
- * playing.
- */
-function blockedMessage(board: Board, outcome: Extract<MoveOutcome, { kind: 'blocked' }>): string {
-  if (outcome.blockerKind === 'wall') return 'That way is walled off — it cost a heart.';
-  if (outcome.blockerKind === 'gate') {
-    const group = board.groups[outcome.blockerGroup] ?? 'a colour';
-    return `A ${group} gate is closed — that cost a heart.`;
-  }
-  const blocker = board.arrows[outcome.blockerIndex]?.id ?? '?';
-  return `Blocked by "${blocker}" — that cost a heart.`;
 }

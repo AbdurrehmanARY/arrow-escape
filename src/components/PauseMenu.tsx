@@ -28,6 +28,8 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
+import { withClick } from './sound';
+
 export interface PauseMenuProps {
   palette: Palette;
   visible: boolean;
@@ -118,7 +120,7 @@ export const PauseMenu = memo(function PauseMenu({
             <Secondary palette={palette} label="Settings" glyph="⚙" onPress={onSettings} />
           </View>
 
-          <Pressable accessibilityRole="button" onPress={onLevels} style={styles.leave}>
+          <Pressable accessibilityRole="button" onPress={withClick(onLevels)} style={styles.leave}>
             <Text style={[styles.leaveLabel, { color: palette.textMuted }]}>
               Leave for level select
             </Text>
@@ -183,7 +185,7 @@ function Secondary({
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={onPress}
+      onPress={withClick(onPress)}
       style={({ pressed }) => [
         styles.secondary,
         { backgroundColor: palette.surfaceRaised, borderColor: palette.border },
