@@ -140,7 +140,20 @@ function heartsShown(tree: ReturnType<typeof create>): number {
 }
 
 describe('hearts, through the Skia hit-test path', () => {
-  it('counts down 5-4-3-2-1-0 as a blocked arrow is tapped', () => {
+  /**
+   * One heart, then nothing, for repeated taps on the *same* stuck arrow.
+   *
+   * This test used to tap `c` five times and assert 5-4-3-2-1-0, which was right
+   * when a heart was charged per *tap*. Hearts are now charged per *arrow* — see
+   * `PlaySession.chargedArrows` — so the same arrow can only ever cost one.
+   *
+   * The rewrite is deliberately not "assert the new number and move on". What
+   * this file exists to prove is that a screen-space touch reaches the reducer
+   * and the HUD shows the result; the interesting version of that under the new
+   * rule is that the *second* tap is visibly free, because a HUD that kept
+   * counting down would be the clearest possible sign the two layers disagree.
+   */
+  it('charges one heart for an arrow however many times it is tapped', () => {
     let game: GameState = initGameState(FIXTURE.initial, 5);
 
     // `c` (index 2) sits at the back of the queue and can never move.
@@ -160,8 +173,11 @@ describe('hearts, through the Skia hit-test path', () => {
       seen.push(heartsShown(tree));
     }
 
-    expect(seen).toEqual([5, 4, 3, 2, 1, 0]);
-    expect(game.session.status).toBe('failed');
+    // Down once on the first tap, then flat — and still five taps recorded, so
+    // the taps genuinely arrived rather than being swallowed somewhere.
+    expect(seen).toEqual([5, 4, 4, 4, 4, 4]);
+    expect(game.taps).toBe(5);
+    expect(game.session.status).toBe('playing');
     act(() => tree.unmount());
   });
 

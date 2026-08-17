@@ -60,9 +60,12 @@ export interface GameState {
    * has already faded cannot be re-read, so a player who looks away mid-animation
    * has lost the only feedback the game gave them about a pair they misjudged.
    *
-   * It cannot grow without bound: five failed taps ends the level, so at most five
-   * pairs are ever marked. That is what makes "until the level ends" affordable —
-   * on a fifty-arrow board it is ten arrows at the very worst.
+   * It cannot grow without bound: a heart is charged the first time each arrow is
+   * found stuck (`PlaySession.chargedArrows`), so five *distinct* blocked arrows
+   * is exactly what ends the level and `blockedArrows` therefore tops out at five.
+   * Repeat taps on an already-marked arrow add nothing to either list. That is
+   * what makes "until the level ends" affordable — on a fifty-arrow board it is
+   * ten arrows at the very worst.
    *
    * An arrow can appear in both, and legitimately does: the thing that blocked you
    * once may be the thing you misjudge next.

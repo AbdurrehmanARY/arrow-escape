@@ -302,6 +302,29 @@ export interface PlaySession {
   readonly status: GameStatus;
   /** Wrong taps so far. Drives the "how hard was this for you" curation signal. */
   readonly mistakes: number;
+  /**
+   * Arrows that have already cost a heart this attempt.
+   *
+   * An arrow is charged **once**. Tap it while it is stuck and you pay; tap the
+   * same stuck arrow again and you pay nothing, because you have already been
+   * told what it costs. Every *other* arrow is still on its first strike, so the
+   * price of a genuinely new misread is unchanged.
+   *
+   * The reason is that a blocked tap never changes the board, so a player probing
+   * the same tangle twice — or double-delivering a gesture the UI guard missed —
+   * was being charged twice for one piece of information. Hearts now measure how
+   * many distinct arrows you misread, which is the thing the level is actually
+   * testing.
+   *
+   * It follows that failure needs `maxHearts` **distinct** wrong arrows, not
+   * `maxHearts` wrong taps: the board is more forgiving than it was, deliberately.
+   * It also bounds the set at `maxHearts` entries, which is what keeps a plain
+   * `Set` affordable on a two-hundred-arrow board.
+   *
+   * Lives on the session rather than in `BoardState` for the same reason hearts
+   * do: it is a property of this attempt, and the solver must never see it.
+   */
+  readonly chargedArrows: ReadonlySet<number>;
 }
 
 /** Default hearts per level, matching the reference game's five. */

@@ -236,8 +236,10 @@ export function runEngineSelfCheck(): SelfCheckReport {
     check('Running out of hearts fails a still-winnable level', () => {
       const { board, initial } = buildOrThrow(CHAIN);
       let session = startSession(initial, 2);
+      // Two *different* stuck arrows: a heart is charged per arrow, not per tap,
+      // so tapping the same one twice would only ever cost one.
       session = tapArrow(board, session, 2).session;
-      session = tapArrow(board, session, 2).session;
+      session = tapArrow(board, session, 1).session;
 
       assert(session.status === 'failed', `expected failed, got ${session.status}`);
       assert(isSolvable(board, session.state), 'the board itself should still be winnable');

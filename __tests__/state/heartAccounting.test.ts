@@ -56,15 +56,71 @@ describe('one collision costs exactly one heart', () => {
     expect(after.mistakes).toBe(0);
   });
 
-  it('charges each of two deliberate wrong taps once, and only once', () => {
+  it('charges each of two deliberate wrong arrows once, and only once', () => {
     // Two separate mistakes should cost two hearts. The bug was one *gesture*
     // costing two, which is a different thing and is guarded at the UI layer.
     const { board, session } = setup();
     let current = session;
     current = tapArrow(board, current, 2).session;
-    current = tapArrow(board, current, 2).session;
+    current = tapArrow(board, current, 1).session;
     expect(current.heartsLeft).toBe(3);
     expect(current.mistakes).toBe(2);
+  });
+});
+
+/**
+ * A heart is charged per *arrow*, not per tap.
+ *
+ * The first time an arrow is found stuck it costs one; after that it is free,
+ * because the player has already been told what it costs and a blocked tap never
+ * changes the board. Every other arrow is still on its first strike.
+ */
+describe('an arrow is charged only once', () => {
+  it('costs nothing to re-tap an arrow that has already taken a heart', () => {
+    const { board, session } = setup();
+    let current = tapArrow(board, session, 2).session;
+    expect(current.heartsLeft).toBe(4);
+
+    for (let i = 0; i < 6; i += 1) {
+      const result = tapArrow(board, current, 2);
+      // Still blocked, so the view still shakes it — just not billed again.
+      expect(result.outcome.kind).toBe('blocked');
+      expect(result.session).toBe(current);
+      current = result.session;
+    }
+
+    expect(current.heartsLeft).toBe(4);
+    expect(current.mistakes).toBe(1);
+    expect(current.status).toBe('playing');
+  });
+
+  it('leaves every other arrow on full price', () => {
+    const { board, session } = setup();
+    let current = tapArrow(board, session, 2).session;
+    current = tapArrow(board, current, 2).session;
+    expect(current.heartsLeft).toBe(4);
+
+    current = tapArrow(board, current, 1).session;
+    expect(current.heartsLeft).toBe(3);
+    expect(current.chargedArrows.has(1)).toBe(true);
+    expect(current.chargedArrows.has(2)).toBe(true);
+  });
+
+  it('starts a session with nothing charged, and a restart wipes the slate', () => {
+    const { board, initial, session } = setup();
+    expect(session.chargedArrows.size).toBe(0);
+
+    const struck = tapArrow(board, session, 2).session;
+    expect(struck.chargedArrows.size).toBe(1);
+    // The original session is untouched — `tapArrow` never mutates its argument.
+    expect(session.chargedArrows.size).toBe(0);
+
+    const restarted = gameReducer(initGameState(initial, 5), {
+      type: 'restart',
+      initial,
+      hearts: 5,
+    });
+    expect(restarted.session.chargedArrows.size).toBe(0);
   });
 });
 
@@ -84,8 +140,11 @@ describe('hearts and mistakes stay consistent', () => {
     const { board, session } = setup(2);
     let current = session;
 
+    // Alternating between the two stuck arrows, because the same arrow twice is
+    // only one heart now. Two hearts, two distinct wrong arrows, then twenty more
+    // taps that must not push the count below zero.
     for (let i = 0; i < 20; i += 1) {
-      current = tapArrow(board, current, 2).session;
+      current = tapArrow(board, current, i % 2 === 0 ? 2 : 1).session;
       expect(current.heartsLeft).toBeGreaterThanOrEqual(0);
     }
     expect(current.heartsLeft).toBe(0);

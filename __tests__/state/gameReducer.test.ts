@@ -81,15 +81,18 @@ describe('tapping a blocked arrow', () => {
     const twice = gameReducer(once, { type: 'tap', board, arrowIndex: 2 });
 
     expect(twice.highlight?.nonce).toBeGreaterThan(once.highlight!.nonce);
-    expect(twice.session.heartsLeft).toBe(DEFAULT_HEARTS - 2);
+    // The shake replays, but the heart does not go again: an arrow is charged
+    // once per attempt. See `PlaySession.chargedArrows`.
+    expect(twice.session.heartsLeft).toBe(DEFAULT_HEARTS - 1);
   });
 
   it('fails the level when the last heart goes', () => {
+    // Two *distinct* stuck arrows, because the same one twice costs one heart.
     const { board, state } = setup(CHAIN, 2);
     let current = gameReducer(state, { type: 'tap', board, arrowIndex: 2 });
     expect(current.session.status).toBe('playing');
 
-    current = gameReducer(current, { type: 'tap', board, arrowIndex: 2 });
+    current = gameReducer(current, { type: 'tap', board, arrowIndex: 1 });
     expect(current.session.status).toBe('failed');
     // The board it leaves behind is untouched — that is the promise the fail
     // screen makes to the player.
@@ -214,25 +217,31 @@ describe('collision marks', () => {
     expect(cleared.blockedArrows).toEqual(blocked.blockedArrows);
   });
 
-  it('does not record the same arrow twice', () => {
+  it('does not record the same arrow twice, and does not charge it twice either', () => {
     const { board, state } = setup();
     let current = gameReducer(state, { type: 'tap', board, arrowIndex: 2 });
     current = gameReducer(current, { type: 'tap', board, arrowIndex: 2 });
 
-    expect(current.session.mistakes).toBe(2);
+    expect(current.session.mistakes).toBe(1);
+    expect(current.session.heartsLeft).toBe(DEFAULT_HEARTS - 1);
     expect(current.blockedArrows).toEqual([2]);
+    // The tap itself still happened, and the shake still re-fires.
+    expect(current.taps).toBe(2);
+    expect(current.highlight!.nonce).toBe(2);
   });
 
   /**
-   * The bound that makes "until the level ends" affordable: five failed taps end
-   * the attempt, so the marks cannot grow past five pairs however long a board is
-   * played.
+   * The bound that makes "until the level ends" affordable: a heart is charged the
+   * first time each arrow is found stuck, so five distinct blocked arrows end the
+   * attempt and the marks cannot grow past five pairs however long a board is
+   * played. Needs a board with six snakes — the three-snake chain only has two
+   * stuck arrows to spend hearts on.
    */
   it('cannot outlive the hearts that produce it', () => {
-    const { board, state } = setup();
+    const { board, state } = setup('f F e E d D c C b B a A');
     let current = state;
-    for (let i = 0; i < DEFAULT_HEARTS; i += 1) {
-      current = gameReducer(current, { type: 'tap', board, arrowIndex: 2 });
+    for (let index = 1; index <= DEFAULT_HEARTS; index += 1) {
+      current = gameReducer(current, { type: 'tap', board, arrowIndex: index });
     }
 
     expect(current.session.status).toBe('failed');

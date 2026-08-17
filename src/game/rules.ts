@@ -150,6 +150,7 @@ export function startSession(state: BoardState, hearts: number = DEFAULT_HEARTS)
     maxHearts,
     status: isCleared(state) ? 'won' : 'playing',
     mistakes: 0,
+    chargedArrows: new Set(),
   };
 }
 
@@ -165,6 +166,13 @@ export function startSession(state: BoardState, hearts: number = DEFAULT_HEARTS)
  * are the failure mode.** A blocked tap never changes the board, so it can never
  * make the level unwinnable; it only costs a heart. The skill being tested is
  * reading the tangle correctly, not ordering moves.
+ *
+ * A heart is charged **per arrow, not per tap** — see `PlaySession.chargedArrows`.
+ * The first time an arrow turns out to be stuck it costs one; after that it is
+ * free to tap forever, while every other arrow is still unpaid. A repeat tap
+ * still returns a `blocked` outcome, so the view shakes it and marks it exactly
+ * as before: the player is told the same thing, they are simply not billed twice
+ * for it.
  */
 export function tapArrow(
   board: Board,
@@ -180,7 +188,15 @@ export function tapArrow(
   if (outcome.kind === 'invalid') return { session, outcome };
 
   if (outcome.kind === 'blocked') {
+    // Already paid for. The outcome still comes back so the view shakes the arrow
+    // and keeps its mark; the session is returned *by identity*, matching the
+    // `next === prev` convention `applyOutcome` sets for "nothing changed".
+    if (session.chargedArrows.has(arrowIndex)) return { session, outcome };
+
     const heartsLeft = session.heartsLeft - 1;
+    const chargedArrows = new Set(session.chargedArrows);
+    chargedArrows.add(arrowIndex);
+
     return {
       outcome,
       session: {
@@ -188,6 +204,7 @@ export function tapArrow(
         heartsLeft,
         mistakes: session.mistakes + 1,
         status: heartsLeft <= 0 ? 'failed' : 'playing',
+        chargedArrows,
       },
     };
   }

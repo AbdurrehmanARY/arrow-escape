@@ -153,9 +153,11 @@ describe('hearts are the only way to lose', () => {
     expect(isSolvable(board, initial)).toBe(true);
 
     let session = startSession(initial, 2);
-    // Two taps on the arrow at the back of the queue, which is blocked twice over.
+    // Two taps on the two arrows behind the front of the queue, both of them
+    // stuck. Two *different* arrows, because a heart is charged per arrow rather
+    // than per tap — the same one twice would only cost one.
     session = tapArrow(board, session, 2).session;
-    session = tapArrow(board, session, 2).session;
+    session = tapArrow(board, session, 1).session;
 
     expect(session.status).toBe('failed');
     // The board itself was never damaged â€” only the player's hearts.

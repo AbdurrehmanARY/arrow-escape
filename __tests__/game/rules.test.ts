@@ -153,16 +153,36 @@ describe('sessions and hearts', () => {
   });
 
   it('fails the level when the last heart is spent', () => {
-    const { board, initial } = build('a A . b B');
+    // `c C b B a A`: heads point right, so only index 0 is free and both 1 and 2
+    // are stuck. Two *distinct* stuck arrows, because a heart is charged per
+    // arrow — tapping index 2 twice would only ever cost one.
+    const { board, initial } = build('c C b B a A');
     let session = startSession(initial, 2);
 
-    session = tapArrow(board, session, 0).session;
+    session = tapArrow(board, session, 2).session;
     expect(session.status).toBe('playing');
     expect(session.heartsLeft).toBe(1);
 
-    session = tapArrow(board, session, 0).session;
+    session = tapArrow(board, session, 1).session;
     expect(session.status).toBe('failed');
     expect(session.heartsLeft).toBe(0);
+  });
+
+  it('charges a stuck arrow once, however many times it is tapped', () => {
+    const { board, initial } = build('a A . b B');
+    const session = startSession(initial);
+
+    const first = tapArrow(board, session, 0);
+    expect(first.outcome.kind).toBe('blocked');
+    expect(first.session.heartsLeft).toBe(DEFAULT_HEARTS - 1);
+    expect(first.session.chargedArrows.has(0)).toBe(true);
+
+    // Still blocked — the view must keep saying so — but no longer billed.
+    const second = tapArrow(board, first.session, 0);
+    expect(second.outcome.kind).toBe('blocked');
+    expect(second.session.heartsLeft).toBe(DEFAULT_HEARTS - 1);
+    expect(second.session.mistakes).toBe(1);
+    expect(second.session).toBe(first.session);
   });
 
   it('ignores taps once the level is over', () => {
