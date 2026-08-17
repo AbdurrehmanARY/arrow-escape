@@ -20,10 +20,10 @@
  */
 
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, ScreenHeader, useSheetSound, useTheme, withClick } from '@components';
+import { Screen, ScreenHeader, Springy, useSheetSound, useTheme, withClick } from '@components';
 import { isGoogleConfigured } from '@services/auth';
 import { isBackendConfigured } from '@services/supabase';
 import { accountEmail, syncedAgo, useAuthStore } from '@state/authStore';
@@ -262,18 +262,17 @@ function Action({
     tone === 'quiet' ? palette.textMuted : palette.textOnAccent;
 
   return (
-    <Pressable
+    <Springy
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={withClick(onPress)}
-      style={({ pressed }) => [
+      style={[
         styles.action,
         { backgroundColor: background, borderColor: tone === 'quiet' ? palette.border : background },
-        pressed && styles.pressed,
       ]}
     >
       <Text style={[styles.actionLabel, { color }]}>{label}</Text>
-    </Pressable>
+    </Springy>
   );
 }
 
@@ -303,8 +302,8 @@ function Confirm({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={styles.scrim} onPress={onCancel}>
-        <Pressable
+      <Springy style={styles.scrim} onPress={onCancel}>
+        <Springy
           style={[styles.sheet, { backgroundColor: palette.surface }]}
           onPress={(event) => event.stopPropagation()}
         >
@@ -321,8 +320,8 @@ function Confirm({
             <Action palette={palette} label={confirmLabel} tone="danger" onPress={onConfirm} />
             <Action palette={palette} label="Cancel" tone="primary" onPress={onCancel} />
           </View>
-        </Pressable>
-      </Pressable>
+        </Springy>
+      </Springy>
     </Modal>
   );
 }
@@ -372,8 +371,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
-  actionLabel: { ...typography.body, fontWeight: '700' },
-  pressed: { opacity: 0.75 },
+  actionLabel: { ...typography.body, fontWeight: '700' },
   error: { ...typography.small, textAlign: 'center' },
   errorDetail: { ...typography.small, fontSize: 11, textAlign: 'center', marginTop: 2 },
   legal: { ...typography.small, textAlign: 'center', marginTop: spacing.sm },

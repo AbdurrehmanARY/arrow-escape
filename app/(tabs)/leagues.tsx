@@ -21,10 +21,10 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, useSheetSound, useTheme, withClick } from '@components';
+import { Screen, Springy, useSheetSound, useTheme, withClick } from '@components';
 import { today } from '@challenge';
 import {
   arrowsFor,
@@ -139,14 +139,14 @@ export default function LeaguesScreen() {
             {formatRemaining(msRemaining(week, now))}
           </Text>
         </View>
-        <Pressable
+        <Springy
           accessibilityRole="button"
           accessibilityLabel="How leagues work"
           onPress={withClick(() => setShowIntro(true))}
           hitSlop={12}
         >
           <Text style={[styles.info, { color: palette.textFaint }]}>ⓘ</Text>
-        </Pressable>
+        </Springy>
       </View>
 
       <View style={[styles.shield, { backgroundColor: palette.accentMuted }]}>
@@ -235,9 +235,9 @@ export default function LeaguesScreen() {
                 : 'Leagues need an account so scores can be compared fairly. Until then this board shows only you — rather than made-up players, which would make your rank meaningless.'}
           </Text>
           {session ? null : (
-            <Pressable accessibilityRole="button" onPress={withClick(() => router.push('/account'))}>
+            <Springy accessibilityRole="button" onPress={withClick(() => router.push('/account'))}>
               <Text style={[styles.link, { color: palette.accent }]}>About accounts →</Text>
-            </Pressable>
+            </Springy>
           )}
         </View>
       )}
@@ -358,7 +358,7 @@ function LeagueIntro({
             ))}
           </View>
 
-          <Pressable
+          <Springy
             accessibilityRole="button"
             accessibilityLabel={last ? 'Close' : 'Continue'}
             onPress={withClick(() => {
@@ -369,16 +369,15 @@ function LeagueIntro({
                 setPage((value) => value + 1);
               }
             })}
-            style={({ pressed }) => [
+            style={[
               styles.continue,
               { backgroundColor: palette.accent },
-              pressed && styles.pressed,
             ]}
           >
             <Text style={[styles.continueLabel, { color: palette.textOnAccent }]}>
               {last ? 'Got it' : 'Continue'}
             </Text>
-          </Pressable>
+          </Springy>
         </View>
       </View>
     </Modal>
@@ -481,6 +480,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
-  continueLabel: { ...typography.body, fontWeight: '800' },
-  pressed: { opacity: 0.75 },
+  continueLabel: { ...typography.body, fontWeight: '800' },
 });

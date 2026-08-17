@@ -269,6 +269,5 @@ const styles = StyleSheet.create({
 
   leave: { alignSelf: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.md },
   leaveLabel: { ...typography.small },
-
-  pressed: { opacity: 0.65 },
+
 });

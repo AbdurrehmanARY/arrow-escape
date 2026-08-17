@@ -13,7 +13,11 @@
  */
 
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+// Direct path, not the '@components' barrel: a component importing the barrel
+// that exports it is a cycle, and Metro resolves those to `undefined` at import
+// time rather than erroring — which shows up as a blank screen, not a stack.
+import { Springy } from './Pressable';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
@@ -45,18 +49,17 @@ export const CoachCard = memo(function CoachCard({
         <Text style={[styles.body, { color: palette.textMuted }]}>{body}</Text>
       </View>
 
-      <Pressable
+      <Springy
         accessibilityRole="button"
         accessibilityLabel={dismissLabel}
         onPress={onDismiss}
-        style={({ pressed }) => [
+        style={[
           styles.dismiss,
           { backgroundColor: palette.accent },
-          pressed && styles.pressed,
         ]}
       >
         <Text style={[styles.dismissLabel, { color: palette.textOnAccent }]}>{dismissLabel}</Text>
-      </Pressable>
+      </Springy>
     </View>
   );
 });
@@ -79,5 +82,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dismissLabel: { ...typography.body, fontWeight: '700' },
-  pressed: { opacity: 0.7 },
 });

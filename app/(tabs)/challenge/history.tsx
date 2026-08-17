@@ -12,10 +12,10 @@
  */
 
 import { useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, ScreenHeader, useTheme, withClick } from '@components';
+import { Screen, ScreenHeader, Springy, useTheme, withClick } from '@components';
 import { parseChallengeId, type ChallengeRecord } from '@challenge';
 import { TIER_LABELS } from '@game/codec';
 import { useChallengeStore } from '@state/challengeStore';
@@ -123,14 +123,13 @@ function HistoryRow({
   const perfect = won && record.heartsLeft === 5 && record.hintsUsed === 0;
 
   return (
-    <Pressable
+    <Springy
       accessibilityRole="button"
       accessibilityLabel={`${record.id}, ${won ? 'completed' : 'not completed'}`}
       onPress={withClick(onPress)}
-      style={({ pressed }) => [
+      style={[
         styles.row,
         { backgroundColor: palette.surface, borderColor: palette.border },
-        pressed && styles.pressed,
       ]}
     >
       <View style={[styles.dayBadge, { backgroundColor: won ? palette.success : palette.dangerMuted }]}>
@@ -150,7 +149,7 @@ function HistoryRow({
       </View>
 
       <Text style={[styles.chevron, { color: palette.textFaint }]}>›</Text>
-    </Pressable>
+    </Springy>
   );
 }
 
@@ -172,8 +171,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.md,
     marginBottom: spacing.sm,
-  },
-  pressed: { opacity: 0.7 },
+  },
   dayBadge: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   dayNumber: { ...typography.body, fontWeight: '800' },
   rowBody: { flex: 1, gap: 2 },

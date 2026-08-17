@@ -17,10 +17,10 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, ScreenHeader, useTheme, withClick } from '@components';
+import { Screen, ScreenHeader, Springy, useTheme, withClick } from '@components';
 import { TIER_BANDS, TIER_LABELS, type DifficultyTier } from '@game/codec';
 import { ENCODED_LEVELS, LEVEL_COUNT } from '@data/levels';
 import { CHAPTERS, chapterOf, chapterProgress, isChapterOpen, type Chapter } from '@data/chapters';
@@ -177,20 +177,19 @@ function JumpToLevel({ palette, onJump }: { palette: Palette; onJump: (id: numbe
             },
           ]}
         />
-        <Pressable
+        <Springy
           accessibilityRole="button"
           accessibilityLabel="Go to level"
           accessibilityState={{ disabled: !valid }}
           disabled={!valid}
           onPress={withClick(() => onJump(parsed))}
-          style={({ pressed }) => [
+          style={[
             styles.jumpGo,
             { backgroundColor: palette.accent, opacity: valid ? 1 : 0.4 },
-            pressed && styles.pressed,
           ]}
         >
           <Text style={[styles.jumpGoLabel, { color: palette.textOnAccent }]}>Go</Text>
-        </Pressable>
+        </Springy>
       </View>
     </View>
   );
@@ -222,7 +221,7 @@ function ChapterList({
         const done = cleared === total;
 
         return (
-          <Pressable
+          <Springy
             key={chapter.index}
             accessibilityRole="button"
             accessibilityLabel={
@@ -231,7 +230,7 @@ function ChapterList({
             accessibilityState={{ disabled: !open }}
             disabled={!open}
             onPress={withClick(() => onOpen(chapter))}
-            style={({ pressed }) => [
+            style={[
               styles.chapterCard,
               {
                 backgroundColor: done
@@ -242,7 +241,6 @@ function ChapterList({
                 borderColor: isCurrent ? palette.accent : palette.border,
                 opacity: open ? 1 : 0.4,
               },
-              pressed && styles.pressed,
             ]}
           >
             <View style={styles.chapterHead}>
@@ -275,7 +273,7 @@ function ChapterList({
                 />
               </View>
             ) : null}
-          </Pressable>
+          </Springy>
         );
       })}
     </ScrollView>
@@ -386,7 +384,7 @@ function LevelTile({
   const perfect = cleared && record?.bestMistakes === 0;
 
   return (
-    <Pressable
+    <Springy
       accessibilityRole="button"
       accessibilityLabel={
         locked
@@ -396,7 +394,7 @@ function LevelTile({
       accessibilityState={{ disabled: locked }}
       disabled={locked}
       onPress={withClick(onPress)}
-      style={({ pressed }) => [
+      style={[
         styles.tile,
         {
           backgroundColor: cleared
@@ -407,13 +405,12 @@ function LevelTile({
           borderColor: current ? palette.accent : palette.border,
           opacity: locked ? 0.35 : 1,
         },
-        pressed && styles.pressed,
       ]}
     >
       <View style={[styles.tierStripe, { backgroundColor: tierColor(palette, tier) }]} />
       <Text style={[styles.tileNumber, { color: palette.text }]}>{locked ? '🔒' : id}</Text>
       {perfect ? <Text style={[styles.perfect, { color: palette.success }]}>♥</Text> : null}
-    </Pressable>
+    </Springy>
   );
 }
 
@@ -479,8 +476,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  tilePad: { flexGrow: 1, flexBasis: 0 },
-  pressed: { opacity: 0.6 },
+  tilePad: { flexGrow: 1, flexBasis: 0 },
   tierStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 4 },
   tileNumber: { ...typography.heading, fontSize: 17, fontVariant: ['tabular-nums'] },
   perfect: { position: 'absolute', bottom: 3, right: 5, fontSize: 9 },

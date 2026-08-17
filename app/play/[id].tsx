@@ -13,27 +13,13 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 import { SkiaBoard } from '@render/SkiaBoard';
-import {
-  Celebration,
-  ConfirmDialog,
-  FailOverlay,
-  Hud,
-  PauseMenu,
-  PillButton,
-  Screen,
-  StuckOverlay,
-  WinOverlay,
-  computeBoardLayout,
-  initialScaleForTier,
-  useTheme,
-  withClick,
-} from '@components';
+import { Celebration, computeBoardLayout, ConfirmDialog, FailOverlay, Hud, initialScaleForTier, PauseMenu, PillButton, Screen, Springy, StuckOverlay, useTheme, WinOverlay, withClick } from '@components';
 import { earnedCount, today } from '@challenge';
 import {
   buildLevel,
@@ -777,18 +763,17 @@ export default function PlayScreen() {
             <Text style={[styles.panHint, { color: palette.textFaint }]}>
               {built.value.board.rows}×{built.value.board.cols} — drag to pan, pinch to zoom
             </Text>
-            <Pressable
+            <Springy
               accessibilityRole="button"
               accessibilityLabel="Fit board to screen"
               onPress={withClick(() => setFitNonce((n) => n + 1))}
-              style={({ pressed }) => [
+              style={[
                 styles.fitButton,
                 { borderColor: palette.border, backgroundColor: palette.surfaceRaised },
-                pressed && styles.fitPressed,
               ]}
             >
               <Text style={[styles.fitLabel, { color: palette.textMuted }]}>Fit</Text>
-            </Pressable>
+            </Springy>
           </View>
         ) : null}
       </View>
@@ -827,7 +812,7 @@ export default function PlayScreen() {
       ) : null}
 
       {hintsAvailable === 0 && !adReady ? (
-        <Pressable
+        <Springy
           accessibilityRole="button"
           onPress={withClick(doRestart)}
           style={styles.freeAlternative}
@@ -835,7 +820,7 @@ export default function PlayScreen() {
           <Text style={[styles.freeAlternativeLabel, { color: palette.textFaint }]}>
             Restarting is always free.
           </Text>
-        </Pressable>
+        </Springy>
       ) : null}
 
       {/*

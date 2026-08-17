@@ -12,10 +12,10 @@
  */
 
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { ConfirmDialog, Screen, ScreenHeader, useTheme, withClick } from '@components';
+import { ConfirmDialog, Screen, ScreenHeader, Springy, useTheme, withClick } from '@components';
 import { APP_VERSION } from '@config';
 import { hasAudioAssets, playSfx, type SfxName } from '@services/audio';
 import { clearAll } from '@services/storage';
@@ -80,20 +80,19 @@ export default function SettingsScreen() {
             {THEMES.map((theme) => {
               const selected = theme.id === settings.themeId;
               return (
-                <Pressable
+                <Springy
                   key={theme.id}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
                   accessibilityLabel={`${theme.name} theme`}
                   onPress={withClick(() => settings.set('themeId', theme.id))}
-                  style={({ pressed }) => [
+                  style={[
                     styles.themeCard,
                     {
                       backgroundColor: theme.palette.board,
                       borderColor: selected ? palette.accent : palette.border,
                       borderWidth: selected ? 2 : 1,
                     },
-                    pressed && styles.pressed,
                   ]}
                 >
                   <View style={styles.swatches}>
@@ -104,7 +103,7 @@ export default function SettingsScreen() {
                   <Text style={[styles.themeName, { color: theme.palette.text }]}>
                     {theme.name}
                   </Text>
-                </Pressable>
+                </Springy>
               );
             })}
           </View>
@@ -198,11 +197,11 @@ export default function SettingsScreen() {
             an account was connected. A status row that cannot be wrong about the
             one thing it reports is worth the two lines it takes to derive it.
           */}
-          <Pressable
+          <Springy
             accessibilityRole="button"
             accessibilityLabel={email ? `Account, signed in as ${email}` : 'Account, not connected'}
             onPress={withClick(() => router.push('/account'))}
-            style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+            style={[styles.linkRow,]}
           >
             <Text style={[styles.linkLabel, { color: palette.text }]}>Account</Text>
             <Text
@@ -211,7 +210,7 @@ export default function SettingsScreen() {
             >
               {email ?? 'Not connected'} ›
             </Text>
-          </Pressable>
+          </Springy>
         </Section>
 
         {/*
@@ -250,17 +249,16 @@ export default function SettingsScreen() {
             restarting a level is always free.
           </Text>
 
-          <Pressable
+          <Springy
             accessibilityRole="button"
             onPress={withClick(() => setConfirmReset(true))}
-            style={({ pressed }) => [
+            style={[
               styles.danger,
               { borderColor: palette.danger },
-              pressed && styles.pressed,
             ]}
           >
             <Text style={[styles.dangerLabel, { color: palette.danger }]}>Reset all progress</Text>
-          </Pressable>
+          </Springy>
         </Section>
       </ScrollView>
 
@@ -320,20 +318,19 @@ function VolumeControl({
           const filled = step <= active && active > 0;
           const isOff = step === 0;
           return (
-            <Pressable
+            <Springy
               key={step}
               accessibilityRole="button"
               accessibilityLabel={`${label} ${Math.round(step * 100)} percent`}
               accessibilityState={{ selected: step === active }}
               onPress={() => audible(() => onChange(step), 'buttonClick')}
-              style={({ pressed }) => [
+              style={[
                 styles.volumeStep,
                 {
                   backgroundColor: filled ? palette.accent : palette.surfaceRaised,
                   borderColor: step === active ? palette.accent : palette.border,
                 },
                 isOff && styles.volumeOff,
-                pressed && styles.pressed,
               ]}
             >
               {isOff ? (
@@ -346,7 +343,7 @@ function VolumeControl({
                   0
                 </Text>
               ) : null}
-            </Pressable>
+            </Springy>
           );
         })}
       </View>
@@ -492,6 +489,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
-  dangerLabel: { ...typography.body, fontWeight: '700' },
-  pressed: { opacity: 0.6 },
+  dangerLabel: { ...typography.body, fontWeight: '700' },
 });

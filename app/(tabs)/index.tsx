@@ -19,10 +19,10 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, useTheme, withClick } from '@components';
+import { Screen, Springy, useTheme, withClick } from '@components';
 import { playMusic } from '@services/audio';
 import { challengeFor, today } from '@challenge';
 import { TIER_LABELS } from '@game/codec';
@@ -154,30 +154,29 @@ export default function HomeScreen() {
       </View>
 
       {/* ---- Play -------------------------------------------------------- */}
-      <Pressable
+      <Springy
         accessibilityRole="button"
         accessibilityLabel={started ? `Continue to level ${resume}` : 'Play level 1'}
         onPress={withClick(() => router.push(`/play/${resume}`))}
-        style={({ pressed }) => [
+        style={[
           styles.play,
           { backgroundColor: palette.accent },
-          pressed && styles.pressed,
         ]}
       >
         <Text style={[styles.playLabel, { color: palette.textOnAccent }]}>
           {started ? 'Continue' : 'Play'}
         </Text>
-      </Pressable>
+      </Springy>
 
-      <Pressable
+      <Springy
         accessibilityRole="button"
         onPress={withClick(() => router.push('/levels'))}
-        style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+        style={[styles.secondary,]}
       >
         <Text style={[styles.secondaryLabel, { color: palette.textMuted }]}>
           All levels · {cleared} of {LEVEL_COUNT} cleared
         </Text>
-      </Pressable>
+      </Springy>
     </Screen>
   );
 }
@@ -196,20 +195,19 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <Pressable
+    <Springy
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${subtitle}`}
       onPress={withClick(onPress)}
-      style={({ pressed }) => [
+      style={[
         styles.card,
         { backgroundColor: palette.surface },
-        pressed && styles.pressed,
       ]}
     >
       <Text style={[styles.cardTitle, { color: palette.text }]}>{title}</Text>
       <Text style={[styles.cardSubtitle, { color: palette.textMuted }]}>{subtitle}</Text>
       {children}
-    </Pressable>
+    </Springy>
   );
 }
 
@@ -265,8 +263,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: spacing.xl,
   },
-  playLabel: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
-  pressed: { opacity: 0.75 },
+  playLabel: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
 
   secondary: {
     minHeight: MIN_TOUCH_TARGET,

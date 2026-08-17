@@ -156,8 +156,7 @@ export function IconButton({ palette, glyph, label, onPress, active = false }: I
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  body: { flex: 1 },
-  pressed: { opacity: 0.6 },
+  body: { flex: 1 },
 
   header: {
     flexDirection: 'row',

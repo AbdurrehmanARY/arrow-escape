@@ -346,8 +346,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
   },
-  actionLabel: { ...typography.body, fontWeight: '700' },
-  pressed: { opacity: 0.6 },
+  actionLabel: { ...typography.body, fontWeight: '700' },
   textLink: { marginTop: spacing.md, padding: spacing.sm },
   textLinkLabel: { ...typography.small, fontWeight: '600' },
 });
