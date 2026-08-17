@@ -11,12 +11,13 @@
  */
 
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSettingsStore } from '@state/settingsStore';
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, themeById, typography } from '@theme';
 
+import { Springy, useGlow } from './Pressable';
 import { withClick } from './sound';
 
 /** The active theme, resolved from the player's saved preference. */
@@ -126,25 +127,30 @@ export interface IconButtonProps {
 
 /** A square icon button. `label` is for screen readers, not shown. */
 export function IconButton({ palette, glyph, label, onPress, active = false }: IconButtonProps) {
+  const elevation = useGlow(palette.accent, 'active');
+
   return (
-    <Pressable
+    <Springy
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
       onPress={withClick(onPress)}
-      style={({ pressed }) => [
+      // The visible square is already MIN_TOUCH_TARGET, so the slop is insurance
+      // against a header that ever gets tighter rather than a fix for one today.
+      hitSlop={8}
+      style={[
         styles.icon,
         {
           backgroundColor: active ? palette.accentMuted : palette.surfaceRaised,
           borderColor: active ? palette.accent : palette.border,
         },
-        pressed && styles.pressed,
+        active && elevation,
       ]}
     >
       <Text style={[styles.iconGlyph, { color: active ? palette.text : palette.textMuted }]}>
         {glyph}
       </Text>
-    </Pressable>
+    </Springy>
   );
 }
 

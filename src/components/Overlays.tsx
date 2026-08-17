@@ -20,6 +20,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
+import { Springy, useGlow } from './Pressable';
 import { useSheetSound, withClick } from './sound';
 
 interface ActionProps {
@@ -31,26 +32,30 @@ interface ActionProps {
 }
 
 function Action({ palette, label, onPress, primary = false, disabled = false }: ActionProps) {
+  // Only the primary action carries elevation. Two glowing buttons side by side
+  // is two primary actions, which is none.
+  const elevation = useGlow(palette.accent, 'primary');
+
   return (
-    <Pressable
+    <Springy
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={withClick(onPress)}
-      style={({ pressed }) => [
+      style={[
         styles.action,
         {
           backgroundColor: primary ? palette.accent : palette.surfaceRaised,
           borderColor: primary ? palette.accent : palette.border,
           opacity: disabled ? 0.45 : 1,
         },
-        pressed && !disabled && styles.pressed,
+        primary && !disabled && elevation,
       ]}
     >
       <Text style={[styles.actionLabel, { color: primary ? palette.textOnAccent : palette.text }]}>
         {label}
       </Text>
-    </Pressable>
+    </Springy>
   );
 }
 
