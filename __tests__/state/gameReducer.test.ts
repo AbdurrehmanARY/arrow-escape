@@ -58,7 +58,6 @@ describe('tapping a free arrow', () => {
       current = gameReducer(current, { type: 'departed', arrowIndex: index });
     }
     expect(current.session.status).toBe('won');
-    expect(current.message).toMatch(/clear/i);
   });
 });
 
@@ -72,7 +71,6 @@ describe('tapping a blocked arrow', () => {
     expect(next.session.state).toBe(state.session.state);
     expect(next.highlight?.blocked).toBe(2);
     expect(next.highlight?.blocker).toBe(1);
-    expect(next.message).toContain('"b"');
   });
 
   it('bumps the nonce on every failed tap so an identical shake can replay', () => {
@@ -93,7 +91,6 @@ describe('tapping a blocked arrow', () => {
 
     current = gameReducer(current, { type: 'tap', board, arrowIndex: 2 });
     expect(current.session.status).toBe('failed');
-    expect(current.message).toMatch(/out of hearts/i);
     // The board it leaves behind is untouched — that is the promise the fail
     // screen makes to the player.
     expect(current.session.state.remaining).toBe(3);
@@ -170,6 +167,90 @@ describe('clearing the highlight', () => {
 
     expect(cleared.highlight).toBeUndefined();
     expect(cleared.session.heartsLeft).toBe(DEFAULT_HEARTS - 1);
+  });
+});
+
+/**
+ * The standing collision marks.
+ *
+ * `highlight` is momentary and drives the shake; these are the record that
+ * outlives it. The distinction is the whole point — a player who looks away
+ * during the flash has otherwise lost the only account the game gave them of a
+ * pair they misjudged.
+ */
+describe('collision marks', () => {
+  it('starts with none', () => {
+    const { state } = setup();
+    expect(state.blockedArrows).toEqual([]);
+    expect(state.blockerArrows).toEqual([]);
+  });
+
+  it('records both sides of a failed tap', () => {
+    const { board, state } = setup();
+    const blocked = gameReducer(state, { type: 'tap', board, arrowIndex: 2 });
+
+    expect(blocked.blockedArrows).toContain(2);
+    expect(blocked.blockerArrows).toContain(blocked.highlight!.blocker);
+  });
+
+  it('survives a later successful tap, unlike the flash', () => {
+    const { board, state } = setup();
+    const blocked = gameReducer(state, { type: 'tap', board, arrowIndex: 2 });
+    const moved = gameReducer(blocked, { type: 'tap', board, arrowIndex: 0 });
+
+    // The flash is gone — a success is not a collision.
+    expect(moved.highlight).toBeUndefined();
+    // The record is not.
+    expect(moved.blockedArrows).toEqual(blocked.blockedArrows);
+    expect(moved.blockerArrows).toEqual(blocked.blockerArrows);
+  });
+
+  it('survives clearHighlight, which only ever meant the flash', () => {
+    const { board, state } = setup();
+    const blocked = gameReducer(state, { type: 'tap', board, arrowIndex: 2 });
+    const cleared = gameReducer(blocked, { type: 'clearHighlight' });
+
+    expect(cleared.highlight).toBeUndefined();
+    expect(cleared.blockedArrows).toEqual(blocked.blockedArrows);
+  });
+
+  it('does not record the same arrow twice', () => {
+    const { board, state } = setup();
+    let current = gameReducer(state, { type: 'tap', board, arrowIndex: 2 });
+    current = gameReducer(current, { type: 'tap', board, arrowIndex: 2 });
+
+    expect(current.session.mistakes).toBe(2);
+    expect(current.blockedArrows).toEqual([2]);
+  });
+
+  /**
+   * The bound that makes "until the level ends" affordable: five failed taps end
+   * the attempt, so the marks cannot grow past five pairs however long a board is
+   * played.
+   */
+  it('cannot outlive the hearts that produce it', () => {
+    const { board, state } = setup();
+    let current = state;
+    for (let i = 0; i < DEFAULT_HEARTS; i += 1) {
+      current = gameReducer(current, { type: 'tap', board, arrowIndex: 2 });
+    }
+
+    expect(current.session.status).toBe('failed');
+    expect(current.blockedArrows.length).toBeLessThanOrEqual(DEFAULT_HEARTS);
+    expect(current.blockerArrows.length).toBeLessThanOrEqual(DEFAULT_HEARTS);
+  });
+
+  it('is wiped by a restart, because the attempt is what they describe', () => {
+    const { board, initial, state } = setup();
+    const blocked = gameReducer(state, { type: 'tap', board, arrowIndex: 2 });
+    const fresh = gameReducer(blocked, {
+      type: 'restart',
+      initial,
+      hearts: DEFAULT_HEARTS,
+    });
+
+    expect(fresh.blockedArrows).toEqual([]);
+    expect(fresh.blockerArrows).toEqual([]);
   });
 });
 

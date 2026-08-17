@@ -68,6 +68,8 @@ export interface Palette {
   arrowBlocker: string;
   /** Assist mode: this arrow genuinely has a clear run. */
   arrowSafe: string;
+  /** Hint system: the arrow the player should tap next, with glow and pulse. */
+  arrowHinted: string;
   /**
    * Optional per-arrow colours, used only when `ArrowStyle.colorful` is on.
    *

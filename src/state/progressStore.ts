@@ -20,6 +20,7 @@ import { create } from 'zustand';
 
 import { UNLOCK_ALL_LEVELS } from '@config';
 import { loadSlice, saveSlice, STORAGE_KEYS } from '@services/storage';
+import { syncProgress } from '@services/sync';
 
 /** What the player achieved on a level, kept for the level-select badges. */
 export interface LevelRecord {
@@ -44,6 +45,15 @@ interface ProgressState extends PersistedProgress {
   completeLevel: (id: number, mistakes: number, heartsLeft: number) => void;
   setLastPlayed: (id: number) => void;
   resetProgress: () => void;
+  /**
+   * Merge with the account's copy, if there is one.
+   *
+   * Fire-and-forget: nothing awaits it and it never throws. Called after sign-in
+   * and after a clear, so a reinstall gets history back and a second device stays
+   * level — see `services/sync.ts` for why the merge keeps the better of two
+   * values rather than the newer.
+   */
+  pullAndPush: () => Promise<void>;
 }
 
 const EMPTY: PersistedProgress = {
@@ -115,6 +125,17 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
   resetProgress: () => {
     set(EMPTY);
     persist(EMPTY);
+  },
+
+  pullAndPush: async () => {
+    const merged = await syncProgress(get().records);
+    // `undefined` means no account, no connection, or no tables — all ordinary,
+    // and all leave the local state exactly as it was.
+    if (!merged) return;
+
+    const next: PersistedProgress = { ...get(), records: merged };
+    set({ records: merged });
+    persist(next);
   },
 }));
 

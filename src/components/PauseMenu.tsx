@@ -28,6 +28,9 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
+import { Springy, useGlow } from './Pressable';
+import { withClick } from './sound';
+
 export interface PauseMenuProps {
   palette: Palette;
   visible: boolean;
@@ -101,24 +104,14 @@ export const PauseMenu = memo(function PauseMenu({
             <Stat palette={palette} value={`${boardRows}×${boardCols}`} label="board" />
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={onResume}
-            style={({ pressed }) => [
-              styles.resume,
-              { backgroundColor: palette.accent },
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={[styles.resumeLabel, { color: palette.textOnAccent }]}>Resume</Text>
-          </Pressable>
+          <ResumeButton palette={palette} onPress={onResume} />
 
           <View style={styles.row}>
             <Secondary palette={palette} label="Restart" glyph="↺" onPress={onRestart} />
             <Secondary palette={palette} label="Settings" glyph="⚙" onPress={onSettings} />
           </View>
 
-          <Pressable accessibilityRole="button" onPress={onLevels} style={styles.leave}>
+          <Pressable accessibilityRole="button" onPress={withClick(onLevels)} style={styles.leave}>
             <Text style={[styles.leaveLabel, { color: palette.textMuted }]}>
               Leave for level select
             </Text>
@@ -169,6 +162,27 @@ function Stat({
   );
 }
 
+/**
+ * The sheet's one primary action, and the only thing on it that glows.
+ *
+ * Its own component so the glow hook has somewhere to live — `PauseMenu` is
+ * memoised and a hook call inside the sheet's body would run on every render of
+ * a modal that is usually closed.
+ */
+function ResumeButton({ palette, onPress }: { palette: Palette; onPress: () => void }) {
+  const elevation = useGlow(palette.accent, 'primary');
+
+  return (
+    <Springy
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[styles.resume, { backgroundColor: palette.accent }, elevation]}
+    >
+      <Text style={[styles.resumeLabel, { color: palette.textOnAccent }]}>Resume</Text>
+    </Springy>
+  );
+}
+
 function Secondary({
   palette,
   label,
@@ -181,18 +195,17 @@ function Secondary({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <Springy
       accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
+      onPress={withClick(onPress)}
+      style={[
         styles.secondary,
         { backgroundColor: palette.surfaceRaised, borderColor: palette.border },
-        pressed && styles.pressed,
       ]}
     >
       <Text style={[styles.secondaryGlyph, { color: palette.textMuted }]}>{glyph}</Text>
       <Text style={[styles.secondaryLabel, { color: palette.text }]}>{label}</Text>
-    </Pressable>
+    </Springy>
   );
 }
 

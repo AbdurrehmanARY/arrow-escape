@@ -20,7 +20,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, ScreenHeader, useTheme } from '@components';
+import { Screen, ScreenHeader, useTheme, withClick } from '@components';
 import { TIER_BANDS, TIER_LABELS, type DifficultyTier } from '@game/codec';
 import { ENCODED_LEVELS, LEVEL_COUNT } from '@data/levels';
 import { CHAPTERS, chapterOf, chapterProgress, isChapterOpen, type Chapter } from '@data/chapters';
@@ -182,7 +182,7 @@ function JumpToLevel({ palette, onJump }: { palette: Palette; onJump: (id: numbe
           accessibilityLabel="Go to level"
           accessibilityState={{ disabled: !valid }}
           disabled={!valid}
-          onPress={() => onJump(parsed)}
+          onPress={withClick(() => onJump(parsed))}
           style={({ pressed }) => [
             styles.jumpGo,
             { backgroundColor: palette.accent, opacity: valid ? 1 : 0.4 },
@@ -230,7 +230,7 @@ function ChapterList({
             }
             accessibilityState={{ disabled: !open }}
             disabled={!open}
-            onPress={() => onOpen(chapter)}
+            onPress={withClick(() => onOpen(chapter))}
             style={({ pressed }) => [
               styles.chapterCard,
               {
@@ -395,7 +395,7 @@ function LevelTile({
       }
       accessibilityState={{ disabled: locked }}
       disabled={locked}
-      onPress={onPress}
+      onPress={withClick(onPress)}
       style={({ pressed }) => [
         styles.tile,
         {

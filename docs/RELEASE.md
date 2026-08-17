@@ -9,18 +9,79 @@ is done — this is the checklist for getting it into the Play Store.
 
 `eas.json` defines three:
 
-| Profile | Output | For |
-|---|---|---|
-| `development` | APK with dev client | on-device testing with native modules (needed once ads are on) |
-| `preview` | APK | sharing a real build with testers, no store account needed |
-| `production` | AAB, auto-incrementing versionCode | the Play Store |
+| Profile       | Output                             | For                                                                       |
+| ------------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| `development` | APK with dev client                | on-device testing with native modules (needed once ads are on)            |
+| `preview`     | APK, no dev tools                  | production-like performance, shared with testers, no store account needed |
+| `production`  | AAB, auto-incrementing versionCode | the Play Store                                                            |
+
+`preview` is the one to judge performance on. A development build carries the dev
+launcher and runs an unminified bundle, so it is **not** representative of how the
+shipped game feels; `preview` is compiled release-style and is.
+
+**EAS CLI is a separate program, not a project dependency**, so nothing in
+`node_modules` provides an `eas` command. Every script here calls it through
+`npx --yes eas-cli@latest`, which needs no installation and is the alternative
+Expo documents. Two commands to get started, once:
 
 ```bash
-npm install -g eas-cli
-eas login
-eas build:configure          # links the project to your Expo account, once
-eas build --profile preview --platform android
+npm run eas:login        # opens a browser; needs a free Expo account
+npm run eas:configure    # links this project to that account, writes extra.eas.projectId
 ```
+
+Each profile then has a script, so neither the CLI invocation nor the flags have
+to be remembered:
+
+| Script                    | Runs                                                   |
+| ------------------------- | ------------------------------------------------------ |
+| `npm run build:dev`       | `eas build --profile development --platform android`   |
+| `npm run build:preview`   | `eas build --profile preview --platform android`       |
+| `npm run build:prod`      | `eas build --profile production --platform android`    |
+| `npm run build:dev:local` | the same dev build, compiled on this PC instead of EAS |
+| `npm run eas -- <args>`   | any other EAS command, e.g. `npm run eas -- whoami`    |
+
+Installing it globally with `npm install -g eas-cli` also works and is marginally
+faster, since npx re-resolves the version each run. It is not required, and the
+scripts do not assume it — a bare `eas` on the command line is what fails with
+`'eas' is not recognized`.
+
+`eas.json` pins `cli.version` to `>= 21.0.0` — the version this configuration was
+checked against. An older CLI refuses to run rather than misinterpret the
+profiles.
+
+## Development builds
+
+A development build is the app compiled with its own native modules, plus fast
+refresh and the dev menu. It is the only way to test anything Expo Go cannot load
+— **ads, above all**.
+
+```bash
+npm run build:dev
+```
+
+EAS builds it in the cloud and prints a download link plus a QR code. On the
+phone, open the link and install the APK — Android will ask you to allow
+installing from that browser the first time, which is expected for any APK that
+did not come from the Play Store.
+
+Then start Metro for it:
+
+```bash
+npm run dev            # or: npm run dev:tunnel, if the LAN is blocked
+```
+
+Open the app and it connects to Metro. From then on it is the normal edit-and-see
+loop, with native modules available.
+
+Two things worth knowing:
+
+- **`expo-dev-client` does not reach production.** Its Gradle wiring is
+  `debugImplementation` only; the launcher and dev menu are added to a release
+  build solely if `expo.devlauncher.configureInRelease=true` is set, and it is
+  not. A `production` app-bundle is unaffected by its presence.
+- **Rebuild only when native code changes** — a new native dependency, or a change
+  to `app.json` that affects the native project. Pure JavaScript changes are
+  picked up by Metro without rebuilding.
 
 ## Versioning
 
@@ -71,8 +132,8 @@ purchases rates in the lowest bracket everywhere.
 ## Rollout
 
 ```bash
-eas build --profile production --platform android
-eas submit --profile production --platform android
+npm run build:prod
+npm run eas -- submit --profile production --platform android
 ```
 
 The submit profile targets the **internal** track as a **draft**, on purpose —
@@ -86,7 +147,7 @@ nothing goes live until you promote it in the Play Console. Suggested path:
 
 ## After v0.1
 
-All 600 levels ship. What has *not* been validated is the curve against real
+All 600 levels ship. What has _not_ been validated is the curve against real
 people: `expectedBlindMistakes` models a player tapping at random, and a real
 player reads partially — better than random, worse than perfect — so the true
 difficulty sits somewhere below the model.

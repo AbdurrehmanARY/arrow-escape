@@ -1,12 +1,23 @@
 # Audio assets
 
 The game runs perfectly without these files — **every audio call is a no-op when
-the asset is missing** (see `src/services/audio.ts`). Every event listed below is
-already wired at its call site; enabling a sound is dropping in a file and
-uncommenting one line in `src/services/audioAssets.ts`.
+the asset is missing** (see `src/services/audio.ts`). Replacing one is dropping a
+file in and changing one line of `src/services/audioAssets.ts`.
 
-Nothing here is required for the game to ship. It is required for the game to
-sound like anything.
+**Every file currently in this folder is synthesised, not recorded.** They are
+computed from formulas by `npm run sounds:build` — clean and plain, in the register
+of early system sounds rather than produced game audio. That was the right trade
+against silence, and it is not the finished article.
+
+**They are `.wav`, not the `.m4a` this document asks for**, because AAC encoding
+needs a codec this toolchain does not have. The whole set is about 3.5MB, 90% of it
+music. Real files should be `.m4a` — see [Format](#format) — which takes that under
+800KB.
+
+Two files listed below are **deliberately not wired to anything**, and are marked
+where they appear: `correct-move` and `undo` (no undo is exposed), and `countdown`
+(there is no countdown anywhere in this game — no pre-level timer, no turn clock,
+no claim window). Everything else fires at a real moment.
 
 ---
 
@@ -44,41 +55,54 @@ become the most noticeable thing in the game.
 
 | File | When |
 |---|---|
-| `sfx/arrow-pickup.m4a` | a finger lands on an arrow, before the tap completes |
-| `sfx/arrow-release.m4a` | an arrow threads off the board — **fires constantly, so it must never grate** |
-| `sfx/correct-move.m4a` | a tap that clears an arrow |
-| `sfx/wrong-move.m4a` | a tap on a blocked arrow |
-| `sfx/collision.m4a` | the moment the arrow hits what is in its way |
-| `sfx/heart-lost.m4a` | the heart drains. Soft and low — the player misread, they did not fail |
+| `sfx/arrow-pickup.m4a` | a finger lands on an arrow, before the tap resolves. Confirms *which* arrow is under the thumb — very short and very quiet |
+| `sfx/arrow-release.m4a` | an arrow threads off the board — **fires constantly, so it must never grate.** The most important file here |
+| `sfx/wrong-move.m4a` | a completed tap that hit **no arrow**. Costs nothing, so it must not sound like a penalty |
+| `sfx/collision.m4a` | a tap on an arrow that cannot leave. This one *does* cost a heart |
+| `sfx/heart-lost.m4a` | the heart drains, layered under `collision`. Soft and low — the player misread, they did not fail |
 | `sfx/last-heart.m4a` | one heart remaining. Fires once a level, so it can afford to be distinctive |
-| `sfx/hint.m4a` | a hint is spent |
-| `sfx/undo.m4a` | reserved; no undo is exposed today |
-| `sfx/restart.m4a` | level restarted |
+| `sfx/hint.m4a` | a hint is spent and the arrow lights up |
+| `sfx/restart.m4a` | level restarted, from any of the four places that can cause one |
 | `sfx/pause.m4a` · `sfx/resume.m4a` | the pause sheet opening and closing |
+| `sfx/correct-move.m4a` | **not wired.** `arrow-release` already covers a successful tap |
+| `sfx/undo.m4a` | **not wired.** No undo is exposed today |
 
 ### UI
 
-`sfx/button.m4a` · `sfx/toggle.m4a` · `sfx/popup-open.m4a` ·
-`sfx/popup-close.m4a` · `sfx/reward-collected.m4a`
-
-Short and quiet. These fire on every interaction, and their job is to be felt
-rather than heard.
+| File | When |
+|---|---|
+| `sfx/button.m4a` | every button and every tab. **The most-played sound in the app** — felt rather than heard, or it becomes the whole experience |
+| `sfx/toggle.m4a` | a settings switch. Deliberately distinct from `button`: a switch is not a button |
+| `sfx/popup-open.m4a` · `sfx/popup-close.m4a` | confirmation dialogs and the league explainer. **Not** the win/fail sheets, which have voices of their own |
+| `sfx/reward-collected.m4a` | a hint earned by watching a rewarded ad |
 
 ### Progress
 
-`sfx/level-complete.m4a` · `sfx/fireworks.m4a` · `sfx/star.m4a` ·
-`sfx/difficulty-unlocked.m4a` · `sfx/achievement.m4a`
+| File | When |
+|---|---|
+| `sfx/level-complete.m4a` | the board is cleared. First in the win sequence |
+| `sfx/star.m4a` | …and it was cleared with **no wrong taps** |
+| `sfx/achievement.m4a` | …and that win earned a new award |
+| `sfx/difficulty-unlocked.m4a` | …and it was the last level before a new tier |
+| `sfx/fireworks.m4a` | under the confetti burst, 140ms in. **Texture, not an event** — soft |
 
-`fireworks` plays under the confetti burst and should be soft — it is texture,
-not an event.
+The first four are a sequence, spaced 420ms apart, and all four can fire on one
+win. Judge them as a phrase rather than in isolation.
 
 ### Failure
 
-`sfx/out-of-hearts.m4a` · `sfx/game-over.m4a`
+| File | When |
+|---|---|
+| `sfx/out-of-hearts.m4a` | five wrong reads. The board behind it is almost always still winnable — so, not harsh |
+| `sfx/game-over.m4a` | a gate sealed on an arrow that still needed the way out. Heavier; this one really is over |
 
 ### Miscellaneous
 
-`sfx/countdown.m4a` · `sfx/notification.m4a` · `sfx/reward-ready.m4a`
+| File | When |
+|---|---|
+| `sfx/notification.m4a` | a message appears under the board — out of hints, nothing to hint at |
+| `sfx/reward-ready.m4a` | a rewarded ad becomes available while the player has no hints |
+| `sfx/countdown.m4a` | **not wired.** Nothing in this game counts down |
 
 ---
 

@@ -93,4 +93,6 @@ export const STORAGE_KEYS = {
   settings: 'settings',
   hints: 'hints',
   onboarding: 'onboarding',
+  challenges: 'challenges',
+  league: 'league',
 } as const;

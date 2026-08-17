@@ -9,3 +9,6 @@ export * from './progressStore';
 export * from './settingsStore';
 export * from './hintStore';
 export * from './onboardingStore';
+export * from './challengeStore';
+export * from './authStore';
+export * from './leagueStore';

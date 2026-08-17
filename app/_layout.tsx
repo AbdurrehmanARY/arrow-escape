@@ -25,6 +25,9 @@ import { initAds } from '@services/ads';
 import { applyAudioSettings, initAudio } from '@services/audio';
 import { useHintStore } from '@state/hintStore';
 import { useOnboardingStore } from '@state/onboardingStore';
+import { useChallengeStore } from '@state/challengeStore';
+import { useAuthStore } from '@state/authStore';
+import { useLeagueStore } from '@state/leagueStore';
 import { useProgressStore } from '@state/progressStore';
 import { useSettingsStore } from '@state/settingsStore';
 
@@ -59,6 +62,9 @@ export default function RootLayout() {
   const hydrateProgress = useProgressStore((state) => state.hydrate);
   const hydrateHints = useHintStore((state) => state.hydrate);
   const hydrateOnboarding = useOnboardingStore((state) => state.hydrate);
+  const hydrateChallenges = useChallengeStore((state) => state.hydrate);
+  const hydrateAuth = useAuthStore((state) => state.hydrate);
+  const hydrateLeague = useLeagueStore((state) => state.hydrate);
 
   const music = useSettingsStore((state) => state.music);
   const sfx = useSettingsStore((state) => state.sfx);
@@ -78,6 +84,9 @@ export default function RootLayout() {
       void hydrateProgress();
       void hydrateHints();
       void hydrateOnboarding();
+      void hydrateChallenges();
+      void hydrateAuth();
+      void hydrateLeague();
       void initAudio();
       void initAds();
     })();
@@ -85,7 +94,7 @@ export default function RootLayout() {
     return () => {
       cancelled = true;
     };
-  }, [hydrateSettings, hydrateProgress, hydrateHints, hydrateOnboarding]);
+  }, [hydrateSettings, hydrateProgress, hydrateHints, hydrateOnboarding, hydrateChallenges, hydrateAuth, hydrateLeague]);
 
   /**
    * Push the audio settings down whenever any of them changes.

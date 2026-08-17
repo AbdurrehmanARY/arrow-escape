@@ -69,37 +69,37 @@ export type MusicTrack = 'menu' | 'gameplay' | 'victory' | 'failure';
  */
 export const SFX_ASSETS: Partial<Record<SfxName, number>> = {
   // --- Gameplay ---
-  // arrowPickup: require('../../assets/audio/sfx/arrow-pickup.m4a'),
-  // arrowRelease: require('../../assets/audio/sfx/arrow-release.m4a'),
-  // correctMove: require('../../assets/audio/sfx/correct-move.m4a'),
-  // wrongMove: require('../../assets/audio/sfx/wrong-move.m4a'),
-  // collision: require('../../assets/audio/sfx/collision.m4a'),
-  // heartLost: require('../../assets/audio/sfx/heart-lost.m4a'),
-  // lastHeartWarning: require('../../assets/audio/sfx/last-heart.m4a'),
-  // hintUsed: require('../../assets/audio/sfx/hint.m4a'),
-  // undo: require('../../assets/audio/sfx/undo.m4a'),
-  // levelRestart: require('../../assets/audio/sfx/restart.m4a'),
-  // pause: require('../../assets/audio/sfx/pause.m4a'),
-  // resume: require('../../assets/audio/sfx/resume.m4a'),
+  arrowPickup: require('../../assets/audio/sfx/arrow-pickup.wav'),
+  arrowRelease: require('../../assets/audio/sfx/arrow-release.wav'),
+  correctMove: require('../../assets/audio/sfx/correct-move.wav'),
+  wrongMove: require('../../assets/audio/sfx/wrong-move.wav'),
+  collision: require('../../assets/audio/sfx/collision.wav'),
+  heartLost: require('../../assets/audio/sfx/heart-lost.wav'),
+  lastHeartWarning: require('../../assets/audio/sfx/last-heart.wav'),
+  hintUsed: require('../../assets/audio/sfx/hint.wav'),
+  undo: require('../../assets/audio/sfx/undo.wav'),
+  levelRestart: require('../../assets/audio/sfx/restart.wav'),
+  pause: require('../../assets/audio/sfx/pause.wav'),
+  resume: require('../../assets/audio/sfx/resume.wav'),
   // --- UI ---
-  // buttonClick: require('../../assets/audio/sfx/button.m4a'),
-  // toggle: require('../../assets/audio/sfx/toggle.m4a'),
-  // popupOpen: require('../../assets/audio/sfx/popup-open.m4a'),
-  // popupClose: require('../../assets/audio/sfx/popup-close.m4a'),
-  // rewardCollected: require('../../assets/audio/sfx/reward-collected.m4a'),
+  buttonClick: require('../../assets/audio/sfx/button.wav'),
+  toggle: require('../../assets/audio/sfx/toggle.wav'),
+  popupOpen: require('../../assets/audio/sfx/popup-open.wav'),
+  popupClose: require('../../assets/audio/sfx/popup-close.wav'),
+  rewardCollected: require('../../assets/audio/sfx/reward-collected.wav'),
   // --- Progress ---
-  // levelComplete: require('../../assets/audio/sfx/level-complete.m4a'),
-  // fireworks: require('../../assets/audio/sfx/fireworks.m4a'),
-  // starCollect: require('../../assets/audio/sfx/star.m4a'),
-  // difficultyUnlocked: require('../../assets/audio/sfx/difficulty-unlocked.m4a'),
-  // achievement: require('../../assets/audio/sfx/achievement.m4a'),
+  levelComplete: require('../../assets/audio/sfx/level-complete.wav'),
+  fireworks: require('../../assets/audio/sfx/fireworks.wav'),
+  starCollect: require('../../assets/audio/sfx/star.wav'),
+  difficultyUnlocked: require('../../assets/audio/sfx/difficulty-unlocked.wav'),
+  achievement: require('../../assets/audio/sfx/achievement.wav'),
   // --- Failure ---
-  // outOfHearts: require('../../assets/audio/sfx/out-of-hearts.m4a'),
-  // gameOver: require('../../assets/audio/sfx/game-over.m4a'),
+  outOfHearts: require('../../assets/audio/sfx/out-of-hearts.wav'),
+  gameOver: require('../../assets/audio/sfx/game-over.wav'),
   // --- Miscellaneous ---
-  // countdown: require('../../assets/audio/sfx/countdown.m4a'),
-  // notification: require('../../assets/audio/sfx/notification.m4a'),
-  // rewardReady: require('../../assets/audio/sfx/reward-ready.m4a'),
+  countdown: require('../../assets/audio/sfx/countdown.wav'),
+  notification: require('../../assets/audio/sfx/notification.wav'),
+  rewardReady: require('../../assets/audio/sfx/reward-ready.wav'),
 };
 
 /**
@@ -111,10 +111,10 @@ export const SFX_ASSETS: Partial<Record<SfxName, number>> = {
  * and becomes the most noticeable thing in the game.
  */
 export const MUSIC_ASSETS: Partial<Record<MusicTrack, number>> = {
-  // menu: require('../../assets/audio/music/menu.m4a'),
-  // gameplay: require('../../assets/audio/music/gameplay.m4a'),
-  // victory: require('../../assets/audio/music/victory.m4a'),
-  // failure: require('../../assets/audio/music/failure.m4a'),
+  menu: require('../../assets/audio/music/menu.wav'),
+  gameplay: require('../../assets/audio/music/gameplay.wav'),
+  victory: require('../../assets/audio/music/victory.wav'),
+  failure: require('../../assets/audio/music/failure.wav'),
 };
 
 /** Tracks that repeat rather than playing once and stopping. */

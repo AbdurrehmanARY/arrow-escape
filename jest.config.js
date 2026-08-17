@@ -14,6 +14,11 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
   moduleNameMapper: {
     '^@game$': '<rootDir>/src/game',
+    '^@render/(.*)$': '<rootDir>/src/render/$1',
+    '^@challenge$': '<rootDir>/src/challenge',
+    '^@league$': '<rootDir>/src/league',
+    '^@league/(.*)$': '<rootDir>/src/league/$1',
+    '^@challenge/(.*)$': '<rootDir>/src/challenge/$1',
     '^@game/(.*)$': '<rootDir>/src/game/$1',
     '^@theme$': '<rootDir>/src/theme',
     '^@theme/(.*)$': '<rootDir>/src/theme/$1',

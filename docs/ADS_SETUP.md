@@ -52,11 +52,11 @@ create one **Rewarded** ad unit inside it. You need two ids:
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY"
-        }
-      ]
-    ]
-  }
+          "androidAppId": "ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY",
+        },
+      ],
+    ],
+  },
 }
 ```
 
@@ -74,10 +74,14 @@ Expo Go still cannot load the native module, so from here on device testing need
 a custom build:
 
 ```bash
-npx eas build --profile development --platform android
+npm run build:dev
 ```
 
-Install the resulting APK, then `npx expo start --dev-client`.
+Install the resulting APK, then `npm run dev`.
+
+(The package is `eas-cli`, not `eas` — `npx eas ...` fails with "could not
+determine executable to run". The scripts call `npx --yes eas-cli@latest`, so
+neither the package name nor a global install has to be remembered.)
 
 ## Verifying it
 

@@ -83,10 +83,25 @@ address your phone needs to be able to reach.
 Then:
 
 ```bash
-npm start
+npm run dev
 ```
 
-Scan the QR with **Expo Go** from the Play Store.
+Scan the QR with your **development build** — not Expo Go.
+
+> ### ⚠️ Expo Go can no longer run the game
+>
+> The board renders with **React Native Skia**, which is a native module Expo Go
+> does not bundle. Expo Go still opens the menu and the settings screens, but
+> **the play screen will crash**.
+>
+> This is not a regression to fix. It is the cost of the renderer change that
+> removed the frame drops on large boards, and it was a one-way door — see
+> decision 99 in [PROJECT_MEMORY.md](PROJECT_MEMORY.md).
+>
+> `npm run start:go` is kept for the non-gameplay screens only. For anything
+> involving a board, install a development build once (`npm run build:dev`) and
+> use `npm run dev` from then on. It behaves exactly like Expo Go afterwards —
+> same QR, same fast refresh — it is just your own app rather than a generic host.
 
 <details>
 <summary>What it is fixing, and why the tunnel was not enough</summary>
@@ -130,6 +145,45 @@ faster, because only changed modules are re-sent.
 
 > Expo Go covers everything **except ads**, which need a native module it cannot
 > load. See [ADS_SETUP.md](ADS_SETUP.md).
+
+### Development builds — the other way to run it
+
+Expo Go is a fixed app: it ships a set of native modules and cannot load any
+others. That is why ads have never been testable. A **development build** is your
+own app, compiled with your own native dependencies, with the same fast refresh
+and dev menu on top — so it can load anything the production app can.
+
+`expo-dev-client` is installed and `eas.json` has a `development` profile:
+
+```bash
+npm run eas:login        # once — free Expo account
+npm run eas:configure    # once — links the project
+npm run build:dev        # builds the APK on EAS, prints a download link
+npm run dev              # starts Metro for the dev build
+```
+
+There is nothing to install first. The scripts call EAS through
+`npx --yes eas-cli@latest`; typing a bare `eas` is what produces
+`'eas' is not recognized`.
+
+Full command-by-command walkthrough, including installing the APK on the phone,
+is in [RELEASE.md](RELEASE.md#development-builds).
+
+**Which runtime does which:**
+
+| Script               | Runs in           | Use for                              |
+| -------------------- | ----------------- | ------------------------------------ |
+| `npm run start:go`   | Expo Go           | quickest loop, no build step, no ads |
+| `npm run dev`        | development build | anything native — ads especially     |
+| `npm run dev:tunnel` | development build | same, over the tunnel this PC needs  |
+
+`npm start` is left as it was. With `expo-dev-client` installed the bare command
+targets a development build, so **use `npm run start:go` when you mean Expo Go**
+rather than relying on the default.
+
+The development build does not replace Expo Go — keep using Expo Go for gameplay
+and level testing, where it is faster. Reach for the development build when you
+need the real native app.
 
 ---
 
