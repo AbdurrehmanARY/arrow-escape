@@ -56,3 +56,6 @@ coverage/
 # Claude Code local settings and scratch files.
 .claude/settings.local.json
 .claude/*.tmp.*
+
+# Locally built APKs — large, and rebuilt from source on demand.
+/build/
