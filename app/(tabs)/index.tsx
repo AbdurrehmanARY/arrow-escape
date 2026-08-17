@@ -32,7 +32,7 @@ import { useHintStore } from '@state/hintStore';
 import { isDayWon, statsOf, useChallengeStore } from '@state/challengeStore';
 import { arrowsFor, leagueForArrows } from '@league';
 import { arrowsThisWeek, useLeagueStore } from '@state/leagueStore';
-import { MIN_TOUCH_TARGET, radius, spacing, typography, type Palette } from '@theme';
+import { fonts, MIN_TOUCH_TARGET, radius, spacing, typography, type Palette } from '@theme';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  cardTitle: { ...typography.heading, fontWeight: '800' },
+  cardTitle: { ...typography.heading, fontFamily: fonts.displayExtra, fontWeight: '800' },
   cardSubtitle: { ...typography.small },
   emblem: {
     width: 72,
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
 
   brand: { alignItems: 'center', marginTop: spacing.xxl, marginBottom: spacing.xxl },
   wordmark: { ...typography.display, fontSize: 42, letterSpacing: -0.5 },
-  levelLine: { ...typography.title, fontWeight: '800', marginTop: spacing.xs },
+  levelLine: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800', marginTop: spacing.xs },
 
   play: {
     height: 64,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: spacing.xl,
   },
-  playLabel: { ...typography.title, fontWeight: '800' },
+  playLabel: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
   pressed: { opacity: 0.75 },
 
   secondary: {

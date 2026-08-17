@@ -20,6 +20,18 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import {
+  Sora_600SemiBold,
+  Sora_700Bold,
+  Sora_800ExtraBold,
+} from '@expo-google-fonts/sora';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
 
 import { initAds } from '@services/ads';
 import { applyAudioSettings, initAudio } from '@services/audio';
@@ -57,6 +69,27 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
+
+  /**
+   * The typefaces, loaded before the first frame.
+   *
+   * Gated for the same reason settings are: a screen that paints in the system
+   * font and then re-paints in Sora is a visible jump on every launch, and the
+   * fonts are bundled assets rather than a download, so the wait is milliseconds.
+   *
+   * `fontsError` is deliberately treated as "carry on" rather than as a failure.
+   * A missing typeface falls back to the system one, which is a slightly plainer
+   * game — not a broken one, and certainly not a reason to refuse to start.
+   */
+  const [fontsLoaded, fontsError] = useFonts({
+    Sora_600SemiBold,
+    Sora_700Bold,
+    Sora_800ExtraBold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
 
   const hydrateSettings = useSettingsStore((state) => state.hydrate);
   const hydrateProgress = useProgressStore((state) => state.hydrate);
@@ -114,7 +147,9 @@ export default function RootLayout() {
     });
   }, [ready, music, sfx, masterVolume, musicVolume, sfxVolume]);
 
-  if (!ready) return null;
+  // Fonts join settings at the gate. An error is not a reason to wait forever —
+  // the system font is a fine fallback and the game is more important than it.
+  if (!ready || (!fontsLoaded && !fontsError)) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

@@ -42,13 +42,76 @@ export const radius = {
  * Line height is set explicitly on every style — leaving it implicit is how a
  * dense settings screen ends up with rows of different heights on two devices.
  */
+/**
+ * The two families, by role.
+ *
+ * Sora carries anything that should feel like a game — headings, scores, level
+ * numbers. Inter carries anything that should be *read* — settings labels, rules
+ * copy, leaderboard rows. Mixing them is the point: a settings screen set in a
+ * display face is hard to read, and a score set in a UI face is forgettable.
+ *
+ * `fontWeight` is deliberately still declared alongside `fontFamily`. The family
+ * name already encodes the weight, so the two must agree — but Android will
+ * synthesise a fake bold from a regular file if only the weight is given, and
+ * leaving it out entirely makes the fallback (when the fonts fail to load) render
+ * uniformly light.
+ */
+export const fonts = {
+  displaySemi: 'Sora_600SemiBold',
+  displayBold: 'Sora_700Bold',
+  displayExtra: 'Sora_800ExtraBold',
+  bodyRegular: 'Inter_400Regular',
+  bodyMedium: 'Inter_500Medium',
+  bodySemi: 'Inter_600SemiBold',
+  bodyBold: 'Inter_700Bold',
+} as const;
+
 export const typography = {
-  display: { fontSize: 32, lineHeight: 40, fontWeight: '800', letterSpacing: -0.6 },
-  title: { fontSize: 24, lineHeight: 30, fontWeight: '700', letterSpacing: -0.3 },
-  heading: { fontSize: 20, lineHeight: 26, fontWeight: '600' },
+  display: {
+    fontFamily: fonts.displayExtra,
+    fontSize: 32,
+    lineHeight: 40,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+  },
+  title: {
+    fontFamily: fonts.displayBold,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  heading: {
+    fontFamily: fonts.displaySemi,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '600',
+  },
+  /*
+    Body styles deliberately carry no `fontFamily`.
+
+    In React Native each weight of a custom font is a *separate family*, so
+    `fontWeight` cannot pick between them — a screen that does
+    `{...typography.body, fontWeight: '700'}` would keep Inter Regular and either
+    render un-bold (iOS) or get an ugly synthesised bold (Android). There are 69
+    such overrides in this app, almost all on body and small.
+
+    Rather than break them or rewrite all 69 at once, these keep the system font
+    and the display styles above take Sora, where the weight is fixed and the
+    override sites are few. Use `fonts.*` explicitly when a body style genuinely
+    needs Inter at a known weight — `bodyStrong` below is the common case.
+  */
   body: { fontSize: 16, lineHeight: 22, fontWeight: '400' },
   small: { fontSize: 14, lineHeight: 20, fontWeight: '400' },
   tiny: { fontSize: 12, lineHeight: 16, fontWeight: '500', letterSpacing: 0.12 },
+
+  /** Inter at a weight that actually exists, for labels that must read as strong. */
+  bodyStrong: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
 } as const;
 
 /**

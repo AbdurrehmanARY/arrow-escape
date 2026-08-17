@@ -23,7 +23,7 @@ import { challengeFor, isChallengeDay, parseChallengeId, today } from '@challeng
 import { TIER_LABELS } from '@game/codec';
 import { summaryOf, tierOf } from '@data/levels';
 import { useChallengeStore } from '@state/challengeStore';
-import { radius, spacing, typography, type Palette } from '@theme';
+import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 import { formatDuration } from './index';
 
@@ -145,12 +145,12 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: radius.pill },
   badgeText: { ...typography.small, fontWeight: '700' },
   boardMeta: { ...typography.small },
-  verdict: { ...typography.title, fontWeight: '800' },
+  verdict: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
   body: { ...typography.body, textAlign: 'center' },
   nudge: { ...typography.small, textAlign: 'center' },
 
   grid: { flexDirection: 'row', gap: spacing.xl, marginVertical: spacing.sm },
   cell: { alignItems: 'center' },
-  cellValue: { ...typography.heading, fontWeight: '800' },
+  cellValue: { ...typography.heading, fontFamily: fonts.displayExtra, fontWeight: '800' },
   cellLabel: { ...typography.small },
 });

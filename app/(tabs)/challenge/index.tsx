@@ -39,7 +39,7 @@ import {
 import { TIER_LABELS } from '@game/codec';
 import { tierOf } from '@data/levels';
 import { statsOf, useChallengeStore } from '@state/challengeStore';
-import { radius, spacing, typography, type Palette } from '@theme';
+import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
 const MONTHS = [
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
   },
   stat: { alignItems: 'center', flex: 1 },
   statValue: { ...typography.body, fontWeight: '700' },
-  statValueBig: { ...typography.title, fontWeight: '800' },
+  statValueBig: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
   statLabel: { ...typography.small },
 
   monthBar: {
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   monthArrow: { fontSize: 30, lineHeight: 34, fontWeight: '700', paddingHorizontal: spacing.md },
-  monthLabel: { ...typography.heading, fontWeight: '700' },
+  monthLabel: { ...typography.heading, fontFamily: fonts.displayBold, fontWeight: '700' },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',

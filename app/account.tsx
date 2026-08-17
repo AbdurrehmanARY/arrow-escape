@@ -27,7 +27,7 @@ import { Screen, ScreenHeader, useSheetSound, useTheme, withClick } from '@compo
 import { isGoogleConfigured } from '@services/auth';
 import { isBackendConfigured } from '@services/supabase';
 import { accountEmail, syncedAgo, useAuthStore } from '@state/authStore';
-import { radius, spacing, typography, type Palette } from '@theme';
+import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 /** Why the last attempt failed, in the player's terms rather than the API's. */
 const FAILURE_TEXT: Record<string, string> = {
@@ -392,6 +392,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  sheetTitle: { ...typography.title, fontWeight: '800' },
+  sheetTitle: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
   sheetActions: { alignSelf: 'stretch', gap: spacing.sm, marginTop: spacing.md },
 });

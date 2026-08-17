@@ -42,7 +42,7 @@ import { leaderboard, type LeaderboardRow } from '@services/sync';
 import { useAuthStore } from '@state/authStore';
 import { statsOf, useChallengeStore } from '@state/challengeStore';
 import { arrowsThisWeek, useLeagueStore } from '@state/leagueStore';
-import { radius, spacing, typography, type Palette } from '@theme';
+import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 /** One row of the table. Shaped for the server rows that will join it. */
 interface Standing {
@@ -388,7 +388,7 @@ function LeagueIntro({
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   headerText: { gap: 2 },
-  leagueName: { ...typography.title, fontWeight: '800' },
+  leagueName: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
   countdown: { ...typography.body },
   info: { fontSize: 22 },
 
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  sheetTitle: { ...typography.title, fontWeight: '800' },
+  sheetTitle: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
   sheetEmblem: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
   sheetGlyph: { fontSize: 40, fontWeight: '800' },
   sheetBody: { ...typography.body, textAlign: 'center' },

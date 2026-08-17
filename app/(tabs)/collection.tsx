@@ -33,7 +33,7 @@ import {
 } from '@challenge';
 import { statsOf, useChallengeStore } from '@state/challengeStore';
 import { clearedCount, perfectCount, useProgressStore } from '@state/progressStore';
-import { radius, spacing, typography, type Palette } from '@theme';
+import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
-  sectionTitle: { ...typography.heading, fontWeight: '800' },
+  sectionTitle: { ...typography.heading, fontFamily: fonts.displayExtra, fontWeight: '800' },
   rule: { flex: 1, height: 1 },
 
   row: { flexDirection: 'row', gap: spacing.sm },
@@ -278,11 +278,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   tileGlyph: { fontSize: 26, fontWeight: '800' },
-  tileValue: { ...typography.heading, fontWeight: '800' },
+  tileValue: { ...typography.heading, fontFamily: fonts.displayExtra, fontWeight: '800' },
   tileLabel: { ...typography.small, textAlign: 'center', marginTop: spacing.xs },
   tileSub: { ...typography.small, fontSize: 11 },
 
-  year: { ...typography.heading, fontWeight: '800', marginBottom: spacing.sm },
+  year: { ...typography.heading, fontFamily: fonts.displayExtra, fontWeight: '800', marginBottom: spacing.sm },
   empty: { ...typography.body, marginBottom: spacing.lg },
   footnote: { ...typography.small, textAlign: 'center', marginTop: spacing.lg },
 });
