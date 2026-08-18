@@ -46,6 +46,31 @@ export interface LeaderboardRow {
   readonly rank: number;
 }
 
+/**
+ * Can this account's data actually be stored?
+ *
+ * Signing in and syncing are separate things, and every function below fails
+ * silently by design — which is right for gameplay and wrong for a status
+ * screen, because "signed in" and "signed in but nothing is being saved" look
+ * identical to a player. This asks the cheapest question that tells them apart:
+ * one row, no filters, discard the result.
+ *
+ * False means no session, no network, or — most likely during setup — the
+ * migration in `supabase/migrations/` has not been run yet.
+ */
+export async function syncReachable(): Promise<boolean> {
+  const client = supabase();
+  const userId = await currentUserId();
+  if (!client || !userId) return false;
+
+  try {
+    const { error } = await client.from('level_records').select('level_id').limit(1);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 /** The signed-in user's id, or undefined when there is no session. */
 async function currentUserId(): Promise<string | undefined> {
   const client = supabase();

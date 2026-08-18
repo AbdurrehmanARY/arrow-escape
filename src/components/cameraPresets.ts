@@ -61,20 +61,48 @@ const SNUG_TIERS: ReadonlySet<DifficultyTier> = new Set([
  *                 minimum — returning it means "show everything".
  * @returns A scale value. Will be clamped by `BoardViewport` to its legal range.
  */
+/**
+ * Smallest an arrow cell may appear on glass, in dp.
+ *
+ * Distinct from `MIN_CELL_SIZE`, which is how big a cell is *drawn* in board
+ * space. This is how big it ends up *on screen* after the initial zoom, and the
+ * two are only the same at scale 1.
+ *
+ * It exists because "fit the whole board" and "be readable" are not compatible
+ * on a large board, and fitting was silently winning. A 23x25 Casual level
+ * fitted to a phone renders roughly 12dp cells — an arrowhead at that size is a
+ * smudge, and the tier is supposed to be *easy*.
+ *
+ * The trade is explicit: below this, the board stops fully fitting and becomes
+ * pannable. That is the right way round. A board you must pan is mildly annoying;
+ * a board you cannot read is not playable.
+ */
+const READABLE_CELL_DP = 22;
+
 export function initialScaleForTier(
   tier: DifficultyTier,
   fitScale: number,
+  /**
+   * Board-space size of one cell. Optional so existing callers and tests keep
+   * working — without it, the readability floor simply does not apply.
+   */
+  cellSize?: number,
 ): number {
+  // The floor applies to every tier, including the ones that would rather fit.
+  // A Casual board is not made easier by being too small to read.
+  const readableFloor =
+    cellSize && cellSize > 0 ? READABLE_CELL_DP / cellSize : 0;
+
   if (FIT_TIERS.has(tier)) {
-    // Full board visible. No zoom adjustment.
-    return fitScale;
+    // Full board visible, unless that would make the cells unreadable.
+    return Math.max(fitScale, readableFloor);
   }
 
   if (SNUG_TIERS.has(tier)) {
     // Slightly zoomed in — the board still fits but the margins are tighter.
     // On a board that already fills the screen this is subtle; on a small board
     // it does nothing because the viewport clamps at fitScale.
-    return fitScale * 1.2;
+    return Math.max(fitScale * 1.2, readableFloor);
   }
 
   // Exploration mode. Start zoomed in enough that the player sees a readable

@@ -26,6 +26,7 @@ import { useRouter } from 'expo-router';
 import { Screen, ScreenHeader, Springy, useSheetSound, useTheme, withClick } from '@components';
 import { isGoogleConfigured } from '@services/auth';
 import { isBackendConfigured } from '@services/supabase';
+import { syncReachable } from '@services/sync';
 import { accountEmail, syncedAgo, useAuthStore } from '@state/authStore';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
@@ -71,6 +72,32 @@ export default function AccountScreen() {
   const email = accountEmail({ session });
   const synced = syncedAgo(syncedAt, now);
 
+  /**
+   * Whether the account's data actually has anywhere to go.
+   *
+   * Signing in and *syncing* are two different things, and this screen was
+   * quietly conflating them: it said "Connected" the moment a session existed,
+   * while every write was silently discarded because the tables do not exist.
+   * The player has no way to tell those apart, and "connected" is the more
+   * reassuring of the two — which is exactly the wrong way round to guess.
+   *
+   * `undefined` while the check is in flight, so the row can say so rather than
+   * flashing a wrong answer for a few hundred milliseconds.
+   */
+  const [storageReady, setStorageReady] = useState<boolean | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    // The signed-out case resolves to `undefined` through the same path rather
+    // than setting state directly, so there is one place the answer arrives from.
+    void (session ? syncReachable() : Promise.resolve(undefined)).then((ok) => {
+      if (!cancelled) setStorageReady(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
   return (
     <Screen scroll>
       <ScreenHeader
@@ -98,9 +125,26 @@ export default function AccountScreen() {
           <>
             <Text style={[styles.title, { color: palette.text }]}>Account connected</Text>
             <Text style={[styles.email, { color: palette.accent }]}>{email}</Text>
-            {synced ? (
-              <Text style={[styles.body, { color: palette.textMuted }]}>Synced {synced}</Text>
-            ) : null}
+            {/*
+              Three states, not two. "Synced 2m ago" was shown whenever a session
+              existed, which was true about the *session* and a lie about the
+              data — nothing was being stored at all, and the player had no way
+              to know.
+            */}
+            {storageReady === undefined ? (
+              <View style={styles.syncRow}>
+                <ActivityIndicator size="small" color={palette.textFaint} />
+                <Text style={[styles.body, { color: palette.textFaint }]}>Checking sync…</Text>
+              </View>
+            ) : storageReady ? (
+              <Text style={[styles.body, { color: palette.textMuted }]}>
+                {synced ? `Synced ${synced}` : 'Syncing'}
+              </Text>
+            ) : (
+              <Text style={[styles.body, { color: palette.danger }]}>
+                Signed in, but progress is not being saved to your account yet.
+              </Text>
+            )}
           </>
         ) : (
           <>
@@ -351,6 +395,7 @@ const styles = StyleSheet.create({
   noticeTitle: { ...typography.body, fontWeight: '700' },
   noticeBody: { ...typography.small },
 
+  syncRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   actions: { gap: spacing.sm },
   switchRow: {
     flexDirection: 'row',
@@ -371,7 +416,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
-  actionLabel: { ...typography.body, fontWeight: '700' },
+  actionLabel: { ...typography.body, fontWeight: '700' },
   error: { ...typography.small, textAlign: 'center' },
   errorDetail: { ...typography.small, fontSize: 11, textAlign: 'center', marginTop: 2 },
   legal: { ...typography.small, textAlign: 'center', marginTop: spacing.sm },

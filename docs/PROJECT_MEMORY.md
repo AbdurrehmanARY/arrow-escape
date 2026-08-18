@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** end of Phase 22 — the board renders on Skia; frame drops on large boards resolved on device. Phase 19 (level design document) deferred by request.
+> **Last updated:** dog-silhouette pass — a 69th bitmap shape added and the library rebuilt; 122 of 600 levels changed silhouette, none changed tier or board size. Previously: end of Phase 22 — the board renders on Skia; frame drops on large boards resolved on device. Phase 19 (level design document) deferred by request.
 > Release state and the full remaining checklist live in [PROGRESS.md](PROGRESS.md).
 
 ---
@@ -9,17 +9,20 @@
 ## Status
 
 **Code-complete at 600 levels.** Playable end to end: 600 generated and
-solver-verified levels drawing on 64 of the 137 silhouettes in the library — the
+solver-verified levels drawing on 61 of the 138 silhouettes in the library — the
 rest are open rectangles, which is what packing to four-fifths costs — across
 **ten** difficulty tiers, six
 themes, animation, hearts, hints, persistence, navigation, settings, first-run
 teaching, a full audio layer, and an ads path that is implemented but switched off.
 
-Boards are **packed**: every tier from easy to nightmare fills 79–90% of its
+Boards are **packed**: every tier from easy to nightmare fills 79–91% of its
 playable area, averaging 88% across the 560 packed levels. The 40 shutter levels
-sit at 66% deliberately — see decision 86. Snake length rises monotonically across
-all ten tiers, 3.0 to 11.3 cells on average and 4.1 to 26.1 at the longest, which
-is the axis difficulty actually lives on here.
+sit at 66% deliberately — see decision 86.
+
+**Longest** snake length rises monotonically across all ten tiers, 4.1 to 26.2
+cells, which is the axis difficulty actually lives on here. **Mean** length rises
+3.0 to 10.3 from Tutorial to superHard and then stops ordering cleanly — see
+decision 119.
 
 Audio is **fully wired**: 27 effects and 4 music beds, every one of them reached by
 a real moment in the game. The files themselves are synthesised placeholders, so
@@ -169,7 +172,7 @@ monotone; they buy dependency _depth_, not risk.
 84. **The "usable fraction" of a mask depends on which grower runs, and using one number for both throttled the biggest tiers.** 0.6 describes a _random_ self-avoiding walk stranding pockets. `growPackedBoard` places centre-outward and reaches ~87%. Sizing packed plans at 0.6 made `arrowsFor` cap nightmare at 114 arrows on a board with room for 180.
 85. **Raising the minimum body length is not a density lever on its own.** It also divides the capacity cap, so the first attempt traded a 24% longer snake for 25% fewer of them and nightmare coverage went _down_, 77% to 72%. The two constants have to move together.
 86. **Packing the early levels raised the floor of the whole game.** "Dense across all difficulties" includes Easy, and it took the first fifty levels from a handful of expected blind mistakes to about 156 against 576 for the last fifty — the curve still climbs, at roughly 3.7x rather than 5x, but it starts much higher. Levels 1-20 are explicitly exempt and a test holds them under twelve.
-87. **`expectedBlindMistakes` cannot order the top four tiers, and that is a fact about the metric.** It models a player tapping at random, who never traces a snake, so it responds to how many arrows are free at once. At a fixed density longer snakes mean _fewer_ arrows, so the number falls as the board gets harder to read: the top four measure 674 / 624 / 519 / 592. They are ordered by snake length instead — monotone at every step, 3.0 to 11.3 average and 4.1 to 26.1 longest — which is the axis difficulty actually lives on here.
+87. **`expectedBlindMistakes` cannot order the top four tiers, and that is a fact about the metric.** It models a player tapping at random, who never traces a snake, so it responds to how many arrows are free at once. At a fixed density longer snakes mean _fewer_ arrows, so the number falls as the board gets harder to read: the top four measure 674 / 624 / 519 / 592. They are ordered by snake length instead — 4.1 to 26.2 cells at the longest, monotone at every step, which is the axis difficulty actually lives on here. Mean length is _not_ a safe invariant across those four; see decision 119.
 88. **Shutter levels are the one deliberate exception to the density target.** A `shuts` gate asks the player to work out an _order_, and an order can only be read off a board sparse enough to see the dependencies in. Packing them would hide the single thing they exist to teach.
 89. **Every audio call is a no-op when the file is missing, and that is a build-time property rather than a runtime one.** Metro resolves `require` when it bundles, so a `try/catch` around a missing asset does not help — the app ships with a broken module that can take the native side down. The registry is explicit and starts empty; enabling a sound is uncommenting one line.
 90. **Voice limiting is what "no overlapping distortion" actually requires.** Two copies of one short effect a few milliseconds apart do not sound like two events, they sum and clip. This game produces that easily — several arrows can leave at once and a player can tap faster than a sound is long — so the same effect will not retrigger inside `RETRIGGER_GAP_MS`.
@@ -208,6 +211,12 @@ monotone; they buy dependency _depth_, not risk.
 114. **The hint notice was being set and never rendered.** `setHintNotice` had four call sites and its state variable was underscore-prefixed and unused, so tapping Hint with none left did nothing visible at all — indistinguishable from a dead button. Found while looking for somewhere honest to put `notification`, which is now the sound that accompanies it.
 115. **`levelRestart` belonged to the restart, not to one of the four buttons that cause one.** It was fired from the pause menu's handler, so restarting from the Restart pill, the confirm dialog or either failure overlay was silent. It lives in `doRestart` now — the single place a restart actually happens.
 116. **`countdown` was left unwired, deliberately.** There is no countdown anywhere in this game: no pre-level timer, no turn clock, no claim window. Every candidate site was either a per-minute display where a sound would be noise, or an existing moment that already has a voice. Inventing a trigger to reach a round number would have put a sound somewhere it is not earned, which is how an app starts to feel cheap.
+
+### Added in the dog-silhouette pass
+
+117. **A bitmap silhouette is not locked to 16x16, and the seated dog is the first one that needed more.** `sampleArt` reads the artwork's own dimensions, so the library's uniform 16x16 is a convention rather than a constraint. A seated side profile drawn at 16 collapses into an undifferentiated wedge: the neck, the front-leg gap and the tail all fall below one target cell and get voted away. Drawn at 32x32 they survive. The convention is still right for the other 68 bitmaps — a bold outline reads at any size, and uniformity is what lets a new shape be checked against the others at a glance — so this is an exception with a reason, not a new default.
+118. **`MIN_CAPACITY_FOR_HARD_TIERS` is the gate a new shape actually has to clear, and it is easy to miss.** The first dog measured 50% fill at the 18x18 reference size against a 55% floor, which silently classified it `FRAGMENTING` and confined it to Tutorial, Easy and Casual — boards of 10 to 24 cells a side, where a detailed silhouette is exactly what does not read. Nothing fails or warns; the shape simply never appears anywhere it would look good. Raising the back and thickening the tail brought it to 61%. Any new shape wants checking against this before it is drawn in detail, not after.
+119. **Mean snake length per tier is not a monotone invariant, and the test asserting it was passing on noise.** Adding one shape to the rotation reshuffles which silhouettes each level draws — 122 of 600 changed — and that alone inverted brutal and extremeHard, 11.03/10.85 becoming 11.00/10.85. The capped tiers specify overlapping body ranges (8-19, 9-22, 10-25, 11-28) and have only ~22 levels each to realise them, so which silhouettes a tier happens to draw moves its mean by more than the gap between adjacent tiers. The claim was split the same way decision 87 split the blind-mistake check: `longest` stays strictly monotone across all ten steps, which is the stronger claim and does hold; `mean` is monotone to superHard and then only required to stay well clear of the tiers below. **Board sizes and tiers were unaffected** — adding a shape consumes no extra RNG draws and seeds derive from level id, so unshaped levels rebuilt byte-identical.
 
 ### Reversed along the way
 

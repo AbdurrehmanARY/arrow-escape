@@ -22,7 +22,7 @@ import {
   PACKED_USABLE_FRACTION,
   USABLE_FRACTION,
 } from './curriculum';
-import { maskCapacity, maskFor } from './shapes';
+import { maskCapacity, maskFor, SHAPE_NAMES } from './shapes';
 
 const verbose = process.argv.includes('--verbose');
 
@@ -65,6 +65,32 @@ for (const plan of CURRICULUM) {
         `${plan.shape.padEnd(14)} ${plan.rows}x${plan.cols}  arrows ${plan.arrowCount}`,
     );
   }
+}
+
+/*
+ * Two properties of the shape library that nothing else was checking.
+ *
+ * Ids must be unique across the four families because `maskFor` resolves them in a
+ * fixed order — analytic, then glyph, then procedural, then bitmap — so a collision
+ * does not error, it silently makes the loser unreachable. `infinity` was defined
+ * as both a bitmap and a glyph for exactly that reason and went unnoticed: the
+ * drawing sat in `SHAPE_NAMES` inflating every count while never rendering.
+ *
+ * And every shape should reach at least one level, since the point of drawing one
+ * is that a player sees it.
+ */
+const duplicates = SHAPE_NAMES.filter((name, i) => SHAPE_NAMES.indexOf(name) !== i);
+if (duplicates.length > 0) {
+  console.log('');
+  console.log(`shape ids are not unique: ${[...new Set(duplicates)].join(', ')}`);
+  problems += duplicates.length;
+}
+
+const unused = SHAPE_NAMES.filter((name) => !shapeCounts.has(name));
+if (unused.length > 0) {
+  console.log('');
+  console.log(`${unused.length} shape(s) reach no level: ${unused.join(', ')}`);
+  problems += unused.length;
 }
 
 console.log('');

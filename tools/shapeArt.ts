@@ -136,7 +136,10 @@ const symbols: ShapeArt[] = [
     '.....######.....',
     '................',
   ]),
-  art('infinity', 'Infinity', 'symbol', [
+  // Renamed off `infinity`, which the glyph family also claims. `maskFor` resolves
+  // glyphs before bitmaps, so under the old id this drawing was unreachable — it
+  // sat in `SHAPE_NAMES` inflating the count and never rendered on a single board.
+  art('infinityBand', 'Infinity Band', 'symbol', [
     '................',
     '................',
     '................',

@@ -750,14 +750,110 @@ function buildOnboarding(): LevelPlan[] {
   return plans;
 }
 
-function buildMainRun(): LevelPlan[] {
-  const rng = mulberry32(20_260_728);
-  const plans: LevelPlan[] = [];
+/**
+ * A level with everything decided except its outline.
+ *
+ * Shape assignment was lifted out of the generation loop so it can see the whole
+ * run at once — see `assignShapes`. Every field here is drawn from the seeded RNG
+ * in exactly the order the single-pass version drew it, which is what guarantees
+ * that giving the library full shape coverage cannot move a tier, a board size, a
+ * fill or a gate.
+ */
+interface LevelDraft {
+  readonly id: number;
+  readonly tier: DifficultyTier;
+  readonly spec: TierSpec;
+  readonly rows: number;
+  readonly cols: number;
+  /** Board size before the rectangular stretch — what `shapePoolFor` keys on. */
+  readonly size: number;
+  readonly planning: boolean;
+  /** The original roll: did this level ask for a silhouette on its own? */
+  readonly wantsShape: boolean;
+  readonly fill: number;
+  readonly blind: number;
+  readonly gate?: GatePlan;
+}
 
-  // Rotate through the shape library rather than picking at random, so a
-  // silhouette cannot appear twice within a few levels of itself.
-  let shapeCursor = 0;
+/**
+ * Give every silhouette in the library at least one level.
+ *
+ * The rotation this replaces reached 60 of 138 shapes across 600 levels, and the
+ * misses were not evenly spread: 98 of the 137 silhouettes are `FRAGMENTING`, so
+ * they are barred from every demanding tier, and 60 of those also need a board
+ * wider than twelve cells. Between them those two filters leave most of the
+ * library competing for the shaped levels inside Tutorial, Easy and Casual — and a
+ * per-level coin flip never deals them all in, however many levels it is given.
+ * Adding levels does not fix it; driving the assignment does.
+ *
+ * Most-constrained shape first, which is the whole trick: a glyph that fits a
+ * handful of boards claims one before a circle that fits everywhere takes it. A
+ * shape only forces a level to *become* shaped once the levels that already wanted
+ * a silhouette are used up, so the cost to density is the smallest the coverage
+ * guarantee allows.
+ *
+ * Deterministic and RNG-free by construction — it reads the drafts and returns a
+ * mapping, so it cannot perturb anything the RNG already decided.
+ */
+function assignShapes(drafts: readonly LevelDraft[]): Map<number, ShapeName> {
+  const pools = new Map<number, readonly ShapeName[]>();
+  for (const draft of drafts) {
+    pools.set(draft.id, shapePoolFor(draft.size, draft.spec.minBlind >= DEMANDING_MIN_BLIND));
+  }
+
+  const assigned = new Map<number, ShapeName>();
+  const silhouettes = SHAPE_NAMES.filter((name) => name !== 'free');
+
+  const ranked = silhouettes
+    .map((shape) => ({
+      shape,
+      slots: drafts.filter((draft) => pools.get(draft.id)!.includes(shape)),
+    }))
+    // Ties broken by name so the order is stable across machines and Node versions.
+    .sort((a, b) => a.slots.length - b.slots.length || a.shape.localeCompare(b.shape));
+
+  // Claims are spread with a rotating cursor rather than taken from the front, so
+  // the guaranteed levels do not all pile into the twenties.
+  let cursor = 0;
+  for (const { shape, slots } of ranked) {
+    const open = slots.filter((draft) => !assigned.has(draft.id));
+    if (open.length === 0) continue;
+    const willing = open.filter((draft) => draft.wantsShape);
+    const from = willing.length > 0 ? willing : open;
+    assigned.set(from[cursor % from.length]!.id, shape);
+    cursor += 1;
+  }
+
+  // Levels that wanted a silhouette and were not claimed fall back to the old
+  // rotation. It is still what stops one outline recurring close to itself.
+  let rotation = 0;
   let lastShape: ShapeName | undefined;
+  for (const draft of drafts) {
+    const claimed = assigned.get(draft.id);
+    if (claimed) {
+      lastShape = claimed;
+      continue;
+    }
+    if (!draft.wantsShape) continue;
+
+    const pool = pools.get(draft.id)!;
+    let shape = pool[rotation % pool.length]!;
+    rotation += 1;
+    for (let skip = 0; skip < pool.length && shape === lastShape; skip += 1) {
+      shape = pool[rotation % pool.length]!;
+      rotation += 1;
+    }
+    assigned.set(draft.id, shape);
+    lastShape = shape;
+  }
+
+  return assigned;
+}
+
+/** Everything about levels 21-600 except which outline each one gets. */
+function draftMainRun(): LevelDraft[] {
+  const rng = mulberry32(20_260_728);
+  const drafts: LevelDraft[] = [];
 
   for (let id = 21; id <= 600; id += 1) {
     const planning = isPlanningLevel(id);
@@ -787,23 +883,10 @@ function buildMainRun(): LevelPlan[] {
     // sequence, and sequence is legible on a board you can see all at once.
     if (planning) size = Math.min(size, 24);
 
-    // Rotate rather than sample, so a silhouette cannot appear twice within a few
-    // levels of itself. The skip loop matters now that the pool differs level to
-    // level — a demanding tier draws from a smaller set, so the same cursor value
-    // can land on the same shape two levels running even though it advanced.
-    let shape: ShapeName;
-    if (rng() < SHAPED_LEVEL_SHARE) {
-      const pool = shapePoolFor(size, spec.minBlind >= DEMANDING_MIN_BLIND);
-      shape = pool[shapeCursor % pool.length]!;
-      shapeCursor += 1;
-      for (let skip = 0; skip < pool.length && shape === lastShape; skip += 1) {
-        shape = pool[shapeCursor % pool.length]!;
-        shapeCursor += 1;
-      }
-    } else {
-      shape = 'free';
-    }
-    lastShape = shape;
+    // Whether this level asks for a silhouette of its own. The roll is kept here,
+    // in the RNG's original position, even though the shape itself is chosen later
+    // — moving it would shift every draw after it and rewrite the whole curve.
+    const wantsShape = rng() < SHAPED_LEVEL_SHARE;
 
     // Shutter levels are not packed (see `build-levels.ts`), so they need a fill
     // that suits an open board rather than the packing target every other level
@@ -829,15 +912,6 @@ function buildMainRun(): LevelPlan[] {
     const rows = size;
     const cols = size + stretch;
 
-    // Bodies are capped on planning levels too, for the same reason — and because
-    // a level asking two hard questions at once usually asks neither well.
-    // On a dense board they are capped differently: long snakes are what keep the
-    // arrow count renderable at four-fifths coverage, but a snake longer than about
-    // a dozen cells on a 24-wide board wraps the whole thing and stops reading as a
-    // shape at all.
-    const maxLen = planning ? Math.min(spec.maxLen, 9) : spec.maxLen;
-    const minLen = Math.min(spec.minLen, maxLen);
-
     const gate: GatePlan | undefined = planning
       ? { mode: 'shuts', groupCount: 1, cellsPerGroup: 1 + Math.floor(rng() * 2) }
       : rng() < spec.gateChance
@@ -848,34 +922,65 @@ function buildMainRun(): LevelPlan[] {
           }
         : undefined;
 
-    plans.push({
+    drafts.push({
       id,
-      name: nameFor(id, shape, planning, gate !== undefined),
       tier,
-      shape,
+      spec,
       rows,
       cols,
-      // Shutter levels are the only ones grown at random rather than packed, so
-      // they are the only ones the conservative fraction still describes.
-      arrowCount: arrowsFor(
-        shape,
-        rows,
-        cols,
-        fill,
-        minLen,
-        maxLen,
-        5,
-        planning ? USABLE_FRACTION : PACKED_USABLE_FRACTION,
-      ),
-      minBodyLength: minLen,
-      maxBodyLength: maxLen,
-      targetBlindMistakes: Number(blind.toFixed(1)),
-      hearts: spec.hearts,
+      size,
+      planning,
+      wantsShape,
+      fill,
+      blind,
       ...(gate ? { gate } : {}),
     });
   }
 
-  return plans;
+  return drafts;
+}
+
+function buildMainRun(): LevelPlan[] {
+  const drafts = draftMainRun();
+  const shapes = assignShapes(drafts);
+
+  return drafts.map((draft) => {
+    const shape = shapes.get(draft.id) ?? 'free';
+
+    // Bodies are capped on planning levels, because a level asking two hard
+    // questions at once usually asks neither well. On a dense board they are capped
+    // differently: long snakes are what keep the arrow count renderable at
+    // four-fifths coverage, but a snake longer than about a dozen cells on a
+    // 24-wide board wraps the whole thing and stops reading as a shape at all.
+    const maxLen = draft.planning ? Math.min(draft.spec.maxLen, 9) : draft.spec.maxLen;
+    const minLen = Math.min(draft.spec.minLen, maxLen);
+
+    return {
+      id: draft.id,
+      name: nameFor(draft.id, shape, draft.planning, draft.gate !== undefined),
+      tier: draft.tier,
+      shape,
+      rows: draft.rows,
+      cols: draft.cols,
+      // Shutter levels are the only ones grown at random rather than packed, so
+      // they are the only ones the conservative fraction still describes.
+      arrowCount: arrowsFor(
+        shape,
+        draft.rows,
+        draft.cols,
+        draft.fill,
+        minLen,
+        maxLen,
+        5,
+        draft.planning ? USABLE_FRACTION : PACKED_USABLE_FRACTION,
+      ),
+      minBodyLength: minLen,
+      maxBodyLength: maxLen,
+      targetBlindMistakes: Number(draft.blind.toFixed(1)),
+      hearts: draft.spec.hearts,
+      ...(draft.gate ? { gate: draft.gate } : {}),
+    };
+  });
 }
 
 /**

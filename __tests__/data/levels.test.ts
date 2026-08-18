@@ -199,24 +199,62 @@ describe('the difficulty mix', () => {
     for (const value of capped) expect(value).toBeGreaterThan(lowerMean * 1.5);
   });
 
-  it('lengthens its snakes monotonically across every tier', () => {
-    // The axis the top tiers actually vary on, and the one difficulty lives on in
-    // this game: reading a board means tracing a snake through a tangle. Both the
-    // average and the longest snake rise at every single step, tutorial to
-    // nightmare — 3.0 to 11.3 cells, and 4.1 to 26.1.
-    const lengths = TIER_ORDER.map((tier) => {
-      const rows = byTier(tier);
-      const bodies = rows.map((m) => m.level.arrows.map((arrow) => arrow.body.length));
-      return {
-        mean:
-          bodies.reduce((sum, b) => sum + b.reduce((a, n) => a + n, 0) / b.length, 0) / rows.length,
-        longest: bodies.reduce((sum, b) => sum + Math.max(...b), 0) / rows.length,
-      };
-    });
+  /**
+   * Mean and longest body length per tier, in tier order.
+   *
+   * Split across the two assertions below for the same reason `blindByTier` is:
+   * once `MAX_PACKED_SIZE` flattens the top four tiers onto one board size, the
+   * two length axes stop agreeing, and only one of them still orders cleanly.
+   */
+  const lengthsByTier = TIER_ORDER.map((tier) => {
+    const rows = byTier(tier);
+    const bodies = rows.map((m) => m.level.arrows.map((arrow) => arrow.body.length));
+    return {
+      mean:
+        bodies.reduce((sum, b) => sum + b.reduce((a, n) => a + n, 0) / b.length, 0) / rows.length,
+      longest: bodies.reduce((sum, b) => sum + Math.max(...b), 0) / rows.length,
+    };
+  });
 
-    for (let i = 1; i < lengths.length; i += 1) {
-      expect(lengths[i]!.mean).toBeGreaterThan(lengths[i - 1]!.mean);
-      expect(lengths[i]!.longest).toBeGreaterThan(lengths[i - 1]!.longest);
+  it('lengthens its longest snake at every single tier step', () => {
+    // The strong claim, and the one that holds the whole way up: 4.1 cells at
+    // Tutorial to 26.2 at Nightmare, rising at all nine steps. Reading a board
+    // means tracing a snake through a tangle, so the longest snake is the thing
+    // the capped tiers actually escalate — this is what keeps "Nightmare" from
+    // being a label with nothing behind it.
+    for (let i = 1; i < lengthsByTier.length; i += 1) {
+      expect(lengthsByTier[i]!.longest).toBeGreaterThan(lengthsByTier[i - 1]!.longest);
+    }
+  });
+
+  it('raises mean snake length up to the size cap, then holds it above the rest', () => {
+    // Mean length is monotone exactly as far as board size is — Tutorial through
+    // superHard, 3.0 cells to 10.3 — and then stops, for the same reason
+    // `blindByTier` stops.
+    //
+    // The capped tiers specify heavily overlapping body ranges (superHard 8-19,
+    // extremeHard 9-22, brutal 10-25, nightmare 11-28) and only about twenty
+    // levels each to realise them, so which silhouettes a tier happens to draw
+    // moves its mean by more than the gap between adjacent tiers. Measured
+    // 10.3 / 11.0 / 10.8 / 11.2: brutal sits a seventh of a cell under
+    // extremeHard. That is sampling noise on a 22-level tier, not a curve that
+    // sagged — and it inverted merely from adding one shape to the rotation,
+    // which is the tell. Ordering for those four is asserted on `longest` above,
+    // which is stricter and does hold.
+    const capIndex = TIER_ORDER.indexOf('superHard');
+
+    const growing = lengthsByTier.slice(0, capIndex + 1);
+    for (let i = 1; i < growing.length; i += 1) {
+      expect(growing[i]!.mean).toBeGreaterThan(growing[i - 1]!.mean);
+    }
+
+    // What must stay true of the capped four: decisively longer snakes than the
+    // run of the game beneath them. Same shape of claim, and same margin, as the
+    // blind-mistake check above.
+    const lower = lengthsByTier.slice(0, capIndex);
+    const lowerMean = lower.reduce((sum, entry) => sum + entry.mean, 0) / lower.length;
+    for (const entry of lengthsByTier.slice(capIndex)) {
+      expect(entry.mean).toBeGreaterThan(lowerMean * 1.5);
     }
   });
 

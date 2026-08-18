@@ -391,9 +391,11 @@ export default function PlayScreen() {
         viewportHeight / layout.height,
         1,
       );
-      return initialScaleForTier(tier, fit);
+      // `layout.cellSize` is what turns the readability floor from a guess into
+      // a measurement: on-screen cell size is exactly cellSize x scale.
+      return initialScaleForTier(tier, fit, layout.cellSize);
     },
-    [tier, layout.width, layout.height, viewportWidth, viewportHeight],
+    [tier, layout.width, layout.height, layout.cellSize, viewportWidth, viewportHeight],
   );
 
   /**

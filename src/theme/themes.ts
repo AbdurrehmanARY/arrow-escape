@@ -64,7 +64,7 @@ const dottedBoard: BoardStyle = {
   // panning and no legibility. On a board small enough to fit, it necessarily
   // costs cell size — the margin has to come out of the same viewport — which is
   // why `MIN_CELL_SIZE` matters more at this value than it did at one.
-  padCells: 6.0,
+  padCells: 8.0,
 };
 
 /**
