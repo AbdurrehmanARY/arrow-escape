@@ -1,9 +1,9 @@
 /**
  * app/levels.tsx — level select.
  *
- * Purpose:      Navigate 600 levels without it feeling like a spreadsheet.
- * Notes:        Two views, because 600 tiles is not a list anyone reads. The
- *               chapter view gives twelve landmarks with progress; opening one
+ * Purpose:      Navigate 1,000 levels without it feeling like a spreadsheet.
+ * Notes:        Two views, because 1,000 tiles is not a list anyone reads. The
+ *               chapter view gives twenty landmarks with progress; opening one
  *               shows its fifty levels. "Halfway through Deep Water" is a
  *               position a player can hold in their head; "level 287" is not.
  *
@@ -93,7 +93,7 @@ export default function LevelSelectScreen() {
 
   // Two different questions, and conflating them is how the testing flag would
   // start lying: `unlocked` is what the UI will let you open, `reached` is where
-  // you genuinely are. With every level open the first is always 600.
+  // you genuinely are. With every level open the first is always `LEVEL_COUNT`.
   const unlocked = useMemo(() => playableUpTo(records, LEVEL_COUNT), [records]);
   const reached = useMemo(() => highestUnlocked(records, LEVEL_COUNT), [records]);
   const clearedTotal = useMemo(() => clearedCount(records), [records]);

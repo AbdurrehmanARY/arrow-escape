@@ -105,7 +105,7 @@ release checklist are in [PROGRESS.md](PROGRESS.md).
 | 16    | Ten difficulty tiers                                        | ✅                    |
 | 17    | Board scale and touch response                              | ✅                    |
 | 18    | UI/UX overhaul and pause menu                               | ✅                    |
-| 19    | Level design document for all 600 levels                    | ⏸ deferred by request |
+| 19    | Level design document for all 1,000 levels                  | ⏸ deferred by request |
 | 20    | Performance pass                                            | ✅                    |
 | 21    | Board density, heart synchronisation, audio system          | ✅                    |
 | 22    | Device playtest and curve retune                            | ⛔ needs you          |

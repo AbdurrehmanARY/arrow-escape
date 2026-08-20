@@ -7,8 +7,8 @@
  * project can ship — it is unrecoverable from inside the game and it looks like
  * the player's fault.
  *
- * With 600 levels this runs as a handful of sweeps rather than a `describe.each`
- * per level: 600 suites of five tests each is 3,000 test cases and minutes of CI
+ * With 1,000 levels this runs as a handful of sweeps rather than a `describe.each`
+ * per level: 1,000 suites of five tests each is 5,000 test cases and minutes of CI
  * for no extra information. A sweep that throws names the offending level.
  */
 
@@ -27,9 +27,9 @@ import { ENCODED_LEVELS, LEVEL_COUNT, levelById, summaryOf, tierOf } from '@data
 const ALL_IDS = Array.from({ length: LEVEL_COUNT }, (_, i) => i + 1);
 
 describe('the shipped level library', () => {
-  it('ships the full 600-level set', () => {
-    expect(LEVEL_COUNT).toBe(600);
-    expect(ENCODED_LEVELS).toHaveLength(600);
+  it('ships the full 1,000-level set', () => {
+    expect(LEVEL_COUNT).toBe(1000);
+    expect(ENCODED_LEVELS).toHaveLength(1000);
   });
 
   it('numbers levels 1..N with no gaps', () => {
@@ -149,7 +149,7 @@ describe('the difficulty mix', () => {
   const byTier = (tier: DifficultyTier) => measured.filter((m) => m.tier === tier);
 
   it('uses every tier', () => {
-    // Ten tiers over 600 levels, and the ends are deliberately thin: Tutorial is
+    // Ten tiers over 1,000 levels, and the ends are deliberately thin: Tutorial is
     // spent by level 100 and Nightmare barely exists before level 450. A dozen is
     // the floor at which a tier is a real band rather than a rounding error.
     for (const tier of TIER_ORDER) {

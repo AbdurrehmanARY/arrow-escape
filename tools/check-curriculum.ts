@@ -8,7 +8,7 @@
  *               practice usable yield is roughly 60% of raw capacity, so a plan
  *               needs real headroom, not a bare fit.
  *
- *               With 600 levels this prints a summary rather than every row;
+ *               With 1,000 levels this prints a summary rather than every row;
  *               `--verbose` lists them all.
  *
  *               Run: `npm run levels:check`
@@ -84,6 +84,25 @@ if (duplicates.length > 0) {
   console.log('');
   console.log(`shape ids are not unique: ${[...new Set(duplicates)].join(', ')}`);
   problems += duplicates.length;
+}
+
+/*
+ * No silhouette may sit beside itself. Caught here as well as in the level tests
+ * because this is a property of the *plan*, and finding it before a 157-second
+ * build is cheaper than finding it after one.
+ */
+const adjacent: string[] = [];
+for (let i = 1; i < CURRICULUM.length; i += 1) {
+  const previous = CURRICULUM[i - 1]!;
+  const current = CURRICULUM[i]!;
+  if (current.shape === previous.shape && current.shape !== 'free') {
+    adjacent.push(`${previous.id}/${current.id} both "${current.shape}"`);
+  }
+}
+if (adjacent.length > 0) {
+  console.log('');
+  console.log(`${adjacent.length} consecutive repeat(s): ${adjacent.join(', ')}`);
+  problems += adjacent.length;
 }
 
 const unused = SHAPE_NAMES.filter((name) => !shapeCounts.has(name));

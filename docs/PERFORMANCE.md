@@ -23,7 +23,7 @@ Worst case in the library — level 586, 58×59, 87 snakes:
 | `isDoomed` | every tap, shutter boards only | < 0.01 ms |
 | `findSafeMove` (hint) | on demand | 0.23 ms |
 | `findAllSafeMoves` (assist) | every tap while Assist is on | 0.20 ms |
-| solve all 600 levels | never, on device | 47 ms |
+| solve all 1,000 levels | never, on device | 410 ms |
 
 **The engine is not the bottleneck, and it is not close.** Everything a tap does in
 `src/game/` is under a hundredth of a millisecond. Even with a phone ten times
@@ -126,7 +126,7 @@ document would be worse than leaving it blank.
 3. **Pinch and pan smoothness at 3,600 cells.** The camera maths is a worklet and
    clamps during the gesture, so the risk is not the maths but the size of the
    transformed subtree.
-4. **Memory and first paint on entering level 600.** Decode is 0.3 ms; mounting a
+4. **Memory and first paint on entering level 1000.** Decode is 0.3 ms; mounting a
    few hundred SVG nodes is not, and is not measurable here.
 5. **Whether `MIN_CELL_SIZE = 26` is right on a small screen.** It decides how much
    board fits at 1:1 against how tappable a cell is. The tap tolerance now forgives
@@ -144,6 +144,6 @@ A dev bundle is several times slower than what ships, so a trace taken against
 Android Studio's profiler, or `adb shell dumpsys gfxinfo <package>` for a quick
 jank histogram.
 
-The one number worth writing down: **play level 600 for a minute and report whether
+The one number worth writing down: **play level 1000 for a minute and report whether
 it feels smooth.** That is more actionable than any trace, because every fix above
 is a threshold constant and each one is a one-line change and a rebuild away.

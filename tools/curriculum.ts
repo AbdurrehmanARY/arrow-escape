@@ -1,5 +1,5 @@
 /**
- * curriculum.ts — the plan for all 600 levels.
+ * curriculum.ts — the plan for all 1,000 levels.
  *
  * Purpose:      Decide what every level is, so the curve is designed rather than
  *               emergent, and so no two levels feel like the same puzzle.
@@ -18,7 +18,7 @@
  *
  *               **After level 20 the difficulty is deliberately shuffled.** A
  *               monotonic ramp is predictable, and predictability is the thing
- *               that makes a 600-level game feel like a treadmill. Tiers are drawn
+ *               that makes a 1,000-level game feel like a treadmill. Tiers are drawn
  *               from a mix that shifts over the game, so the *average* climbs while
  *               any individual level is a surprise. A player who just failed an
  *               Extreme board might get an Easy one next, and that is the point.
@@ -30,7 +30,7 @@
  *               that reason — a planning level that quietly failed to get its
  *               shutter is an ordinary level wearing the wrong name.
  *
- *               Everything is seeded and deterministic: the same 600 levels are
+ *               Everything is seeded and deterministic: the same 1,000 levels are
  *               produced on every machine, on every build.
  */
 
@@ -306,14 +306,89 @@ const PLANNING_STEP = 12;
 const PLANNING_FROM = 120;
 
 /**
+ * One contiguous stretch of the library, drafted from its own RNG stream.
+ *
+ * The library is built as a sequence of runs rather than one loop, and the reason
+ * is the promise at the top of `build-levels.ts`: a level someone has learned must
+ * never silently change under them. Every draw in `draftRun` comes off a single
+ * seeded stream, and `assignShapes` distributes its coverage guarantee across
+ * whatever drafts it is handed — so simply widening `id <= 600` to `id <= 1000`
+ * would have re-rolled the shape of most of the first six hundred levels. Giving
+ * the new levels their own run and their own stream leaves the old ones bit-for-bit
+ * identical, which is a property the build can actually check.
+ *
+ * The cost is that each run needs its own endgame and its own difficulty ramp
+ * stated explicitly, which is what the rest of these fields are.
+ */
+interface RunSpec {
+  readonly from: number;
+  readonly to: number;
+  /** Seed for this run's stream. Distinct per run, or the curve would repeat. */
+  readonly seed: number;
+  /** Ids above this are forced to `nightmare` — the run's closing stretch. */
+  readonly endgameFrom: number;
+  /** Id the blind-mistake drift is measured from: the level before the run. */
+  readonly driftFrom: number;
+  /**
+   * Blind-target multiplier at `driftFrom`, and how much it climbs by `to`.
+   *
+   * Stated as a step rather than as an end value on purpose. `1.15 - 0.85` is
+   * `0.29999999999999993` in binary floating point, so deriving the step by
+   * subtraction moved the last bit of every blind target in the main run — enough
+   * to change nothing a player could see, and enough to make "the old levels are
+   * byte-identical" untrue. The step is the number the maths actually wants.
+   */
+  readonly blindScaleFrom: number;
+  readonly blindScaleStep: number;
+}
+
+/**
+ * The runs, in play order, after onboarding.
+ *
+ * The second exists because the library was extended from 600 levels to 1,000. It
+ * picks the difficulty ramp up exactly where the first left it — the extension's
+ * `blindScaleFrom` is the main run's start plus its step — so the seam is
+ * invisible in play while remaining a hard boundary in the data.
+ */
+const RUNS: readonly RunSpec[] = [
+  {
+    from: 21,
+    to: 600,
+    seed: 20_260_728,
+    endgameFrom: 590,
+    driftFrom: 20,
+    blindScaleFrom: 0.85,
+    blindScaleStep: 0.3,
+  },
+  {
+    from: 601,
+    to: 1000,
+    seed: 20_261_012,
+    endgameFrom: 990,
+    driftFrom: 600,
+    blindScaleFrom: 1.15,
+    blindScaleStep: 0.3,
+  },
+];
+
+/** The last level in the library. */
+export const TOTAL_LEVELS = RUNS[RUNS.length - 1]!.to;
+
+/**
  * True if this level id is one of the planning levels.
  *
- * The last ten are excluded. They are the endgame, they are the biggest boards in
- * the game, and a shutter would force them down to a size that undoes the point of
- * finishing there.
+ * The last ten of **every run** are excluded. They are that run's endgame, they
+ * are its biggest boards, and a shutter would force them down to a size that
+ * undoes the point of finishing there.
+ *
+ * Written against `RUNS` rather than as a bare `id <= 590` because level 600 is a
+ * multiple of twelve: a hardcoded bound raised to cover the new levels would have
+ * quietly turned the old finale into a planning level, which is precisely the kind
+ * of silent change the run split exists to prevent.
  */
 export function isPlanningLevel(id: number): boolean {
-  return id >= PLANNING_FROM && id <= 590 && id % PLANNING_STEP === 0;
+  if (id < PLANNING_FROM || id % PLANNING_STEP !== 0) return false;
+  return !RUNS.some((run) => id > run.endgameFrom && id <= run.to);
 }
 
 /**
@@ -402,6 +477,58 @@ const MIX: readonly MixBand[] = [
       extremeHard: 17,
       brutal: 16,
       nightmare: 7,
+    },
+  },
+  // The extension. The shape of the mix does not change — it keeps sliding the
+  // same way it has since level 20 — but it slides further than the original six
+  // hundred had room to. Easy and Casual are held at a few percent rather than
+  // dropped: the note at the top of `MIX` applies with more force here, not less,
+  // because by level 800 every board that is not deliberate relief is a 50x50
+  // tangle. A player four hundred levels past the old ending still needs somewhere
+  // to breathe.
+  {
+    upTo: 720,
+    weights: {
+      tutorial: 0,
+      easy: 2,
+      casual: 4,
+      medium: 7,
+      tricky: 11,
+      hard: 15,
+      superHard: 19,
+      extremeHard: 19,
+      brutal: 15,
+      nightmare: 8,
+    },
+  },
+  {
+    upTo: 860,
+    weights: {
+      tutorial: 0,
+      easy: 1,
+      casual: 3,
+      medium: 5,
+      tricky: 9,
+      hard: 13,
+      superHard: 17,
+      extremeHard: 20,
+      brutal: 20,
+      nightmare: 12,
+    },
+  },
+  {
+    upTo: 1000,
+    weights: {
+      tutorial: 0,
+      easy: 1,
+      casual: 2,
+      medium: 4,
+      tricky: 7,
+      hard: 10,
+      superHard: 15,
+      extremeHard: 20,
+      brutal: 24,
+      nightmare: 17,
     },
   },
 ];
@@ -795,7 +922,11 @@ interface LevelDraft {
  * Deterministic and RNG-free by construction — it reads the drafts and returns a
  * mapping, so it cannot perturb anything the RNG already decided.
  */
-function assignShapes(drafts: readonly LevelDraft[]): Map<number, ShapeName> {
+function assignShapes(
+  drafts: readonly LevelDraft[],
+  /** Level 20's outline, so the onboarding seam is checked like any other. */
+  precedingShape: ShapeName,
+): Map<number, ShapeName> {
   const pools = new Map<number, readonly ShapeName[]>();
   for (const draft of drafts) {
     pools.set(draft.id, shapePoolFor(draft.size, draft.spec.minBlind >= DEMANDING_MIN_BLIND));
@@ -827,19 +958,36 @@ function assignShapes(drafts: readonly LevelDraft[]): Map<number, ShapeName> {
   // Levels that wanted a silhouette and were not claimed fall back to the old
   // rotation. It is still what stops one outline recurring close to itself.
   let rotation = 0;
-  let lastShape: ShapeName | undefined;
-  for (const draft of drafts) {
+  let lastShape: ShapeName | undefined = precedingShape;
+  for (let i = 0; i < drafts.length; i += 1) {
+    const draft = drafts[i]!;
     const claimed = assigned.get(draft.id);
     if (claimed) {
       lastShape = claimed;
       continue;
     }
-    if (!draft.wantsShape) continue;
+    if (!draft.wantsShape) {
+      // An open rectangle breaks the run, so the next silhouette is unconstrained.
+      lastShape = undefined;
+      continue;
+    }
+
+    // Looking *forward* as well as back is what the single-pass version never had
+    // to do. The claim pass fixes levels out of order, so the next board may
+    // already be spoken for — and picking its shape here would put a silhouette
+    // beside itself, which is exactly what levels 297 and 298 did on the first
+    // build of this function.
+    const next = drafts[i + 1];
+    const nextShape = next ? assigned.get(next.id) : undefined;
 
     const pool = pools.get(draft.id)!;
     let shape = pool[rotation % pool.length]!;
     rotation += 1;
-    for (let skip = 0; skip < pool.length && shape === lastShape; skip += 1) {
+    for (
+      let skip = 0;
+      skip < pool.length && (shape === lastShape || shape === nextShape);
+      skip += 1
+    ) {
       shape = pool[rotation % pool.length]!;
       rotation += 1;
     }
@@ -847,24 +995,61 @@ function assignShapes(drafts: readonly LevelDraft[]): Map<number, ShapeName> {
     lastShape = shape;
   }
 
+  /*
+   * Final guard, over the finished sequence.
+   *
+   * Two claimed levels can still land beside each other holding the same outline,
+   * because the claim pass decides levels in constraint order rather than in play
+   * order and cannot see what it has already put next door. Checking the result is
+   * the only honest way to know.
+   *
+   * Repairs are **swaps**, never reassignments: exchanging two levels' shapes
+   * leaves the multiset untouched, so the coverage guarantee this whole function
+   * exists for cannot be lost while fixing adjacency.
+   */
+  const order = drafts.map((draft) => draft.id);
+  const shapeAt = (k: number): ShapeName | undefined =>
+    k < 0 ? precedingShape : k < order.length ? assigned.get(order[k]!) : undefined;
+
+  for (let i = 0; i < order.length; i += 1) {
+    const here = shapeAt(i);
+    if (!here || here !== shapeAt(i - 1)) continue;
+
+    for (let j = 0; j < order.length; j += 1) {
+      if (j === i || j === i - 1) continue;
+      const other = shapeAt(j);
+      if (!other || other === here) continue;
+      // Both boards have to be able to carry the shape they are being handed,
+      // and the swap must not create the clash it is removing somewhere else.
+      if (!pools.get(order[i]!)!.includes(other)) continue;
+      if (!pools.get(order[j]!)!.includes(here)) continue;
+      if (shapeAt(i - 1) === other || shapeAt(i + 1) === other) continue;
+      if (shapeAt(j - 1) === here || shapeAt(j + 1) === here) continue;
+
+      assigned.set(order[i]!, other);
+      assigned.set(order[j]!, here);
+      break;
+    }
+  }
+
   return assigned;
 }
 
-/** Everything about levels 21-600 except which outline each one gets. */
-function draftMainRun(): LevelDraft[] {
-  const rng = mulberry32(20_260_728);
+/** Everything about one run's levels except which outline each one gets. */
+function draftRun(run: RunSpec): LevelDraft[] {
+  const rng = mulberry32(run.seed);
   const drafts: LevelDraft[] = [];
 
-  for (let id = 21; id <= 600; id += 1) {
+  for (let id = run.from; id <= run.to; id += 1) {
     const planning = isPlanningLevel(id);
 
     // The last ten are the endgame. A mixed curve is right everywhere else, but
-    // finishing 600 levels on a random Medium is a flat note to end on.
-    const tier: DifficultyTier = id > 590 ? 'nightmare' : pickTier(rng, weightsFor(id));
+    // finishing a run on a random Medium is a flat note to end on.
+    const tier: DifficultyTier = id > run.endgameFrom ? 'nightmare' : pickTier(rng, weightsFor(id));
     const spec = TIERS[tier];
 
-    // Level 600 is the largest board in the game.
-    let size = id === 600 ? spec.maxSize : Math.round(lerp(rng, spec.minSize, spec.maxSize));
+    // The run's final level is the largest board in it.
+    let size = id === run.to ? spec.maxSize : Math.round(lerp(rng, spec.minSize, spec.maxSize));
 
     // Density has a reach, and past it the board simply cannot be filled: covering
     // four-fifths of a 60x60 grid needs upwards of 250 snakes, which is past what
@@ -901,9 +1086,12 @@ function draftMainRun(): LevelDraft[] {
     // under the packing target.
     const fill = planning ? 0.45 : lerp(rng, spec.minFill, spec.maxFill);
     // Drift the blind-mistake target upward across the game inside each tier, so
-    // a late Hard level is harder than an early one without changing tier.
-    const drift = (id - 20) / 580;
-    const blind = lerp(rng, spec.minBlind, spec.maxBlind) * (0.85 + drift * 0.3);
+    // a late Hard level is harder than an early one without changing tier. The
+    // scale is carried across the run boundary rather than reset, so a Hard board
+    // at level 700 asks more than a Hard board at level 500.
+    const drift = (id - run.driftFrom) / (run.to - run.driftFrom);
+    const blind =
+      lerp(rng, spec.minBlind, spec.maxBlind) * (run.blindScaleFrom + drift * run.blindScaleStep);
 
     // Slight rectangular variation so not every board is a perfect square. Dense
     // boards lean on this harder: they are all the same silhouette, so size and
@@ -940,9 +1128,9 @@ function draftMainRun(): LevelDraft[] {
   return drafts;
 }
 
-function buildMainRun(): LevelPlan[] {
-  const drafts = draftMainRun();
-  const shapes = assignShapes(drafts);
+function buildRun(run: RunSpec, precedingShape: ShapeName): LevelPlan[] {
+  const drafts = draftRun(run);
+  const shapes = assignShapes(drafts, precedingShape);
 
   return drafts.map((draft) => {
     const shape = shapes.get(draft.id) ?? 'free';
@@ -984,6 +1172,19 @@ function buildMainRun(): LevelPlan[] {
 }
 
 /**
+ * The name each run's last level carries.
+ *
+ * Keyed by id and written down rather than derived, because a finale is the one
+ * level a player is guaranteed to remember reaching, and it must not rename itself
+ * when the library grows past it. 600 keeps the name it shipped with; it is still
+ * the end of something, just no longer the end of everything.
+ */
+const FINALE_NAMES: Readonly<Record<number, string>> = {
+  600: 'Last Word',
+  1000: 'The Thousandth',
+};
+
+/**
  * A level's name.
  *
  * Planning levels get their own vocabulary. It is the only signal in the game that
@@ -991,15 +1192,32 @@ function buildMainRun(): LevelPlan[] {
  * spending a heart deserves to have been warned by something.
  */
 function nameFor(id: number, shape: ShapeName, planning: boolean, gated: boolean): string {
-  if (id === 600) return 'Last Word';
+  const finale = FINALE_NAMES[id];
+  if (finale) return finale;
   if (planning)
     return `${PLANNING_QUALIFIERS[id % PLANNING_QUALIFIERS.length]} ${shapeLabel(shape)}`;
   if (gated) return `${GATED_QUALIFIERS[id % GATED_QUALIFIERS.length]} ${shapeLabel(shape)}`;
   return `${QUALIFIERS[(id * 7) % QUALIFIERS.length]} ${shapeLabel(shape)}`;
 }
 
-/** The full 600-level curriculum, in play order. */
-export const CURRICULUM: readonly LevelPlan[] = [...buildOnboarding(), ...buildMainRun()];
+const ONBOARDING = buildOnboarding();
+
+/**
+ * The full 1,000-level curriculum, in play order.
+ *
+ * Each run is handed the outline of the level immediately before it, so every
+ * seam — onboarding into the main run, and the main run into the extension — is
+ * held to the same no-repeat rule as any other pair of adjacent levels. Seams are
+ * exactly the kind of join a rule quietly stops applying at, and there are two of
+ * them now.
+ */
+export const CURRICULUM: readonly LevelPlan[] = RUNS.reduce<LevelPlan[]>(
+  (plans, run) => {
+    plans.push(...buildRun(run, plans[plans.length - 1]!.shape));
+    return plans;
+  },
+  [...ONBOARDING],
+);
 
 /** Curated 1–5 band for a tier, shown in level select. */
 export function bandOf(tier: DifficultyTier): number {

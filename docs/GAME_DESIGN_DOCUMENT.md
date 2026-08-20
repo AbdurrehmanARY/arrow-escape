@@ -185,7 +185,7 @@ Per the project blueprint, v0.1 does **not** include: coins/currency/economy, un
 
 ## 15. Future Expansion Ideas (post-v0.1, not committed)
 
-- Grow the library from 50 → 600 levels in curated packs.
+- Grow the library from 50 → 1,000 levels in curated packs.
 - Additional layout shapes (star, letters, seasonal shapes).
 - New mechanics explored one at a time and only if they deepen the core (e.g. diagonal arrows, fixed walls, multi-tile arrows, teleport tiles).
 - Optional cosmetic themes.

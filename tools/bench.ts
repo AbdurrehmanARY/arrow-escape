@@ -152,10 +152,14 @@ if (biggestBuilt.ok) {
 }
 
 console.log('--- whole library');
+// Labelled from the library's actual size rather than a written-in number. The
+// sweep has always walked `ENCODED_LEVELS`, so when the library grew to 1,000 the
+// figure was already right and only the caption was lying about what it measured.
+const libraryLabel = `all ${ENCODED_LEVELS.length} levels`;
 console.log(
-  `    decode all 600 levels          ${decodeAll.toFixed(1).padStart(9)} ms  (cached after first read)`,
+  `    decode ${libraryLabel.padEnd(23)}${decodeAll.toFixed(1).padStart(9)} ms  (cached after first read)`,
 );
-console.log(`    solve all 600 levels           ${solveAll.toFixed(1).padStart(9)} ms`);
+console.log(`    solve ${libraryLabel.padEnd(24)}${solveAll.toFixed(1).padStart(9)} ms`);
 console.log(
   `    greedy playthrough of #${biggest.i}      ${playthrough.toFixed(1).padStart(9)} ms  ` +
     `(${biggest.a.length} taps, engine only)`,

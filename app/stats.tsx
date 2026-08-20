@@ -1,8 +1,8 @@
 /**
  * app/stats.tsx — the record of a long game.
  *
- * Purpose:      Show what 600 levels of play actually amounts to.
- * Notes:        Six hundred levels is a commitment, and a progress bar on the menu
+ * Purpose:      Show what 1,000 levels of play actually amounts to.
+ * Notes:        A thousand levels is a commitment, and a progress bar on the menu
  *               is thin reward for it. This is the screen that says what kind of
  *               player someone has been — not just how far, but how cleanly.
  *

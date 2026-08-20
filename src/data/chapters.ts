@@ -1,11 +1,11 @@
 /**
- * chapters.ts — 600 levels, grouped into something a person can navigate.
+ * chapters.ts — 1,000 levels, grouped into something a person can navigate.
  *
  * Purpose:      Give the level list structure, so finding level 380 is a choice
  *               rather than a scroll.
  * Responsibilities:
  *               - Chapter boundaries, names, and progress.
- * Notes:        A flat list of 600 tiles is 120 rows of scrolling with no
+ * Notes:        A flat list of 1,000 tiles is 200 rows of scrolling with no
  *               landmarks. Chapters give the player somewhere to *be* — "I'm
  *               halfway through Deep Water" is a position; "level 287" is a
  *               number.
@@ -15,7 +15,7 @@
  *               curriculum is retuned, but a chapter a player remembers finishing
  *               should not silently rename itself between builds.
  *
- *               Twelve chapters of fifty, matching the pack layout exactly, so a
+ *               Twenty chapters of fifty, matching the pack layout exactly, so a
  *               chapter is also the unit of data that gets loaded.
  */
 
@@ -45,6 +45,17 @@ const NAMES: readonly { name: string; tagline: string }[] = [
   { name: 'The Reckoning', tagline: 'No easy reads left' },
   { name: 'Last Light', tagline: 'For the patient' },
   { name: 'The Long Word', tagline: 'Everything you have learned' },
+  // Chapters 13-20 arrived with the extension from 600 levels to 1,000. The names
+  // are fixed like the others and for the same reason given above: a chapter a
+  // player remembers finishing must not rename itself between builds.
+  { name: 'Second Wind', tagline: 'Past where it used to end' },
+  { name: 'The Undertow', tagline: 'Deeper than it looks' },
+  { name: 'Blackwork', tagline: 'Density without mercy' },
+  { name: 'The Meridian', tagline: 'Too far to turn back' },
+  { name: 'Coldforge', tagline: 'Hard, and then harder' },
+  { name: 'The Labyrinth', tagline: 'Every thread at once' },
+  { name: 'Nightfall', tagline: 'The last of the light' },
+  { name: 'The Long Count', tagline: 'Everything you have left' },
 ];
 
 /** Every chapter, in order. */

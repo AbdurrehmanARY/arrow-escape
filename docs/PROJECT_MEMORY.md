@@ -1,28 +1,30 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** dog-silhouette pass — a 69th bitmap shape added and the library rebuilt; 122 of 600 levels changed silhouette, none changed tier or board size. Previously: end of Phase 22 — the board renders on Skia; frame drops on large boards resolved on device. Phase 19 (level design document) deferred by request.
+> **Last updated:** full-coverage pass — every one of the 138 shapes now reaches a level (was 60), a duplicate shape id fixed, and a Dog silhouette added. Tiers and board sizes untouched throughout. Previously: end of Phase 22 — the board renders on Skia; frame drops on large boards resolved on device. Phase 19 (level design document) deferred by request.
 > Release state and the full remaining checklist live in [PROGRESS.md](PROGRESS.md).
 
 ---
 
 ## Status
 
-**Code-complete at 600 levels.** Playable end to end: 600 generated and
-solver-verified levels drawing on 61 of the 138 silhouettes in the library — the
-rest are open rectangles, which is what packing to four-fifths costs — across
-**ten** difficulty tiers, six
+**Code-complete at 1,000 levels.** Playable end to end: 1,000 generated and
+solver-verified levels drawing on **all 138** shapes in the library — every
+silhouette reaches at least one level, guaranteed by construction rather than by
+luck; see decision 120 — across **ten** difficulty tiers, six
 themes, animation, hearts, hints, persistence, navigation, settings, first-run
 teaching, a full audio layer, and an ads path that is implemented but switched off.
 
-Boards are **packed**: every tier from easy to nightmare fills 79–91% of its
-playable area, averaging 88% across the 560 packed levels. The 40 shutter levels
-sit at 66% deliberately — see decision 86.
+Boards are **packed**: every tier from easy to nightmare fills 79–90% of its
+playable area, averaging 87% across the 928 packed levels. The 72 shutter levels
+sit at 64% deliberately — see decision 86. Note that fill is measured against the
+**mask**, not the grid, so a shaped level reads as emptier than its number — which
+is what full shape coverage costs the low tiers (decision 121).
 
-**Longest** snake length rises monotonically across all ten tiers, 4.1 to 26.2
+**Longest** snake length rises monotonically across all ten tiers, 4.0 to 26.2
 cells, which is the axis difficulty actually lives on here. **Mean** length rises
-3.0 to 10.3 from Tutorial to superHard and then stops ordering cleanly — see
-decision 119.
+3.0 to 10.3 from Tutorial to superHard; past that it is not a safe invariant even
+when it happens to hold — see decision 119.
 
 Audio is **fully wired**: 27 effects and 4 music beds, every one of them reached by
 a real moment in the game. The files themselves are synthesised placeholders, so
@@ -54,7 +56,7 @@ wrong _plans_, are the failure mode. Full proof and the difficulty model are in
 
 ### …and the one exception, added in Phase 15
 
-The paragraph above holds on **560 of the 600 levels**. The other 40 carry a
+The paragraph above holds on **928 of the 1,000 levels**. The other 72 carry a
 `shuts` gate — a cell that is open while its colour is on the board and seals for
 good once the last of that colour leaves. That lets a tap _take a route away_,
 which is the one thing that breaks monotonicity, so on those boards order matters,
@@ -96,8 +98,8 @@ monotone; they buy dependency _depth_, not risk.
 23. **`.npmrc` pins `legacy-peer-deps=true`.** Expo 57 ships a `react-dom` whose peer range excludes the pinned React; mixing strict and legacy installs against one tree prunes packages and silently breaks the babel/jest toolchains.
 24. **Metro caches transformed code with the compiling plugin's version baked in.** Any dependency version change needs `npm run start:clear`, or you get an error naming two versions of a package that only exists once. `start:tunnel` clears by default.
 25. **A `require` of a missing asset cannot be caught.** Metro resolves it at build time, so try/catch is wishful thinking and the app ships a broken module-graph entry. Optional assets go in an explicit registry (`services/audioAssets.ts`) that starts empty.
-26. **Levels are stored as walks, not coordinate lists.** A body is a head plus one character per step (`"4,7:DDRR"`), which is roughly a quarter the size of `[[r,c],…]`. All 600 levels are 159 KB.
-27. **Levels ship in packs of 50, not one file each.** Metro charges real overhead per module and nothing ever needs a level in isolation. 12 modules instead of 600, decoded on demand and cached.
+26. **Levels are stored as walks, not coordinate lists.** A body is a head plus one character per step (`"4,7:DDRR"`), which is roughly a quarter the size of `[[r,c],…]`. All 1,000 levels are 2.7 MB.
+27. **Levels ship in packs of 50, not one file each.** Metro charges real overhead per module and nothing ever needs a level in isolation. 20 modules instead of 1,000, decoded on demand and cached.
 28. **Silhouettes are bitmaps, not formulas.** A circle is an inequality; a guitar is not. 74 hand-drawn 16x16 outlines, supersampled to any board size — point sampling loses thin features like a crown's points at small sizes.
 29. **Masks are repaired after sampling.** Isolated cells and regions too small to hold a snake are pruned, so reported capacity is capacity the generator can actually reach. Without it, generation starves for reasons that look mysterious.
 30. **The generator repairs unsolvable boards rather than resampling.** Solvability needs an acyclic blocking graph, and at Extreme densities nearly every random board has a cycle. Reversing a body flips that arrow's exit direction without touching the silhouette, and every cycle contains a stuck arrow — so flipping stuck arrows breaks cycles far more often than it creates them. This turned a hard build failure at level 157 into all 600 levels in 28 seconds.
@@ -105,7 +107,7 @@ monotone; they buy dependency _depth_, not risk.
 32. **Oversized boards have a minimum cell size and pan instead of shrinking.** Fitting a 27x30 board to a phone gives ~12dp cells: unreadable and untappable. Cells stay at 26dp and the viewport scrolls.
 33. **Touch stays exact at every zoom level for free**, because the per-cell targets live inside the transformed view. No coordinate conversion by hand, which is where this normally breaks.
 34. **The grid is one tiled SVG pattern, not one node per cell.** An 810-cell board would otherwise cost more in grid nodes than in every arrow combined.
-35. **600 levels are grouped into 12 chapters**, matching the pack layout exactly so a chapter is also the unit of data loaded. A chapter opens once the previous one has been _started_, not finished — gating on completion would strand a player stuck on one board behind 550 levels they cannot touch.
+35. **1,000 levels are grouped into 20 chapters**, matching the pack layout exactly so a chapter is also the unit of data loaded. A chapter opens once the previous one has been _started_, not finished — gating on completion would strand a player stuck on one board behind 550 levels they cannot touch.
 36. **Chapter names are fixed, not derived.** Contents shift whenever the curriculum is retuned; a chapter a player remembers finishing must not silently rename itself between builds.
 37. **The app icon is generated from the game's own arrow geometry** (`tools/make-icons.ts`), rasterised with `pngjs` — a thick rounded line is a distance test, a head is three half-plane tests, and 4x4 supersampling handles the edges. It is centred on its _drawn_ bounds rather than its path coordinates, because the stroke radius and arrowhead overhang by different amounts per axis.
 38. **The pan/zoom camera maths is a pure module** (`components/camera.ts`), because it runs as a worklet where a debugger is little help, and an off-by-one in the overhang lets a player lose a 27x30 board off-screen.
@@ -218,6 +220,17 @@ monotone; they buy dependency _depth_, not risk.
 118. **`MIN_CAPACITY_FOR_HARD_TIERS` is the gate a new shape actually has to clear, and it is easy to miss.** The first dog measured 50% fill at the 18x18 reference size against a 55% floor, which silently classified it `FRAGMENTING` and confined it to Tutorial, Easy and Casual — boards of 10 to 24 cells a side, where a detailed silhouette is exactly what does not read. Nothing fails or warns; the shape simply never appears anywhere it would look good. Raising the back and thickening the tail brought it to 61%. Any new shape wants checking against this before it is drawn in detail, not after.
 119. **Mean snake length per tier is not a monotone invariant, and the test asserting it was passing on noise.** Adding one shape to the rotation reshuffles which silhouettes each level draws — 122 of 600 changed — and that alone inverted brutal and extremeHard, 11.03/10.85 becoming 11.00/10.85. The capped tiers specify overlapping body ranges (8-19, 9-22, 10-25, 11-28) and have only ~22 levels each to realise them, so which silhouettes a tier happens to draw moves its mean by more than the gap between adjacent tiers. The claim was split the same way decision 87 split the blind-mistake check: `longest` stays strictly monotone across all ten steps, which is the stronger claim and does hold; `mean` is monotone to superHard and then only required to stay well clear of the tiers below. **Board sizes and tiers were unaffected** — adding a shape consumes no extra RNG draws and seeds derive from level id, so unshaped levels rebuilt byte-identical.
 
+### Added in the full-coverage pass
+
+120. **A per-level coin flip cannot cover a shape library, however many levels it is given.** Rotation reached 60 of 138 shapes across 600 levels, and adding levels would not have fixed it: 98 of the 137 silhouettes are `FRAGMENTING`, so they are barred from every demanding tier, and 60 of those also need a board wider than twelve. Between them the two filters leave most of the library competing for shaped levels inside Tutorial, Easy and Casual. Shape choice therefore moved out of the generation loop into `assignShapes`, which sees all 580 levels at once and claims most-constrained-shape-first — a glyph that fits a handful of boards takes one before a circle that fits everywhere does. The RNG draw that decides *whether* a level is shaped stayed in its original position, so **tier moved 0 and size moved 0**: the curve is bit-for-bit what it was.
+121. **Full coverage is paid for by the low tiers, because that is where the constrained shapes are allowed.** Shaped levels went 161 to 216, almost all of it in Easy (66% shaped) and Casual (64%), taking their arrow counts from 46.0 to 33.1 and 71.3 to 48.0. Mask fill held at ~88%, but fill is measured against the mask and a silhouette occupies only part of the grid — so those boards *look* emptier even though they are packed. This is the tradeoff `SHAPED_LEVEL_SHARE` was set to 0.25 to avoid, now taken deliberately in exchange for every shape being seen. Whether Easy and Casual read as too sparse is a device judgment, not a metric one. Levels landing in their target difficulty band went 154 to 213.
+122. **Deciding things out of play order breaks a rule that only ever looked backwards.** `assignShapes` claims levels in *constraint* order, so by the time the fallback rotation reached level 297 it checked the level before it and picked the dog — which the claim pass had already given to 298. The old single-pass version never needed a forward check because nothing was ever decided ahead of it; lifting the decision out of the loop silently invalidated that assumption. Fixed three ways, because one was not enough: the rotation now avoids the next level's claimed shape as well as the previous one; a repair pass re-checks the *finished* sequence, since two claimed levels can still collide and the claim pass cannot see what it put next door; and the repair works by **swapping** two levels' shapes rather than reassigning one, so the multiset is preserved and fixing adjacency can never cost the coverage guarantee. The seam between onboarding and the main run is now checked too — the two halves choose shapes by completely different means, and nothing had been holding level 20 to 21 to the rule at all.
+123. **`infinity` was defined twice and one of them had never rendered.** A bitmap in `shapeArt.ts` and a glyph in `shapeGlyphs.ts` shared the id. `maskFor` resolves glyphs before bitmaps, so the collision did not error — it silently made the bitmap unreachable while it still sat in `SHAPE_NAMES` inflating every count. `shapes.ts` claimed the ids were "asserted unique in the shape tests"; no such test existed. Renaming the bitmap to `infinityBand` recovered a shape that had been dead the whole time, and `check-curriculum.ts` now fails the build on both a duplicate id and a shape that reaches no level. The general lesson is the one worth keeping: a resolution order that falls through is a collision that cannot report itself.
+124. **`@react-native-google-signin/google-signin` uses a guarded dynamic `require`.** Just like AdMob (`ads.ts`), `@react-native-google-signin/google-signin` reaches for native TurboModule `RNGoogleSignin` which is absent in Expo Go. Top-level static imports caused Expo Go to crash on launch with `TurboModuleRegistry.getEnforcing: RNGoogleSignin could not be found`. `src/services/auth.ts` now checks `TurboModuleRegistry.get('RNGoogleSignin')` before requiring the module, allowing Expo Go to run cleanly with auth safely disabled.
+125. **The library grows by adding a *run*, not by widening a loop.** Extending 600 levels to 1,000 looked like changing `id <= 600` to `id <= 1000`. It is not: `assignShapes` (decision 120) spreads its most-constrained-first coverage guarantee across whatever drafts it is handed, so a longer draft list re-deals the claims and **56 of the first 600 levels changed silhouette** — arrow counts and names with them. `tools/curriculum.ts` now describes the library as a list of `RunSpec`s, each with its own seed, its own endgame and its own slice of the difficulty ramp, and each drafted and shape-assigned independently. Levels 1–600 rebuilt **byte-identical** (`md5sum` on packs 01–12, before and after), which is the property the build header has always promised and which nothing was actually checking.
+126. **`1.15 - 0.85` is `0.29999999999999993`, and that was enough to break the freeze.** Parameterising the blind-mistake ramp as `from`/`to` and deriving the step by subtraction moved the last bit of every target in the main run. It changed no level a player could see — `targetBlindMistakes` is rounded to one decimal — but it changed 101 of 580 drafts, so "the old levels are identical" became untrue for a reason invisible in the output. The ramp is stated as `blindScaleFrom` plus `blindScaleStep` instead. The general point: when a refactor must preserve a bit-exact result, express the arithmetic the way the original expressed it, not the way that reads better.
+127. **A hardcoded endgame bound is a trap when the endgame moves.** `isPlanningLevel` ended at `id <= 590` to keep shutters off the last ten levels. Level 600 is a multiple of 12, so raising that bound to cover the new levels would have quietly turned the old finale into a planning level. It now asks `RUNS` whether an id falls in *any* run's closing ten, so the exclusion follows the endgames rather than restating one of them.
+
 ### Reversed along the way
 
 - **The SVG render layer was deleted in the Skia migration** — `BoardCanvas.tsx`, `ArrowSnake.tsx` and `BoardViewport.tsx`, along with `arrowSnakeMemo`, `heartsUi` and `hintGlow`, which all asserted against a mocked SVG element tree that no longer exists. `heartsUi` was the test that caught the swallowed-tap bug; its coverage is partially replaced by `__tests__/render/heartsThroughSkia.test.tsx`, which exercises the same chain minus the gesture-handler wiring. That gap is real and recorded here rather than glossed over.
@@ -234,7 +247,7 @@ monotone; they buy dependency _depth_, not risk.
 | `npm run verify`                     | typecheck + tests + level validation. Run before every commit |
 | `npm start` / `npm run start:tunnel` | Expo dev server (use tunnel on this machine — see below)      |
 | `npm run levels:check`               | prove every curriculum plan fits its shape                    |
-| `npm run levels:build`               | regenerate all 600 levels (deterministic, ~3 min)             |
+| `npm run levels:build`               | regenerate all 1,000 levels (deterministic, ~4 min)           |
 | `npm run levels:validate`            | re-verify the level JSON on disk                              |
 | `npm run levels:preview`             | render every theme to an HTML page                            |
 
@@ -259,7 +272,7 @@ Full breakdown, with the release checklist, in [PROGRESS.md](PROGRESS.md).
 
 - **You:** play through on device. The things to judge are pacing, whether the
   packed boards read or overwhelm, and the 5-heart budget.
-- **Phase 19 (deferred by request):** the level design document covering all 600
+- **Phase 19 (deferred by request):** the level design document covering all 1,000
   levels. Two questions still open on its fields and format.
 - **Assets:** all 31 audio files exist and all 31 are now played, but every one is
   **synthesised by `npm run sounds:build`, not recorded or composed** — clean and
@@ -270,7 +283,7 @@ Full breakdown, with the release checklist, in [PROGRESS.md](PROGRESS.md).
   feature graphic, screenshots — which cannot be generated and blocks submission.
 - **Accounts:** AdMob ([ADS_SETUP.md](ADS_SETUP.md)), Play Console ([RELEASE.md](RELEASE.md)).
 - **Unproven on hardware:** the ads path has never run against a real SDK, and the
-  600-level library has never been played end to end by a person.
+  1,000-level library has never been played end to end by a person.
 
 ## Risks
 

@@ -1,14 +1,15 @@
 /**
  * codec.ts — the on-disk level format.
  *
- * Purpose:      Store 600 levels, some of them very large, without bloating the
+ * Purpose:      Store 1,000 levels, some of them very large, without bloating the
  *               app bundle.
  * Responsibilities:
  *               - `encodeLevel` / `decodeLevel` between the compact wire form and
  *                 the `LevelDefinition` the engine plays.
  * Notes:        The obvious format — every body as `[[r,c],[r,c],…]` — costs
  *               roughly 9 bytes per cell. An extreme level can hold 90 snakes of
- *               6 cells, and 600 of those is megabytes of JSON parsed at launch.
+ *               6 cells, and a thousand of those is megabytes of JSON parsed at
+ *               launch.
  *
  *               A body is a *walk*, so only its head needs coordinates; the rest
  *               is one character per step. `"4,7:DDRR"` replaces five coordinate
@@ -31,7 +32,8 @@ import type { ArrowSpec, GateMode, LevelDefinition } from './types';
  * Difficulty tiers, as authored in the curriculum.
  *
  * Ten rather than five. Five was enough when a level could only vary in how hard
- * it was to read, but with 600 of them each tier had to cover a range wide enough
+ * it was to read, but with hundreds of them each tier had to cover a range wide
+ * enough
  * that "Hard" meant almost nothing — the easiest Hard board and the hardest one
  * were a different game. Ten bands are narrow enough that the label is a promise.
  *
@@ -51,7 +53,7 @@ export type DifficultyTier =
   | 'brutal'
   | 'nightmare';
 
-/** A level in its stored form. Field names are short because there are 600 of them. */
+/** A level in its stored form. Field names are short because there are 1,000 of them. */
 export interface EncodedLevel {
   /** id */
   readonly i: number;
@@ -97,7 +99,8 @@ export interface EncodedGate {
   readonly c: string;
 }
 
-/** One pack file. Levels are grouped so 600 of them are not 600 Metro modules. */
+/** One pack file. Levels are grouped so a thousand of them are not a thousand
+ * Metro modules. */
 export interface LevelPack {
   readonly from: number;
   readonly to: number;

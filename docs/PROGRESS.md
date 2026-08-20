@@ -20,9 +20,10 @@ more code — so the last 13% will not take 13% of the effort, in either directi
 | ------ | -------------------------------------------------- | ---------------------- |
 | 0–10   | Foundation through first-run teaching              | ✅ shipped to gate     |
 | 11–14  | 600-level library, chapters, themes, shape library | ✅                     |
+| —      | extended to a 1,000-level library (20 packs, 20 chapters) | ✅          |
 | 15–17  | Gates, shutters, ten tiers, board scale and touch  | ✅                     |
 | 18     | UI/UX overhaul, pause menu                         | ✅                     |
-| 19     | Level design document for all 600 levels           | ⏸ deferred by request  |
+| 19     | Level design document for all 1,000 levels         | ⏸ deferred by request  |
 | 20     | Performance pass                                   | ✅                     |
 | **21** | **Density, heart sync, audio system**              | **✅ this pass**       |
 | 22     | Device playtest and curve retune                   | ⛔ blocked on you      |
@@ -30,7 +31,7 @@ more code — so the last 13% will not take 13% of the effort, in either directi
 
 **The honest summary:** the game is code-complete and every automated check is
 green. What stands between here and the Play Store is not engineering. It is 31
-audio files, an AdMob account, a Play Console listing, and a human playing 600
+audio files, an AdMob account, a Play Console listing, and a human playing 1,000
 levels to find out whether the difficulty curve is real.
 
 ---
@@ -40,7 +41,7 @@ levels to find out whether the difficulty curve is real.
 ### The rules engine
 
 - Snake arrows, ray-based escape, hearts, win/lose/stuck states.
-- **Provably solvable levels**: 600 of 600 verified by the solver at build time, and
+- **Provably solvable levels**: 1,000 of 1,000 verified by the solver at build time, and
   the recorded solution for each replayed and checked.
 - Two gate types. `opens` adds depth without breaking anything; `shuts` deliberately
   breaks monotonicity, which is what makes 40 levels about _order_ rather than
@@ -52,7 +53,7 @@ levels to find out whether the difficulty curve is real.
 
 ### The level library
 
-- **600 levels**, 10 tiers, 69,725 arrows.
+- **1,000 levels**, 10 tiers, 125,664 arrows.
 - 64 distinct silhouettes used, from a library of 137. The rest of the boards are
   open rectangles — that ratio is the direct cost of packing to four-fifths, since
   a silhouette can only ever fill part of its grid.
@@ -62,7 +63,7 @@ levels to find out whether the difficulty curve is real.
   only if an end's ray is clear of what is already placed — and because the peel
   order is exactly the reverse of the placement order, the check made at build time
   _is_ the check the rules make at play time. The board cannot contain a cycle.
-- Build time: **194 seconds** for all 600.
+- Build time: **249 seconds** for all 1,000.
 
 ### Presentation
 
@@ -202,7 +203,7 @@ build:
 
 ### Needs a physical device
 
-- [ ] **Play the 600 levels.** The curve has never been validated by a human.
+- [ ] **Play the 1,000 levels.** The curve has never been validated by a human.
       `expectedBlindMistakes` models a random tapper; a real player reads
       partially, so true difficulty sits somewhere below the model. Expect to
       retune `tools/curriculum.ts` afterwards.
@@ -216,7 +217,7 @@ build:
       `SFX_GAIN` are reasoned, not heard.
 - [ ] **Prove the ads path against a real SDK.** It has never run; installing it
       breaks Expo Go, so the first dev-client build is where it gets tested.
-- [ ] **Check the smallest screen you have** — 532 of 600 boards need zoom and pan.
+- [ ] **Check the smallest screen you have** — 928 of 1,000 boards need zoom and pan.
 
 ### Engineering, non-blocking
 
@@ -225,7 +226,7 @@ build:
       building. Decision 79 in [PROJECT_MEMORY.md](PROJECT_MEMORY.md) is what that
       gap cost once already.
 - [ ] Audio service tests — currently only its _absence_ is proven harmless.
-- [ ] Phase 19: the level design document covering all 600 levels (deferred; two
+- [ ] Phase 19: the level design document covering all 1,000 levels (deferred; two
       questions still open on fields and format).
 - [ ] Revisit `MAX_PACKED_SIZE = 50` if the top four tiers feel too alike on
       device. Raising it trades density for board size — they fight past 50.

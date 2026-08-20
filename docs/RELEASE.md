@@ -147,7 +147,7 @@ nothing goes live until you promote it in the Play Console. Suggested path:
 
 ## After v0.1
 
-All 600 levels ship. What has _not_ been validated is the curve against real
+All 1,000 levels ship. What has _not_ been validated is the curve against real
 people: `expectedBlindMistakes` models a player tapping at random, and a real
 player reads partially — better than random, worse than perfect — so the true
 difficulty sits somewhere below the model.
