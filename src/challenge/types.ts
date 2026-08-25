@@ -71,6 +71,7 @@ export interface ChallengeStats {
   /** Consecutive days won, counting back from the most recent challenge day. */
   readonly currentStreak: number;
   readonly longestStreak: number;
+  readonly highestWinStreak: number;
   /** Fastest win in ms, or `undefined` with no wins. */
   readonly bestTimeMs: number | undefined;
   readonly totalHintsUsed: number;

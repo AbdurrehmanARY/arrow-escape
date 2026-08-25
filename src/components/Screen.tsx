@@ -51,11 +51,14 @@ export function Screen({ children, scroll = false, padded = true }: ScreenProps)
         backgroundColor={palette.background}
       />
       {scroll ? (
-        <ScrollView contentContainerStyle={padding} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.containerMax, padding]}
+          showsVerticalScrollIndicator={false}
+        >
           {children}
         </ScrollView>
       ) : (
-        <View style={[styles.body, padding]}>{children}</View>
+        <View style={[styles.body, styles.containerMax, padding]}>{children}</View>
       )}
     </View>
   );
@@ -156,7 +159,13 @@ export function IconButton({ palette, glyph, label, onPress, active = false }: I
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  body: { flex: 1 },
+  body: { flex: 1 },
+  containerMax: {
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
+
 
   header: {
     flexDirection: 'row',

@@ -131,17 +131,6 @@ export interface LevelDefinition {
   /** Wrong taps the player may make before the level fails. Defaults to 5. */
   readonly hearts?: number;
   readonly arrows: readonly ArrowSpec[];
-  /**
-   * Permanently impassable cells, as `[row, col]` pairs.
-   *
-   * Walls never change, so they are pure geometry: they carve the board into
-   * corridors and force heads to line up with the gaps. An arrow whose head-ray
-   * meets a wall can never leave, which makes the board unsolvable — the
-   * validator rejects that rather than shipping it.
-   */
-  readonly walls?: readonly (readonly number[])[];
-  /** Cells whose passability is tied to a colour group. See `GateSpec`. */
-  readonly gates?: readonly GateSpec[];
   /** Canonical winning tap order, written by the validator. Verified in CI. */
   readonly solution?: readonly ArrowId[];
 }
@@ -173,27 +162,8 @@ export interface Board {
   readonly cellCount: number;
   /** Indexed by arrow index. Index — not id — is the currency inside the engine. */
   readonly arrows: readonly Arrow[];
-
-  /** `CellIndex` → 1 if permanently impassable. Never changes during play. */
-  readonly walls: Uint8Array;
-  /** `CellIndex` → controlling group index, or `NO_GROUP` if the cell is not a gate. */
-  readonly gateGroup: Int32Array;
-  /** `CellIndex` → 1 if the gate `opens` when its group clears, 0 if it `shuts`. */
-  readonly gateOpens: Uint8Array;
-  /** Colour group names, in the order arrows and gates reference them. */
+  /** Colour group names, in the order arrows reference them. */
   readonly groups: readonly string[];
-
-  /**
-   * True if any gate on this board `shuts`.
-   *
-   * Read as "does tap order matter here". The solver branches on it: without
-   * shutters the board is a DAG that Kahn's algorithm peels in microseconds, and
-   * with them it is a genuine search. Precomputed so the hot path never has to
-   * scan for it. See `GateMode`.
-   */
-  readonly hasShutters: boolean;
-  /** True if the board has any wall or gate at all. Lets the ray walk skip a check. */
-  readonly hasObstacles: boolean;
 }
 
 /**
@@ -216,9 +186,6 @@ export interface BoardState {
   readonly remaining: number;
   /**
    * Group index → how many of its arrows are still on the board.
-   *
-   * Derived data, but stored rather than recomputed because `castRay` consults it
-   * once per gate cell it crosses and is the hottest function in the codebase.
    */
   readonly groupsLeft: Int32Array;
 }
@@ -240,34 +207,19 @@ export type MoveOutcome =
       readonly exitDistance: number;
       /** Body length, so the view knows how long the tail takes to follow. */
       readonly bodyLength: number;
-      /**
-       * The escaping arrow's colour group, or `NO_GROUP`.
-       *
-       * Carried on the outcome rather than looked up from the board so that
-       * `applyOutcome` stays a function of `(state, outcome)` alone. It is the one
-       * piece of arrow identity the state transition needs, and threading the
-       * whole board through every call site to fetch a single integer would be a
-       * poor trade.
-       */
       readonly group: number;
     }
   | {
       /** Something stands in the head's way. Costs a heart; the board is unchanged. */
       readonly kind: 'blocked';
       readonly arrowIndex: number;
-      /** The arrow in the way, or `EMPTY` when a wall or a closed gate stopped it. */
+      /** The arrow in the way. */
       readonly blockerIndex: number;
-      /**
-       * What stopped it. The view says something different for each: another snake
-       * pulses orange, a wall shudders, a gate shows the colour that would open it.
-       * Telling the player *why* is the whole difference between a fair heart and a
-       * baffling one.
-       */
-      readonly blockerKind: 'arrow' | 'wall' | 'gate';
-      /** Controlling group of the gate that stopped it, or `NO_GROUP`. */
-      readonly blockerGroup: number;
+      readonly blockerKind: 'arrow';
       /** Where the collision happens — the view flashes this cell. */
       readonly blockedAt: CellIndex;
+      /** Free cells between the head and the obstacle (stopping distance). */
+      readonly freeCells?: number;
     }
   | {
       /** The tap was not a legal request (bad index, or already gone). */

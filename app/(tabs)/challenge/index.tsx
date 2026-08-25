@@ -1,61 +1,42 @@
 /**
- * app/challenge.tsx — Challenge Mode's home.
+ * app/(tabs)/challenge/index.tsx — Challenge Mode Home.
  *
- * Purpose:      Show today's challenge, the month's calendar, and how the player
- *               is doing.
- * Responsibilities:
- *               - Today's puzzle, its difficulty, and whether it is done.
- *               - A month grid with a dot per completed day.
- *               - Streak and record summary.
- *               - Month navigation, and playing any past day.
- * Notes:        Every number on this screen is **derived from the stored records**,
- *               never read from a stored counter — see `challengeStore`. The month
- *               being viewed is local state; the day being played is a route
- *               parameter, so a challenge is a deep link and will still be one when
- *               sharing arrives.
- *
- *               There is no reward, league or leaderboard UI here, deliberately.
- *               The brief asked for those to be designed *for* rather than built,
- *               and an empty rewards shelf teaches a player the feature is dead.
+ * Purpose:      Display monthly challenge calendar, trophy progress, and month
+ *               navigation matching reference design.
  */
 
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 
-import { PillButton, Screen, ScreenHeader, useTheme, withClick } from '@components';
+import {
+  MonthlyTrophyModal,
+  Screen,
+  Springy,
+  useTheme,
+  withClick,
+} from '@components';
 import {
   challengeFor,
   challengeId,
   daysInMonth,
-  earnedCount,
   firstWeekdayOfMonth,
-  nextReward,
-  REWARDS,
   isChallengeDay,
   today,
   type ChallengeDate,
 } from '@challenge';
-import { TIER_LABELS } from '@game/codec';
-import { tierOf } from '@data/levels';
-import { statsOf, useChallengeStore } from '@state/challengeStore';
+import { useChallengeStore } from '@state/challengeStore';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
 const MONTHS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ] as const;
+
+const TROPHY_GOLD = require('../../../assets/images/trophy_gold.png');
+const TROPHY_SILVER = require('../../../assets/images/trophy_silver.png');
 
 /** `2:05` from milliseconds. Challenges are minutes, never hours. */
 export function formatDuration(ms: number): string {
@@ -71,26 +52,38 @@ export default function ChallengeScreen() {
 
   const now = useMemo(() => today(), []);
   const [view, setView] = useState({ year: now.year, month: now.month });
-
-  const records = useChallengeStore((state) => state.records);
-  const stats = useMemo(() => statsOf({ records }, now), [records, now]);
-
-  /**
-   * Which day the card at the top is describing. Defaults to today.
-   *
-   * Selecting a day **stays on this screen** rather than pushing a detail route.
-   * A calendar and a card describing one of its cells are one thing, and splitting
-   * them across two screens meant every glance at a past day cost a navigation
-   * there and a back press home. The card is the header for the calendar under it,
-   * so the calendar changes the header — and Play is where it always was.
-   */
   const [selected, setSelected] = useState<ChallengeDate>(now);
 
-  const selectedLevel = challengeFor(selected);
-  const selectedTier = selectedLevel === undefined ? undefined : tierOf(selectedLevel);
-  const selectedRecord = records[challengeId(selected)];
-  const selectedIsToday =
-    selected.year === now.year && selected.month === now.month && selected.day === now.day;
+  const records = useChallengeStore((state) => state.records);
+
+  const shiftMonth = useCallback((delta: number) => {
+    setView((current) => {
+      const d = new Date(current.year, current.month - 1 + delta, 1);
+      return { year: d.getFullYear(), month: d.getMonth() + 1 };
+    });
+  }, []);
+
+  const isCurrentMonth = view.year === now.year && view.month === now.month;
+  const monthDays = daysInMonth(view.year, view.month);
+
+  const monthWins = useMemo(() => {
+    let won = 0;
+    for (let day = 1; day <= monthDays; day += 1) {
+      const record = records[challengeId({ ...view, day })];
+      if (record?.outcome === 'won') won += 1;
+    }
+    return won;
+  }, [records, view, monthDays]);
+
+  const isMonthCompleted = monthWins === monthDays;
+
+  const cells = useMemo(() => {
+    const lead = firstWeekdayOfMonth(view.year, view.month);
+    const count = daysInMonth(view.year, view.month);
+    const out: (number | null)[] = Array.from({ length: lead }, () => null);
+    for (let day = 1; day <= count; day += 1) out.push(day);
+    return out;
+  }, [view]);
 
   const play = useCallback(
     (date: ChallengeDate) => {
@@ -101,418 +94,346 @@ export default function ChallengeScreen() {
     [router],
   );
 
-  const shiftMonth = useCallback((delta: number) => {
-    setView((current) => {
-      const d = new Date(current.year, current.month - 1 + delta, 1);
-      return { year: d.getFullYear(), month: d.getMonth() + 1 };
-    });
-  }, []);
+  const selectedRecord = records[challengeId(selected)];
+  const isSelectedWon = selectedRecord?.outcome === 'won';
+  const [showTrophyModal, setShowTrophyModal] = useState(false);
 
-  // A leading blank for each day before the 1st, so the grid lines up under the
-  // weekday headings. Monday-first — see `firstWeekdayOfMonth`.
-  const cells = useMemo(() => {
-    const lead = firstWeekdayOfMonth(view.year, view.month);
-    const count = daysInMonth(view.year, view.month);
-    const out: (number | null)[] = Array.from({ length: lead }, () => null);
-    for (let day = 1; day <= count; day += 1) out.push(day);
-    return out;
-  }, [view]);
-
-  const monthWins = useMemo(() => {
-    let won = 0;
-    for (let day = 1; day <= daysInMonth(view.year, view.month); day += 1) {
-      const record = records[challengeId({ ...view, day })];
-      if (record?.outcome === 'won') won += 1;
-    }
-    return won;
-  }, [records, view]);
-
-  const isCurrentMonth = view.year === now.year && view.month === now.month;
-  const monthDays = daysInMonth(view.year, view.month);
-
-  // Reward standing, shown as a nudge rather than a separate trip.
-  const earned = useMemo(() => earnedCount(stats), [stats]);
-  const next = useMemo(() => nextReward(stats), [stats]);
-  const totalRewards = REWARDS.length;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return Math.abs(gestureState.dx) > 20 && Math.abs(gestureState.dy) < 30;
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx < -40) {
+            if (!isCurrentMonth) {
+              shiftMonth(1);
+            }
+          } else if (gestureState.dx > 40) {
+            shiftMonth(-1);
+          }
+        },
+      }),
+    [isCurrentMonth, shiftMonth],
+  );
 
   return (
-    <Screen scroll>
-      <ScreenHeader
-        palette={palette}
-        title="Challenge"
-        subtitle="A new puzzle every day"
-        onBack={() => router.back()}
-      />
+    <Screen scroll={false}>
+      <View style={styles.container} {...panResponder.panHandlers}>
+        {/* ---- Trophy header with month navigation arrows ------------------ */}
+        <View style={styles.trophyHeader}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Previous month"
+            onPress={withClick(() => shiftMonth(-1))}
+            style={[styles.arrowButton, { backgroundColor: palette.accentMuted }]}
+            hitSlop={12}
+          >
+            <FontAwesome name="chevron-left" size={14} color={palette.accent} />
+          </Pressable>
 
-      {/*
-        ---- The selected day ------------------------------------------
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View ${MONTHS[view.month - 1]} ${view.year} challenge trophy`}
+            onPress={withClick(() => setShowTrophyModal(true))}
+            style={styles.trophyContainer}
+          >
+            <Image
+              source={isMonthCompleted ? TROPHY_GOLD : TROPHY_SILVER}
+              style={styles.trophyImage}
+              resizeMode="contain"
+            />
+          </Pressable>
 
-        This card is the calendar's header, not a separate screen. Tapping a cell
-        below changes what it describes; Play always plays whatever it is showing.
-      */}
-      <View style={[styles.today, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-        <Text style={[styles.todayDate, { color: palette.textMuted }]}>
-          {MONTHS[selected.month - 1]} {selected.day}
-          {selected.year === now.year ? '' : ` ${selected.year}`}
-          {selectedIsToday ? ' · TODAY' : ''}
-        </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Next month"
+            onPress={withClick(() => shiftMonth(1))}
+            disabled={isCurrentMonth}
+            style={[
+              styles.arrowButton,
+              { backgroundColor: palette.accentMuted },
+              isCurrentMonth && { opacity: 0.4 },
+            ]}
+            hitSlop={12}
+          >
+            <FontAwesome
+              name="chevron-right"
+              size={14}
+              color={isCurrentMonth ? palette.textFaint : palette.accent}
+            />
+          </Pressable>
+        </View>
 
-        {selectedTier ? (
-          <View style={[styles.badge, { backgroundColor: palette.accentMuted }]}>
-            <Text style={[styles.badgeText, { color: palette.accent }]}>
-              {TIER_LABELS[selectedTier]}
-            </Text>
-          </View>
-        ) : null}
-
-        {selectedRecord?.outcome === 'won' ? (
-          <>
-            <Text style={[styles.doneMark, { color: palette.success }]}>Completed</Text>
-            <View style={styles.resultRow}>
-              <Stat palette={palette} label="Time" value={formatDuration(selectedRecord.timeMs)} />
-              <Stat palette={palette} label="Moves" value={String(selectedRecord.moves)} />
-              <Stat palette={palette} label="Hearts" value={`${selectedRecord.heartsLeft}/5`} />
-              <Stat palette={palette} label="Hints" value={String(selectedRecord.hintsUsed)} />
+        {/* ---- Progress Pill ----------------------------------------------- */}
+        <View style={styles.progressRow}>
+          <View style={[styles.progressTrack, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  backgroundColor: palette.success,
+                  width: `${Math.max(14, Math.round((monthWins / monthDays) * 100))}%`,
+                },
+              ]}
+            >
+              <Text style={[styles.progressCount, { color: palette.textOnAccent }]}>{monthWins}</Text>
             </View>
-            <PillButton palette={palette} label="Play again" onPress={() => play(selected)} />
-          </>
-        ) : (
-          <>
-            <Text style={[styles.todayHint, { color: palette.textMuted }]}>
-              {selectedRecord
-                ? 'You ran out of hearts. The board is still winnable.'
-                : selectedIsToday
-                  ? 'One hard puzzle. Same for everyone, everywhere.'
-                  : 'Not played yet. Past challenges stay open.'}
-            </Text>
-            <PillButton palette={palette} label="Play" primary onPress={() => play(selected)} />
-          </>
-        )}
-      </View>
+          </View>
+          <Text style={[styles.progressTotal, { color: palette.textFaint }]}>{monthDays}</Text>
+        </View>
 
-      {/* ---- Streak and records --------------------------------------- */}
-      <View style={styles.statRow}>
-        <Stat palette={palette} label="Streak" value={String(stats.currentStreak)} big />
-        <Stat palette={palette} label="Best streak" value={String(stats.longestStreak)} big />
-        <Stat palette={palette} label="Won" value={String(stats.won)} big />
-        <Stat
-          palette={palette}
-          label="Fastest"
-          value={stats.bestTimeMs === undefined ? '—' : formatDuration(stats.bestTimeMs)}
-          big
-        />
-      </View>
-
-      {/* ---- Calendar -------------------------------------------------- */}
-      <View style={styles.monthBar}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Previous month"
-          onPress={withClick(() => shiftMonth(-1))}
-          hitSlop={12}
-        >
-          <Text style={[styles.monthArrow, { color: palette.accent }]}>‹</Text>
-        </Pressable>
-
-        <Text style={[styles.monthLabel, { color: palette.text }]}>
+        {/* ---- Month Title ------------------------------------------------- */}
+        <Text style={[styles.monthTitle, { color: palette.accent }]}>
           {MONTHS[view.month - 1]} {view.year}
         </Text>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Next month"
-          onPress={withClick(() => shiftMonth(1))}
-          disabled={isCurrentMonth}
-          hitSlop={12}
-        >
-          <Text
-            style={[
-              styles.monthArrow,
-              { color: isCurrentMonth ? palette.textFaint : palette.accent },
-            ]}
-          >
-            ›
-          </Text>
-        </Pressable>
-      </View>
-
-      {/*
-        Month progress, as a bar rather than only a number.
-
-        The count alone ("6 of 31") is accurate and says nothing about *shape* — a
-        bar shows at a glance whether a month is nearly done or barely begun, which
-        is the thing that makes someone come back tomorrow.
-      */}
-      <View style={styles.progressRow}>
-        <View style={[styles.progressTrack, { backgroundColor: palette.surfaceRaised }]}>
-          <View
-            style={[
-              styles.progressFill,
-              {
-                backgroundColor: palette.success,
-                width: `${Math.max(8, Math.round((monthWins / monthDays) * 100))}%`,
-              },
-            ]}
-          >
-            <Text style={[styles.progressCount, { color: palette.textOnAccent }]}>
-              {monthWins}
+        {/* ---- Weekday Headers --------------------------------------------- */}
+        <View style={styles.weekHeader}>
+          {WEEKDAYS.map((day) => (
+            <Text key={day} style={[styles.weekday, { color: palette.textMuted }]}>
+              {day}
             </Text>
-          </View>
+          ))}
         </View>
-        <Text style={[styles.progressTotal, { color: palette.textFaint }]}>{monthDays}</Text>
-      </View>
 
-      <View style={styles.weekHeader}>
-        {WEEKDAYS.map((day) => (
-          <Text key={day} style={[styles.weekday, { color: palette.textFaint }]}>
-            {day}
-          </Text>
-        ))}
-      </View>
+        {/* ---- Calendar Grid ----------------------------------------------- */}
+        <View style={styles.grid}>
+          {cells.map((day, index) => {
+            if (day === null) return <View key={`pad${index}`} style={styles.cell} />;
 
-      <View style={styles.grid}>
-        {cells.map((day, index) => {
-          if (day === null) return <View key={`pad${index}`} style={styles.cell} />;
+            const date = { year: view.year, month: view.month, day };
+            const record = records[challengeId(date)];
+            const playable = isChallengeDay(date, now);
+            const isSelected =
+              date.year === selected.year &&
+              date.month === selected.month &&
+              date.day === selected.day;
 
-          const date = { year: view.year, month: view.month, day };
-          const record = records[challengeId(date)];
-          const playable = isChallengeDay(date, now);
-          const isToday =
-            date.year === now.year && date.month === now.month && date.day === now.day;
+            return (
+              <DayCell
+                key={day}
+                palette={palette}
+                day={day}
+                won={record?.outcome === 'won'}
+                isSelected={isSelected}
+                playable={playable}
+                onPress={() => setSelected(date)}
+              />
+            );
+          })}
+        </View>
 
-          return (
-            <DayCell
-              key={day}
-              palette={palette}
-              day={day}
-              won={record?.outcome === 'won'}
-              attempted={record !== undefined && record.outcome !== 'won'}
-              isToday={isToday}
-              selected={
-                date.year === selected.year &&
-                date.month === selected.month &&
-                date.day === selected.day
-              }
-              playable={playable}
-              onPress={() => setSelected(date)}
-            />
-          );
-        })}
-      </View>
+        {/* ---- Play Action Button ------------------------------------------ */}
+        <View style={styles.actionContainer}>
+          <Springy
+            accessibilityRole="button"
+            accessibilityLabel={`Play challenge for ${MONTHS[selected.month - 1]} ${selected.day}`}
+            onPress={withClick(() => play(selected))}
+            style={[styles.playButton, { backgroundColor: palette.accent }]}
+          >
+            <Text style={[styles.playButtonText, { color: palette.textOnAccent }]}>
+              {isSelectedWon ? 'Play Again' : 'Play'}
+            </Text>
+          </Springy>
+        </View>
 
-      {/* ---- The rest of Challenge Mode -------------------------------- */}
-      <View style={styles.links}>
-        <PillButton
+        {/* ---- Monthly Trophy Modal ---------------------------------------- */}
+        <MonthlyTrophyModal
+          visible={showTrophyModal}
+          onClose={() => setShowTrophyModal(false)}
+          month={view.month}
+          year={view.year}
+          wins={monthWins}
+          totalDays={monthDays}
+          onGoToMonth={() => setSelected({ year: view.year, month: view.month, day: 1 })}
           palette={palette}
-          label={`Rewards · ${earned} of ${totalRewards}`}
-          onPress={() => router.push('/challenge/rewards')}
-        />
-        <PillButton
-          palette={palette}
-          label="History"
-          onPress={() => router.push('/challenge/history')}
-        />
-        <PillButton
-          palette={palette}
-          label="Statistics"
-          onPress={() => router.push('/challenge/stats')}
-        />
-        <PillButton
-          palette={palette}
-          label="Leagues"
-          onPress={() => router.push('/leagues')}
         />
       </View>
-
-      {next ? (
-        <Text style={[styles.footnote, { color: palette.textMuted }]}>
-          Next reward: {next.definition.name} — {next.current} of {next.definition.threshold}
-        </Text>
-      ) : null}
-
-      <Text style={[styles.footnote, { color: palette.textFaint }]}>
-        Challenges are Hard, Super Hard or Brutal only. Missed a day? Past challenges
-        stay open.
-      </Text>
     </Screen>
   );
 }
 
-/** One day in the month grid. */
 function DayCell({
   palette,
   day,
   won,
-  attempted,
-  isToday,
-  selected,
+  isSelected,
   playable,
   onPress,
 }: {
   palette: Palette;
   day: number;
   won: boolean;
-  attempted: boolean;
-  isToday: boolean;
-  /** The day the card above is describing. */
-  selected: boolean;
+  isSelected: boolean;
   playable: boolean;
   onPress: () => void;
 }) {
-  const background = won
-    ? palette.success
-    : isToday
-      ? palette.accent
-      : attempted
-        ? palette.dangerMuted
-        : 'transparent';
-
-  const color = won || isToday ? palette.textOnAccent : playable ? palette.text : palette.textFaint;
-
-  const label = won
-    ? `${day}, completed`
-    : playable
-      ? `${day}, show this challenge`
-      : `${day}, not yet available`;
-
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !playable, selected }}
       disabled={!playable}
       onPress={withClick(onPress)}
       style={styles.cell}
     >
-      {/*
-        Selection is a ring around the cell rather than a change of fill.
-
-        The fill already carries three separate facts — won, today, attempted — and
-        overloading it with a fourth would mean a selected won day and a selected
-        today day could not both be read. A ring sits outside all of them and
-        composes with every combination.
-      */}
-      <View
-        style={[
-          styles.dayDot,
-          { backgroundColor: background },
-          selected && { borderWidth: 2, borderColor: palette.accent },
-        ]}
-      >
-        {/*
-          A won day is a solid disc with no number on it.
-
-          The date is not lost — it is the cell's position in the grid, which is
-          what a calendar is for. Dropping the digit is what lets a filled month
-          read as a run of colour at a glance instead of as thirty-one numbers that
-          happen to be tinted: the difference between a streak you can see and one
-          you have to count.
-
-          The accessibility label still carries the day, because position conveys
-          nothing to a screen reader.
-        */}
-        {won ? null : <Text style={[styles.dayText, { color }]}>{day}</Text>}
+      <View style={styles.dayContainer}>
+        {won ? (
+          <View style={[styles.wonDot, { backgroundColor: palette.success }]} />
+        ) : isSelected ? (
+          <View style={[styles.selectedCircle, { backgroundColor: palette.accent }]}>
+            <Text style={[styles.dayText, { color: palette.textOnAccent, fontWeight: '800' }]}>
+              {day}
+            </Text>
+          </View>
+        ) : (
+          <Text
+            style={[
+              styles.dayText,
+              playable ? { color: palette.text } : { color: palette.textFaint },
+            ]}
+          >
+            {day}
+          </Text>
+        )}
       </View>
     </Pressable>
-  );
-}
-
-function Stat({
-  palette,
-  label,
-  value,
-  big = false,
-}: {
-  palette: Palette;
-  label: string;
-  value: string;
-  big?: boolean;
-}) {
-  return (
-    <View style={styles.stat}>
-      <Text style={[big ? styles.statValueBig : styles.statValue, { color: palette.text }]}>
-        {value}
-      </Text>
-      <Text style={[styles.statLabel, { color: palette.textFaint }]}>{label}</Text>
-    </View>
   );
 }
 
 const CELL = `${100 / 7}%`;
 
 const styles = StyleSheet.create({
-  today: {
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  todayDate: { ...typography.small, textTransform: 'uppercase', letterSpacing: 1 },
-  badge: {
+  container: {
+    flex: 1,
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
+    paddingTop: 0,
+    paddingBottom: spacing.sm,
   },
-  badgeText: { ...typography.small, fontWeight: '700' },
-  todayHint: { ...typography.body, textAlign: 'center', marginBottom: spacing.xs },
-  doneMark: { ...typography.body, fontWeight: '700' },
-  resultRow: { flexDirection: 'row', gap: spacing.lg, marginVertical: spacing.sm },
-
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  stat: { alignItems: 'center', flex: 1 },
-  statValue: { ...typography.body, fontWeight: '700' },
-  statValueBig: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
-  statLabel: { ...typography.small },
-
-  monthBar: {
+  trophyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xs,
+    marginVertical: 2,
+    paddingHorizontal: spacing.xs,
   },
-  monthArrow: { fontSize: 30, lineHeight: 34, fontWeight: '700', paddingHorizontal: spacing.md },
-  monthLabel: { ...typography.heading, fontFamily: fonts.displayBold, fontWeight: '700' },
+  arrowButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowButtonDisabled: {
+    opacity: 0.4,
+  },
+  trophyContainer: {
+    width: 170,
+    height: 170,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trophyImage: {
+    width: 160,
+    height: 160,
+  },
   progressRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginHorizontal: spacing.sm,
+    marginTop: 2,
+    marginBottom: spacing.xs,
   },
-  progressTrack: { flex: 1, height: 26, borderRadius: 13, overflow: 'hidden' },
+  progressTrack: {
+    flex: 1,
+    height: 22,
+    borderRadius: 11,
+    overflow: 'hidden',
+  },
   progressFill: {
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 34,
-  },
-  progressCount: { ...typography.small, fontWeight: '800' },
-  progressTotal: { ...typography.body, fontWeight: '700' },
-
-  weekHeader: { flexDirection: 'row', marginBottom: spacing.xs },
-  weekday: { ...typography.small, width: CELL, textAlign: 'center' },
-
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: CELL, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
-  dayDot: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dayText: { ...typography.body, fontWeight: '600' },
-
-  links: { gap: spacing.sm, marginTop: spacing.lg },
-  footnote: {
-    ...typography.small,
+  progressCount: {
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  progressTotal: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  monthTitle: {
+    fontFamily: fonts.displayExtra,
+    fontWeight: '800',
+    fontSize: 20,
     textAlign: 'center',
-    marginTop: spacing.lg,
+    marginBottom: 4,
+  },
+  weekHeader: {
+    flexDirection: 'row',
+    marginBottom: 2,
+  },
+  weekday: {
+    ...typography.small,
+    width: CELL,
+    textAlign: 'center',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 2,
+  },
+  cell: {
+    width: CELL,
+    aspectRatio: 1.1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayContainer: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wonDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  selectedCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionContainer: {
+    marginTop: spacing.xs,
+    marginBottom: 2,
+    alignItems: 'center',
+  },
+  playButton: {
+    width: '85%',
+    maxWidth: 340,
+    height: 46,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playButtonText: {
+    fontFamily: fonts.displayExtra,
+    fontWeight: '800',
+    fontSize: 16,
   },
 });

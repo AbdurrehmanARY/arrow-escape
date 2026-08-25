@@ -74,6 +74,22 @@ export function longestStreak(records: ReadonlyMap<ChallengeId, ChallengeRecord>
   return best;
 }
 
+/** Highest consecutive win streak across played challenges. */
+export function highestWinStreak(records: ReadonlyMap<ChallengeId, ChallengeRecord>): number {
+  const sorted = [...records.values()].sort((a, b) => a.id.localeCompare(b.id));
+  let maxStreak = 0;
+  let currentRun = 0;
+  for (const record of sorted) {
+    if (record.outcome === 'won') {
+      currentRun += 1;
+      if (currentRun > maxStreak) maxStreak = currentRun;
+    } else {
+      currentRun = 0;
+    }
+  }
+  return maxStreak;
+}
+
 /** Every headline number, from the records alone. */
 export function challengeStats(
   records: ReadonlyMap<ChallengeId, ChallengeRecord>,
@@ -91,6 +107,7 @@ export function challengeStats(
     perfect: wins.filter((record) => record.heartsLeft === 5 && record.hintsUsed === 0).length,
     currentStreak: currentStreak(records, from),
     longestStreak: longestStreak(records),
+    highestWinStreak: highestWinStreak(records),
     bestTimeMs: times.length > 0 ? Math.min(...times) : undefined,
     totalHintsUsed: all.reduce((sum, record) => sum + record.hintsUsed, 0),
   };

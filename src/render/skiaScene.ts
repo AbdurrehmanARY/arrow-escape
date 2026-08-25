@@ -141,7 +141,6 @@ export function recordStatic(
     );
 
     drawPattern(canvas, scene, palette);
-    drawObstacles(canvas, scene, palette);
 
     // ---- Arrows ----------------------------------------------------------
     // One paint object reused across every arrow rather than one per arrow. At 180
@@ -185,6 +184,11 @@ export function recordStatic(
           canvas.drawCircle(pupil.x, pupil.y, draw.eyeRadius * 0.45, fill);
         }
       }
+
+      if (draw.shapeCue) {
+        const head = draw.body[draw.body.length - 1]!;
+        drawShapeCue(canvas, draw.shapeCue, head.x, head.y, scene.cellSize * 0.2, '#FFFFFF');
+      }
     }
   });
 }
@@ -214,12 +218,8 @@ function drawPattern(
   paint.setColor(Skia.Color(palette.pattern));
 
   if (scene.patternKind === 'dots') {
-    for (let row = 0; row < scene.rows; row += 1) {
-      const cy = scene.originY + row * scene.cellSize + scene.cellSize / 2;
-      for (let col = 0; col < scene.cols; col += 1) {
-        const cx = scene.originX + col * scene.cellSize + scene.cellSize / 2;
-        canvas.drawCircle(cx, cy, scene.patternRadius, paint);
-      }
+    for (const pt of scene.escapedCells) {
+      canvas.drawCircle(pt.x, pt.y, scene.patternRadius, paint);
     }
     return;
   }
@@ -270,60 +270,56 @@ function drawPattern(
   }
 }
 
-/** Walls and gates. A handful per board at most. */
-function drawObstacles(
+/** Render geometric shape cue for colorblind accessibility. */
+function drawShapeCue(
   canvas: Parameters<Parameters<typeof createPicture>[0]>[0],
-  scene: Scene,
-  palette: Palette,
+  cue: 'circle' | 'square' | 'triangle' | 'diamond' | 'star',
+  cx: number,
+  cy: number,
+  size: number,
+  color: string,
 ): void {
-  if (scene.obstacles.length === 0) return;
-
   const paint = Skia.Paint();
   paint.setAntiAlias(true);
+  paint.setColor(Skia.Color(color));
+  paint.setStyle(0); // fill
 
-  for (const obstacle of scene.obstacles) {
-    const rect = Skia.RRectXY(
-      Skia.XYWHRect(obstacle.x, obstacle.y, obstacle.size, obstacle.size),
-      obstacle.radius,
-      obstacle.radius,
-    );
-
-    if (obstacle.kind === 'wall') {
-      paint.setStyle(0);
-      paint.setAlphaf(1);
-      paint.setColor(Skia.Color(obstacle.color));
-      canvas.drawRRect(rect, paint);
-      continue;
+  const r = size / 2;
+  if (cue === 'circle') {
+    canvas.drawCircle(cx, cy, r, paint);
+  } else if (cue === 'square') {
+    canvas.drawRect(Skia.XYWHRect(cx - r, cy - r, size, size), paint);
+  } else if (cue === 'triangle') {
+    const path = Skia.Path.Make();
+    path.moveTo(cx, cy - r);
+    path.lineTo(cx - r, cy + r);
+    path.lineTo(cx + r, cy + r);
+    path.close();
+    canvas.drawPath(path, paint);
+  } else if (cue === 'diamond') {
+    const path = Skia.Path.Make();
+    path.moveTo(cx, cy - r);
+    path.lineTo(cx + r, cy);
+    path.lineTo(cx, cy + r);
+    path.lineTo(cx - r, cy);
+    path.close();
+    canvas.drawPath(path, paint);
+  } else if (cue === 'star') {
+    const path = Skia.Path.Make();
+    const outer = r;
+    const inner = r * 0.45;
+    for (let i = 0; i < 5; i += 1) {
+      const outerAngle = (i * 72 - 90) * (Math.PI / 180);
+      const innerAngle = ((i + 0.5) * 72 - 90) * (Math.PI / 180);
+      const ox = cx + Math.cos(outerAngle) * outer;
+      const oy = cy + Math.sin(outerAngle) * outer;
+      const ix = cx + Math.cos(innerAngle) * inner;
+      const iy = cy + Math.sin(innerAngle) * inner;
+      if (i === 0) path.moveTo(ox, oy);
+      else path.lineTo(ox, oy);
+      path.lineTo(ix, iy);
     }
-
-    // Open and shut must be unmistakable: a misread gate costs a heart, or on a
-    // shutter board the level. Shut is filled with a bar across it; open is the
-    // same outline left hollow and faded.
-    paint.setColor(Skia.Color(obstacle.color));
-    paint.setAlphaf(obstacle.open ? 0.45 : 1);
-
-    if (obstacle.open) {
-      paint.setStyle(1);
-      paint.setStrokeWidth(Math.max(1, scene.cellSize * 0.07));
-      canvas.drawRRect(rect, paint);
-      continue;
-    }
-
-    paint.setStyle(0);
-    canvas.drawRRect(rect, paint);
-
-    const bar = Skia.Paint();
-    bar.setAntiAlias(true);
-    bar.setStyle(1);
-    bar.setStrokeCap(1);
-    bar.setStrokeWidth(Math.max(1.5, scene.cellSize * 0.1));
-    bar.setColor(Skia.Color(palette.board));
-    canvas.drawLine(
-      obstacle.x + obstacle.size * 0.22,
-      obstacle.y + obstacle.size / 2,
-      obstacle.x + obstacle.size * 0.78,
-      obstacle.y + obstacle.size / 2,
-      bar,
-    );
+    path.close();
+    canvas.drawPath(path, paint);
   }
 }

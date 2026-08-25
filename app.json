@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ArrowPath",
-    "slug": "arrowpath",
+    "slug": "ary",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -19,12 +19,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.abdurrehmanary.arrowpath",
-      "versionCode": 15,
+      "versionCode": 18,
       "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
@@ -62,7 +58,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "fdc07c4e-af7e-4cec-8b5a-945d54c6b849"
+        "projectId": "8a99525d-7d1b-493b-96ec-d7b7628fc213"
       },
       "supabase": {
         "url": "https://otaoosekzkgzwspmdgfj.supabase.co",
@@ -76,7 +72,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/fdc07c4e-af7e-4cec-8b5a-945d54c6b849"
+      "url": "https://u.expo.dev/8a99525d-7d1b-493b-96ec-d7b7628fc213"
     }
   }
 }

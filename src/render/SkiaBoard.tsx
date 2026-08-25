@@ -34,7 +34,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, Group, Path, Picture } from '@shopify/react-native-skia';
+import { Canvas, Circle, Group, Path, Picture } from '@shopify/react-native-skia';
 import {
   Easing,
   runOnJS,
@@ -55,7 +55,7 @@ import { clampScale, clampTranslation, fitScale, translationBounds } from '../co
 import { arrowAtBoardPoint, toBoardPoint } from './hitTest';
 import { buildScene, splitScene, type Scene } from './scene';
 import { buildAllArrowPaths, recordStatic, type ArrowPaths } from './skiaScene';
-import { releaseDurationMs, SHAKE_MS } from './timings';
+import { releaseDurationMs } from './timings';
 
 /** Shared with the tap gesture, exactly as before — see `BoardViewport`. */
 export const PAN_SLOP = 14;
@@ -100,6 +100,10 @@ export interface SkiaBoardProps {
   focusY?: number;
   focusNonce?: number;
   onFocusComplete?: () => void;
+  /** Free cells before blocker for blocked arrow collision distance. */
+  freeCells?: number | undefined;
+  /** Callback fired at the exact collision point of a blocked tap animation. */
+  onCollisionHit?: ((arrowIndex: number) => void) | undefined;
   /** Bumped on every failed tap, re-triggering the blocked arrow's recoil. */
   shakeNonce?: number;
   reducedMotion?: boolean;
@@ -146,6 +150,8 @@ export function SkiaBoard({
   focusNonce = 0,
   onFocusComplete,
   shakeNonce = 0,
+  freeCells = 0,
+  onCollisionHit,
   reducedMotion = false,
   onTapArrow,
   onPressArrow,
@@ -335,10 +341,14 @@ export function SkiaBoard({
   const handleTap = useCallback(
     (bx: number, by: number) => {
       const index = arrowAtBoardPoint(state, board, bx, by, cellSize, originX, originY);
-      if (index !== EMPTY) onTapArrow(index);
-      else onTapEmpty?.();
+      if (index !== EMPTY) {
+        if (departingSet.has(index)) return;
+        onTapArrow(index);
+      } else {
+        onTapEmpty?.();
+      }
     },
-    [state, board, cellSize, originX, originY, onTapArrow, onTapEmpty],
+    [state, board, cellSize, originX, originY, onTapArrow, onTapEmpty, departingSet],
   );
 
   const pinch = useMemo(
@@ -522,6 +532,29 @@ export function SkiaBoard({
             {/* Everything at rest: one draw call. */}
             <Picture picture={picture} />
 
+            {/* Smooth animated grid dots appearing as arrows depart */}
+            {scene.patternKind === 'dots' &&
+              departingArrows?.map((index) => {
+                const arrow = board.arrows[index];
+                if (!arrow) return null;
+                const points = arrow.body.map((cell) => {
+                  const col = cell % board.cols;
+                  const row = Math.floor(cell / board.cols);
+                  return {
+                    x: originX + col * cellSize + cellSize / 2,
+                    y: originY + row * cellSize + cellSize / 2,
+                  };
+                });
+                return (
+                  <DepartingDotsNode
+                    key={`dots-${index}`}
+                    points={points}
+                    radius={scene.patternRadius}
+                    color={palette.pattern}
+                  />
+                );
+              })}
+
             {/*
               The handful of arrows that are moving or individually highlighted.
               One node each, and never more than a few, because the rules only ever
@@ -541,6 +574,9 @@ export function SkiaBoard({
                   departing={departingSet.has(draw.index)}
                   hinted={draw.index === hintedArrow}
                   shakeNonce={draw.index === shakeArrow ? shakeNonce : 0}
+                  freeCells={draw.index === shakeArrow ? freeCells : 0}
+                  {...(onCollisionHit ? { onCollisionHit } : {})}
+                  palette={palette}
                   reducedMotion={reducedMotion}
                   // Index and callback passed separately, never combined into a
                   // closure here. `onDone={() => onDepartComplete(index)}` is a
@@ -593,9 +629,12 @@ function ArrowNode({
   departing,
   hinted,
   shakeNonce,
+  freeCells = 0,
+  onCollisionHit,
   reducedMotion,
   index,
   onDepartComplete,
+  palette,
 }: {
   paths: ArrowPaths;
   color: string;
@@ -605,32 +644,20 @@ function ArrowNode({
   departing: boolean;
   hinted: boolean;
   shakeNonce: number;
+  freeCells?: number | undefined;
+  onCollisionHit?: ((arrowIndex: number) => void) | undefined;
   reducedMotion: boolean;
   index: number;
-  onDepartComplete?: (arrowIndex: number) => void;
+  onDepartComplete?: ((arrowIndex: number) => void) | undefined;
+  palette: Palette;
 }) {
   const progress = useSharedValue(0);
   const shake = useSharedValue(0);
   const glow = useSharedValue(0);
   const pulse = useSharedValue(1);
 
-  /**
-   * Whether this arrow's exit has already begun.
-   *
-   * The fix for "tap three arrows quickly and one escapes twice", and the guard has
-   * to be about *starting*, not about finishing. The effect below re-runs whenever
-   * any of its dependencies change, and tapping quickly re-renders the board
-   * repeatedly while an arrow is still in flight. Each re-run reset `progress` to 0
-   * and started a fresh `withTiming`, so the snake visibly threaded out, snapped
-   * back to its start, and threaded out again.
-   *
-   * The reducer was never fooled — its `departed` case already ignores an arrow it
-   * is not tracking — so this was always a rendering artefact rather than a
-   * gameplay one. It still had to be fixed at the source: an exit is a
-   * once-per-departure event, so it is latched.
-   *
-   * A ref rather than state, because it must not itself cause a render.
-   */
+  const [isCollidedColor, setIsCollidedColor] = useState(false);
+  const lastHandledShakeNonce = useRef(0);
   const exitStarted = useRef(false);
 
   // ---- Release -------------------------------------------------------------
@@ -653,15 +680,12 @@ function ArrowNode({
     };
 
     if (reducedMotion) {
-       
       progress.value = 1;
       finish();
       return;
     }
 
-     
     progress.value = 0;
-     
     progress.value = withTiming(
       1,
       {
@@ -677,60 +701,81 @@ function ArrowNode({
     );
   }, [departing, reducedMotion, paths.travelCells, progress, index, onDepartComplete]);
 
-  // ---- Blocked shake -------------------------------------------------------
+  // ---- Blocked Collision Sequence ------------------------------------------
   useEffect(() => {
-    if (shakeNonce === 0 || reducedMotion) return;
-    // A forward lurch and recoil reads as "tried to go, could not" far better than
-    // a sideways wobble, which says nothing about direction.
-     
-    shake.value = withSequence(
-      withTiming(1, { duration: SHAKE_MS * 0.28, easing: Easing.out(Easing.quad) }),
-      withTiming(-0.4, { duration: SHAKE_MS * 0.32 }),
-      withTiming(0, { duration: SHAKE_MS * 0.4, easing: Easing.elastic(1.4) }),
-    );
-  }, [shakeNonce, reducedMotion, shake]);
+    if (shakeNonce === 0 || shakeNonce === lastHandledShakeNonce.current) return;
+    lastHandledShakeNonce.current = shakeNonce;
 
-  // ---- Hint glow and pulse -------------------------------------------------
+    if (reducedMotion) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsCollidedColor(true);
+      if (onCollisionHit) onCollisionHit(index);
+      const timer = setTimeout(() => setIsCollidedColor(false), 250);
+      return () => clearTimeout(timer);
+    }
+
+    // Move forward up to the blocker cell (freeCells) or nudge into adjacent blocker (0.25)
+    const targetDisplacement = Math.max(freeCells, 0.25);
+    const animDuration = releaseDurationMs(targetDisplacement);
+
+    shake.value = 0;
+    setIsCollidedColor(false);
+
+    shake.value = withSequence(
+      // Step 1: Move forward smoothly using the exact same movement curve & timing physics as departure
+      withTiming(
+        targetDisplacement,
+        { duration: animDuration, easing: Easing.bezier(0.3, 0.02, 0.55, 1) },
+        (doneAtImpact) => {
+          'worklet';
+          if (doneAtImpact) {
+            if (onCollisionHit) {
+              runOnJS(onCollisionHit)(index);
+            }
+            runOnJS(setIsCollidedColor)(true);
+          }
+        },
+      ),
+      // Step 2: Stop at collision point, then return smoothly using the same movement curve & timing physics
+      withTiming(
+        0,
+        { duration: animDuration, easing: Easing.bezier(0.3, 0.02, 0.55, 1) },
+        (doneReturn) => {
+          'worklet';
+          if (doneReturn) {
+            shake.value = 0;
+            runOnJS(setIsCollidedColor)(false);
+          }
+        },
+      ),
+    );
+  }, [shakeNonce, freeCells, reducedMotion, shake, index, onCollisionHit]);
+
+  // ---- Hint minor vibration -------------------------------------------------
   useEffect(() => {
     if (!hinted) {
-       
-      glow.value = withTiming(0, { duration: 200 });
-       
-      pulse.value = 1;
       return;
     }
-     
-    glow.value = withTiming(1, { duration: 400 });
+
+    glow.value = 0;
+    pulse.value = 1;
+
     if (reducedMotion) return;
 
-    /*
-      A short shiver the moment the hint lands, then the slow pulse.
-
-      The camera has just travelled to this arrow, so the player is looking at a
-      board that stopped moving — and on a dense board a colour change alone is
-      easy to miss among fifty other snakes. A brief physical twitch says "here"
-      in a way a tint does not, and it is over in a quarter of a second so it
-      never competes with the steady pulse that follows.
-
-      Deliberately smaller than the blocked recoil: that one is a failure and
-      should feel like one; this is an invitation.
-    */
-    // eslint-disable-next-line react-hooks/immutability -- stable shared value
-    shake.value = withSequence(
-      withTiming(0.35, { duration: 90, easing: Easing.out(Easing.quad) }),
-      withTiming(-0.22, { duration: 90 }),
-      withTiming(0, { duration: 140, easing: Easing.elastic(1.6) }),
-    );
-
-    pulse.value = withRepeat(
+    // eslint-disable-next-line react-hooks/immutability
+    shake.value = withRepeat(
       withSequence(
-        withTiming(1.12, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.2, { duration: 50, easing: Easing.out(Easing.quad) }),
+        withTiming(-0.2, { duration: 50 }),
+        withTiming(0.15, { duration: 50 }),
+        withTiming(-0.15, { duration: 50 }),
       ),
-      -1,
+      6,
       false,
     );
   }, [hinted, reducedMotion, glow, pulse, shake]);
+
+  const activeColor = isCollidedColor ? palette.arrowBlocked : color;
 
   // The trim window: a slice exactly one body long sliding from tail to off-board.
   const startAt = useDerivedValue(() =>
@@ -740,17 +785,14 @@ function ArrowNode({
     Math.min(1, progress.value * (1 + paths.bodyFraction) + paths.bodyFraction),
   );
 
-  // Shake and hint pulse, as one transform on the arrow's own group.
+  // Motion transform on the arrow's own group.
   const nodeTransform = useDerivedValue(() => {
-    const nudge = shake.value * cellSize * 0.16;
+    const nudge = shake.value * cellSize;
     return [
       { translateX: forward.x * nudge },
       { translateY: forward.y * nudge },
-      { scale: pulse.value },
     ];
   });
-
-  const glowOpacity = useDerivedValue(() => glow.value * 0.55);
 
   /**
    * How far the head has advanced, in dp.
@@ -769,19 +811,6 @@ function ArrowNode({
 
   return (
     <Group transform={nodeTransform}>
-      {hinted ? (
-        <Path
-          path={paths.body}
-          start={startAt}
-          end={endAt}
-          style="stroke"
-          strokeWidth={stroke * 3.5}
-          strokeCap="round"
-          strokeJoin="round"
-          color={color}
-          opacity={glowOpacity}
-        />
-      ) : null}
 
       <Path
         path={paths.body}
@@ -791,22 +820,15 @@ function ArrowNode({
         strokeWidth={stroke}
         strokeCap="round"
         strokeJoin="round"
-        color={color}
+        color={activeColor}
       />
 
       {/*
         The head travels with the body, and must have its own transform to do it.
-
-        The body is drawn by *trimming* its path, so the visible window slides along
-        geometry that never moves. The head is a separate filled shape sitting at the
-        arrow's resting position, so trimming does nothing to it — left alone it stays
-        behind while the body threads out from under it, which is the desync that was
-        reported. It is translated along the same forward vector by the same distance
-        the trim window has advanced, so the two stay locked together.
       */}
       {paths.head ? (
         <Group transform={headTransform}>
-          <Path path={paths.head} style="fill" color={color} />
+          <Path path={paths.head} style="fill" color={activeColor} />
         </Group>
       ) : null}
     </Group>
@@ -866,3 +888,36 @@ function PressOverlay({
 const styles = StyleSheet.create({
   viewport: { overflow: 'hidden' },
 });
+
+/**
+ * Animated grid dots that scale and fade in smoothly as an arrow escapes/departs.
+ */
+function DepartingDotsNode({
+  points,
+  radius,
+  color,
+}: {
+  points: readonly { x: number; y: number }[];
+  radius: number;
+  color: string;
+}) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = 0;
+    progress.value = withTiming(1, {
+      duration: 380,
+      easing: Easing.out(Easing.quad),
+    });
+  }, [progress]);
+
+  const opacity = useDerivedValue(() => progress.value);
+
+  return (
+    <Group opacity={opacity}>
+      {points.map((pt, i) => (
+        <Circle key={i} cx={pt.x} cy={pt.y} r={radius} color={color} />
+      ))}
+    </Group>
+  );
+}

@@ -95,4 +95,5 @@ export const STORAGE_KEYS = {
   onboarding: 'onboarding',
   challenges: 'challenges',
   league: 'league',
+  streak: 'streak',
 } as const;

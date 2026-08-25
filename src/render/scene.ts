@@ -32,6 +32,21 @@ import type { ArrowStyle, BoardStyle, Palette } from '@theme';
 
 import { buildArrowGeometry, cellCentre, type Point } from '../components/arrowGeometry';
 
+export type GroupShapeCue = 'circle' | 'square' | 'triangle' | 'diamond' | 'star';
+
+export const GROUP_SHAPE_CUES: readonly GroupShapeCue[] = [
+  'circle',
+  'square',
+  'triangle',
+  'diamond',
+  'star',
+];
+
+export function shapeCueForGroup(group: number): GroupShapeCue | undefined {
+  if (group === NO_GROUP) return undefined;
+  return GROUP_SHAPE_CUES[group % GROUP_SHAPE_CUES.length];
+}
+
 /** Which visual state an arrow is in. Mirrors the old `ArrowVisualState`. */
 export type ArrowVisual = 'normal' | 'blocked' | 'blocker' | 'safe' | 'hinted';
 
@@ -64,6 +79,8 @@ export interface ArrowDraw {
 
   readonly stroke: number;
   readonly color: string;
+  readonly group: number;
+  readonly shapeCue?: GroupShapeCue | undefined;
 
   /** Length of the body alone, in dp. The dash window's width. */
   readonly bodyLength: number;
@@ -71,18 +88,6 @@ export interface ArrowDraw {
   readonly travel: number;
   /** The same distance in cells, which is what sets the animation's duration. */
   readonly cellSpan: number;
-}
-
-/** A wall or a gate. There are only ever a handful, so a draw each is fine. */
-export interface ObstacleDraw {
-  readonly kind: 'wall' | 'gate';
-  readonly x: number;
-  readonly y: number;
-  readonly size: number;
-  readonly radius: number;
-  readonly color: string;
-  /** Gates only: an open gate is drawn hollow and dashed. */
-  readonly open: boolean;
 }
 
 export interface Scene {
@@ -94,17 +99,11 @@ export interface Scene {
   readonly cols: number;
   readonly rows: number;
   readonly arrows: readonly ArrowDraw[];
-  readonly obstacles: readonly ObstacleDraw[];
   /** Cell centres for the grid pattern, or empty when the pattern is `none`. */
   readonly patternKind: BoardStyle['pattern'];
   readonly patternRadius: number;
   readonly patternWidth: number;
-  /**
-   * True when the board is dense enough to drop shadow and gloss.
-   *
-   * Carried on the scene rather than recomputed in the renderer so that the budget
-   * is a property of the frame, not a decision the draw code makes each time.
-   */
+  readonly escapedCells: readonly Point[];
   readonly simplified: boolean;
 }
 
@@ -211,6 +210,23 @@ export function buildScene(input: SceneInput): Scene {
   const departing = input.departing ?? [];
   const simplified = board.arrows.length > SIMPLIFY_ABOVE_ARROWS;
 
+  const escapedCells: Point[] = [];
+  for (let index = 0; index < board.arrows.length; index += 1) {
+    const alive = state.alive[index] === 1;
+    const isDeparting = departing.includes(index);
+    if (!alive && !isDeparting) {
+      const arrow = board.arrows[index]!;
+      for (const cell of arrow.body) {
+        const col = cell % cols;
+        const row = Math.floor(cell / cols);
+        escapedCells.push({
+          x: originX + col * cellSize + cellSize / 2,
+          y: originY + row * cellSize + cellSize / 2,
+        });
+      }
+    }
+  }
+
   const arrows: ArrowDraw[] = [];
   for (let index = 0; index < board.arrows.length; index += 1) {
     const alive = state.alive[index] === 1;
@@ -244,6 +260,8 @@ export function buildScene(input: SceneInput): Scene {
       eyeRadius: geometry.eyeRadius,
       stroke,
       color: colorForArrow(visual, index, arrow.group, arrowStyle, palette),
+      group: arrow.group,
+      shapeCue: shapeCueForGroup(arrow.group),
       bodyLength,
       travel: bodyLength + rayLength,
       cellSpan: cellSize > 0 ? (bodyLength + rayLength) / cellSize : 0,
@@ -259,10 +277,10 @@ export function buildScene(input: SceneInput): Scene {
     cols,
     rows,
     arrows,
-    obstacles: buildObstacles(input),
     patternKind: boardStyle.pattern,
     patternRadius: Math.max(1, cellSize * boardStyle.dotRatio),
     patternWidth: Math.max(0.5, cellSize * boardStyle.lineRatio),
+    escapedCells,
     simplified,
   };
 }
@@ -278,51 +296,6 @@ function roundedHeadControls(
     { x: baseLeft.x + forward.x * pull, y: baseLeft.y + forward.y * pull },
     { x: baseRight.x + forward.x * pull, y: baseRight.y + forward.y * pull },
   ];
-}
-
-/** Walls and gates, positioned and coloured. */
-function buildObstacles(input: SceneInput): readonly ObstacleDraw[] {
-  const { board, state, cellSize, originX, originY, palette } = input;
-  if (!board.hasObstacles) return [];
-
-  const inset = cellSize * 0.08;
-  const size = cellSize - inset * 2;
-  const out: ObstacleDraw[] = [];
-
-  for (let cell = 0; cell < board.cellCount; cell += 1) {
-    const isWall = board.walls[cell] === 1;
-    const group = board.gateGroup[cell] ?? NO_GROUP;
-    if (!isWall && group === NO_GROUP) continue;
-
-    const x = originX + (cell % board.cols) * cellSize + inset;
-    const y = originY + Math.floor(cell / board.cols) * cellSize + inset;
-
-    if (isWall) {
-      out.push({
-        kind: 'wall',
-        x,
-        y,
-        size,
-        radius: cellSize * 0.16,
-        color: palette.wall,
-        open: false,
-      });
-      continue;
-    }
-
-    out.push({
-      kind: 'gate',
-      x,
-      y,
-      size,
-      radius: cellSize * 0.16,
-      color: palette.groupColors[group % palette.groupColors.length]!,
-      // A gate is open while any arrow of its colour is still on the board.
-      open: (state.groupsLeft[group] ?? 0) > 0,
-    });
-  }
-
-  return out;
 }
 
 /**

@@ -119,14 +119,12 @@ function tapAtScreen(game: GameState, sx: number, sy: number, scale: number): Ga
 function hud(session: GameState['session']) {
   return createElement(Hud, {
     palette: defaultTheme.palette,
-    levelName: 'Test',
-    levelNumber: 1,
     tierLabel: 'Easy',
     heartsLeft: session.heartsLeft,
     maxHearts: session.maxHearts,
-    arrowsLeft: session.state.remaining,
-    arrowsTotal: 3,
-    onPause: () => undefined,
+    onBack: () => undefined,
+    onRestart: () => undefined,
+    onHint: () => undefined,
   });
 }
 

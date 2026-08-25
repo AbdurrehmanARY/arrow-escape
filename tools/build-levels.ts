@@ -113,14 +113,7 @@ function buildOne(planIndex: number): BuildResult {
         // board that is a hundred snakes deep, and the build stopped finishing:
         // levels 100-150 alone took six minutes. A shutter level is about
         // *sequence*, not density, so it loses nothing by staying open, and the
-        // player can actually see the order they are being asked to work out.
-        packed: plan.gate?.mode !== 'shuts',
-        // Only the last relaxation pass drops the gate. A planning level without a
-        // shutter is a different level wearing the wrong name, so it is worth
-        // several attempts before giving up on it — but not worth failing the whole
-        // build over, because "no board of this shape can take a gate" is a fact
-        // about the shape, not a bug.
-        ...(plan.gate && relax < 3 ? { gate: plan.gate } : {}),
+        packed: true,
       },
       { id: plan.id, name: plan.name },
     );
@@ -151,7 +144,7 @@ function buildOne(planIndex: number): BuildResult {
       arrows: candidate.metrics.arrowCount,
       cells,
       oversized: isOversized(plan),
-      gateModes: (candidate.level.gates ?? []).map((gate) => gate.mode),
+      gateModes: [],
       blunderRate: candidate.metrics.blunderRate,
       coverage:
         candidate.level.arrows.reduce((sum, arrow) => sum + arrow.body.length, 0) /

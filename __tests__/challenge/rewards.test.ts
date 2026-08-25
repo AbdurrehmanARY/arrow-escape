@@ -26,6 +26,7 @@ function stats(over: Partial<ChallengeStats> = {}): ChallengeStats {
     perfect: 0,
     currentStreak: 0,
     longestStreak: 0,
+    highestWinStreak: 0,
     bestTimeMs: undefined,
     totalHintsUsed: 0,
     ...over,
@@ -89,9 +90,9 @@ describe('streak rewards read the best streak, never the current one', () => {
   it('does not award on a current streak that never became a best', () => {
     // Defensive: `longestStreak` is always >= `currentStreak` in real data, so this
     // pins that rewards do not accidentally read the wrong field.
-    const odd = stats({ currentStreak: 30, longestStreak: 2 });
-    const unbroken = rewardProgress(odd).find((reward) => reward.definition.id === 'streak-30');
-    expect(unbroken?.earned).toBe(false);
+    const odd = stats({ currentStreak: 7, longestStreak: 2 });
+    const fighter = rewardProgress(odd).find((reward) => reward.definition.id === 'streak-7');
+    expect(fighter?.earned).toBe(false);
   });
 });
 

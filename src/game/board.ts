@@ -81,11 +81,9 @@ export function directionBetween(
  * while leaving no arrow index to report.
  */
 export interface RayResult {
-  readonly blockedBy: 'nothing' | 'arrow' | 'wall' | 'gate';
-  /** The arrow standing in the way, or `EMPTY` for every other case. */
+  readonly blockedBy: 'nothing' | 'arrow';
+  /** The arrow standing in the way, or `EMPTY`. */
   readonly blockerArrow: number;
-  /** Controlling group of the gate that stopped it, or `NO_GROUP`. */
-  readonly blockerGroup: number;
   /** Empty cells between the head and whatever stopped it. */
   readonly freeCells: number;
   /** Cell where the ray was stopped, or `EMPTY` if it reached the edge. */
@@ -96,26 +94,9 @@ export interface RayResult {
 const CLEAR_RAY: RayResult = Object.freeze({
   blockedBy: 'nothing' as const,
   blockerArrow: EMPTY,
-  blockerGroup: NO_GROUP,
   freeCells: 0,
   blockedAt: EMPTY,
 });
-
-/**
- * Is this gate cell currently passable?
- *
- * The whole of the gate mechanic is these two lines. An `opens` gate is shut
- * until its colour has left; a `shuts` gate is the exact inverse and seals once
- * the colour is gone. Exported because the renderer needs the same answer to
- * decide whether to draw a cell solid or ghosted, and two implementations of this
- * would eventually disagree.
- */
-export function isGateOpen(board: Board, state: BoardState, cell: CellIndex): boolean {
-  const group = board.gateGroup[cell]!;
-  if (group === NO_GROUP) return true;
-  const cleared = state.groupsLeft[group] === 0;
-  return board.gateOpens[cell] === 1 ? cleared : !cleared;
-}
 
 /**
  * Walk straight ahead from an arrow's head until the board edge or another arrow.
@@ -126,10 +107,6 @@ export function isGateOpen(board: Board, state: BoardState, cell: CellIndex): bo
  *
  * An arrow can never block itself: the only cells ahead of the head belong to
  * other arrows, because a body is a simple path that does not double back.
- *
- * Walls and gates are checked behind `hasObstacles` so a board that has neither —
- * which is every level shipped before Phase 15 — walks exactly the loop it always
- * did, with one predictable branch added.
  */
 export function castRay(board: Board, state: BoardState, arrowIndex: number): RayResult {
   const arrow = board.arrows[arrowIndex]!;
@@ -147,38 +124,16 @@ export function castRay(board: Board, state: BoardState, arrowIndex: number): Ra
       return {
         blockedBy: 'arrow',
         blockerArrow: occupant,
-        blockerGroup: NO_GROUP,
         freeCells,
         blockedAt: cell,
       };
-    }
-    if (board.hasObstacles) {
-      if (board.walls[cell] === 1) {
-        return {
-          blockedBy: 'wall',
-          blockerArrow: EMPTY,
-          blockerGroup: NO_GROUP,
-          freeCells,
-          blockedAt: cell,
-        };
-      }
-      const group = board.gateGroup[cell]!;
-      if (group !== NO_GROUP && !isGateOpen(board, state, cell)) {
-        return {
-          blockedBy: 'gate',
-          blockerArrow: EMPTY,
-          blockerGroup: group,
-          freeCells,
-          blockedAt: cell,
-        };
-      }
     }
     freeCells += 1;
     r += arrow.dr;
     c += arrow.dc;
   }
 
-  return { ...CLEAR_RAY, freeCells };
+  return freeCells === 0 ? CLEAR_RAY : { ...CLEAR_RAY, freeCells };
 }
 
 /** Cells the head crosses on its way off the board, nearest first. */
@@ -335,80 +290,15 @@ export function buildLevel(level: LevelDefinition): Result<BuiltLevel> {
   }
 
   const cellCount = rows * cols;
-  const walls = new Uint8Array(cellCount);
-  const gateGroup = new Int32Array(cellCount).fill(NO_GROUP);
-  const gateOpens = new Uint8Array(cellCount);
-  let hasShutters = false;
-
-  for (const point of level.walls ?? []) {
-    const cell = readCell(point, rows, cols);
-    if (!cell.ok) return err(`level ${level.id}: wall ${cell.error}`);
-    const owner = claimedCells.get(cell.value);
-    if (owner !== undefined) {
-      return err(`level ${level.id}: a wall sits on arrow "${owner}"`);
-    }
-    walls[cell.value] = 1;
-  }
-
-  for (const gate of level.gates ?? []) {
-    if (!gate.group) return err(`level ${level.id}: a gate has no group`);
-    if (gate.mode !== 'opens' && gate.mode !== 'shuts') {
-      return err(`level ${level.id}: gate "${gate.group}" has unknown mode "${gate.mode}"`);
-    }
-    // A gate keyed to a colour no arrow wears can never change state, which is
-    // always an authoring mistake — it is either a wall written the long way or a
-    // typo in the colour name.
-    if (!groups.includes(gate.group)) {
-      return err(
-        `level ${level.id}: gate "${gate.group}" names a group no arrow belongs to — ` +
-          'it could never open or shut',
-      );
-    }
-    const group = groupIndex(gate.group);
-    if (gate.mode === 'shuts') hasShutters = true;
-
-    for (const point of gate.cells) {
-      const cell = readCell(point, rows, cols);
-      if (!cell.ok) return err(`level ${level.id}: gate "${gate.group}" ${cell.error}`);
-      const owner = claimedCells.get(cell.value);
-      if (owner !== undefined) {
-        return err(`level ${level.id}: gate "${gate.group}" sits on arrow "${owner}"`);
-      }
-      if (walls[cell.value] === 1) {
-        return err(`level ${level.id}: gate "${gate.group}" sits on a wall`);
-      }
-      if (gateGroup[cell.value] !== NO_GROUP) {
-        return err(`level ${level.id}: two gates share a cell`);
-      }
-      gateGroup[cell.value] = group;
-      gateOpens[cell.value] = gate.mode === 'opens' ? 1 : 0;
-    }
-  }
 
   const board: Board = {
     rows,
     cols,
     cellCount,
     arrows,
-    walls,
-    gateGroup,
-    gateOpens,
     groups,
-    hasShutters,
-    hasObstacles: (level.walls?.length ?? 0) > 0 || (level.gates?.length ?? 0) > 0,
   };
   return ok({ board, initial: createInitialState(board) });
-}
-
-/** Validate one authored `[row, col]` pair and pack it. Shared by walls and gates. */
-function readCell(point: readonly number[], rows: number, cols: number): Result<CellIndex, string> {
-  if (!Array.isArray(point) || point.length !== 2) return err('cell is malformed');
-  const row = point[0];
-  const col = point[1];
-  if (typeof row !== 'number' || typeof col !== 'number') return err('cell is non-numeric');
-  if (!Number.isInteger(row) || row < 0 || row >= rows) return err(`row ${row} is off-board`);
-  if (!Number.isInteger(col) || col < 0 || col >= cols) return err(`col ${col} is off-board`);
-  return ok(toCell(row, col, cols));
 }
 
 /**

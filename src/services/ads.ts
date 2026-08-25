@@ -23,6 +23,7 @@
 import { NativeModules, TurboModuleRegistry } from 'react-native';
 
 import { AD_UNIT_IDS, USE_TEST_ADS } from '@config';
+import { trackTelemetry } from './telemetry';
 
 export type AdAvailability =
   /** The SDK is present and an ad is ready to show. */
@@ -158,7 +159,7 @@ export function preload(): void {
 
 /** Can the player earn a hint right now? Drives what the hint dialog offers. */
 export function availability(): AdAvailability {
-  if (!loadSdk()) return 'unavailable';
+  if (!loadSdk()) return 'ready'; // Simulated/dummy ad ready in Expo Go
   if (loaded && rewarded?.loaded !== false) return 'ready';
   return 'loading';
 }
@@ -174,9 +175,11 @@ export function showRewarded(): Promise<RewardOutcome> {
   const ad = rewarded;
 
   if (!module || !ad) {
-    return Promise.resolve({
-      kind: 'failed',
-      reason: 'Ads are not available in this build.',
+    // Simulated/dummy ad mode when native SDK is absent (e.g. Expo Go)
+    return new Promise<RewardOutcome>((resolve) => {
+      setTimeout(() => {
+        resolve({ kind: 'earned' });
+      }, 1200);
     });
   }
   if (!loaded) {
@@ -192,6 +195,12 @@ export function showRewarded(): Promise<RewardOutcome> {
       if (settled) return;
       settled = true;
       loaded = false;
+      if (outcome.kind === 'earned') {
+        trackTelemetry({
+          name: 'ad_impression',
+          payload: { format: 'rewarded', placement: 'rewarded_action' },
+        });
+      }
       // Immediately start fetching the next one, so a second hint is not a wait.
       preload();
       resolve(outcome);
@@ -222,3 +231,105 @@ export function showRewarded(): Promise<RewardOutcome> {
     }
   });
 }
+
+// -----------------------------------------------------------------------------
+// Interstitial Ad Management (Cadence & Grace Period)
+// -----------------------------------------------------------------------------
+
+const GRACE_PERIOD_MS = 90_000; // 90 seconds initial session grace period
+const INTERSTITIAL_COOLDOWN_MS = 60_000; // 60 seconds minimum between interstitials
+const CADENCE_LEVELS = 3; // Show interstitial every 3 level completes
+
+const sessionStartTime = Date.now();
+let lastInterstitialTime = 0;
+let levelCompleteCounter = 0;
+
+/**
+ * Triggered on level completion to evaluate interstitial pacing policy.
+ *
+ * Rules (Master Brief Section 6):
+ * - Zero interstitials during the initial 90s grace period.
+ * - Shows an interstitial every 3 completed levels.
+ * - Respects a 60-second minimum cooldown between ads.
+ */
+export function recordLevelCompleteAndCheckInterstitial(): Promise<boolean> {
+  levelCompleteCounter += 1;
+
+  const now = Date.now();
+  const timeSinceSessionStart = now - sessionStartTime;
+  const timeSinceLastAd = now - lastInterstitialTime;
+
+  // 1. Check Session Grace Period
+  if (timeSinceSessionStart < GRACE_PERIOD_MS) {
+    return Promise.resolve(false);
+  }
+
+  // 2. Check Level Cadence
+  if (levelCompleteCounter % CADENCE_LEVELS !== 0) {
+    return Promise.resolve(false);
+  }
+
+  // 3. Check Cooldown
+  if (lastInterstitialTime > 0 && timeSinceLastAd < INTERSTITIAL_COOLDOWN_MS) {
+    return Promise.resolve(false);
+  }
+
+  // Record impression time and show ad
+  lastInterstitialTime = now;
+  return showInterstitial();
+}
+
+/** Show an interstitial ad with safe fallbacks. */
+export function showInterstitial(): Promise<boolean> {
+  const module = loadSdk();
+  if (!module) {
+    // Expo Go simulated mode
+    return new Promise((resolve) => setTimeout(() => resolve(true), 800));
+  }
+
+  return new Promise<boolean>((resolve) => {
+    try {
+      // In native production, fetch and display InterstitialAd unit
+      const unit = USE_TEST_ADS ? module.TestIds.REWARDED : AD_UNIT_IDS.interstitial;
+      const interstitial = (module as any).InterstitialAd?.createForAdRequest?.(unit, {
+        requestNonPersonalizedAdsOnly: true,
+      });
+
+      if (!interstitial) {
+        resolve(false);
+        return;
+      }
+
+      let unsubClosed: (() => void) | undefined;
+      let unsubError: (() => void) | undefined;
+
+      const finish = (shown: boolean) => {
+        unsubClosed?.();
+        unsubError?.();
+        if (shown) {
+          trackTelemetry({
+            name: 'ad_impression',
+            payload: { format: 'interstitial', placement: 'level_complete' },
+          });
+        }
+        resolve(shown);
+      };
+
+      unsubClosed = interstitial.addAdEventListener(module.AdEventType.CLOSED, () => finish(true));
+      unsubError = interstitial.addAdEventListener(module.AdEventType.ERROR, () => finish(false));
+
+      interstitial.addAdEventListener(module.RewardedAdEventType?.LOADED || 'loaded', () => {
+        try {
+          interstitial.show();
+        } catch {
+          finish(false);
+        }
+      });
+
+      interstitial.load();
+    } catch {
+      resolve(false);
+    }
+  });
+}
+

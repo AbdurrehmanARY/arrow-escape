@@ -29,52 +29,19 @@ import {
 export interface BlockHighlight {
   readonly blocked: number;
   readonly blocker: number;
+  readonly freeCells?: number | undefined;
   /** Bumped on every failed tap so the view can re-trigger an identical shake. */
   readonly nonce: number;
 }
 
 export interface GameState {
   readonly session: PlaySession;
-  /**
-   * Arrows currently animating off the board.
-   *
-   * A list, and taps are *not* blocked while it is non-empty. It used to be a
-   * single slot with the reducer ignoring any tap that arrived mid-flight, which
-   * was defensible when the exit took 340ms and became indefensible once it was
-   * slowed down deliberately — a player tapping at a normal pace would have every
-   * second tap silently dropped.
-   *
-   * Nothing is at risk in allowing them: `applyOutcome` has already removed the
-   * departing arrow from the board state, so the next tap resolves against a board
-   * that is correct *now*. The animation is presentation catching up, not state.
-   */
   readonly departing: readonly number[];
   readonly highlight: BlockHighlight | undefined;
-  /**
-   * Every arrow that has been blocked this attempt, and everything that blocked
-   * one — kept for the rest of the level rather than cleared on the next tap.
-   *
-   * `highlight` above is the *momentary* record: it drives the shake and it is
-   * replaced by the next failed tap. These two are the *standing* one, and they
-   * exist because a collision is a fact the player needs to keep. A flash that
-   * has already faded cannot be re-read, so a player who looks away mid-animation
-   * has lost the only feedback the game gave them about a pair they misjudged.
-   *
-   * It cannot grow without bound: a heart is charged the first time each arrow is
-   * found stuck (`PlaySession.chargedArrows`), so five *distinct* blocked arrows
-   * is exactly what ends the level and `blockedArrows` therefore tops out at five.
-   * Repeat taps on an already-marked arrow add nothing to either list. That is
-   * what makes "until the level ends" affordable — on a fifty-arrow board it is
-   * ten arrows at the very worst.
-   *
-   * An arrow can appear in both, and legitimately does: the thing that blocked you
-   * once may be the thing you misjudge next.
-   */
   readonly blockedArrows: readonly number[];
   readonly blockerArrows: readonly number[];
-  /** The most recent outcome, so the view can react without diffing state. */
   readonly lastOutcome: MoveOutcome | undefined;
-  /** Taps made this attempt, including failed ones. Feeds the level summary. */
+  readonly lastHeartDeducted: boolean;
   readonly taps: number;
 }
 
@@ -89,7 +56,8 @@ export type GameAction =
   | { readonly type: 'departed'; readonly arrowIndex: number }
   /** The failed-tap flash has run its course. */
   | { readonly type: 'clearHighlight' }
-  | { readonly type: 'restart'; readonly initial: BoardState; readonly hearts: number };
+  | { readonly type: 'restart'; readonly initial: BoardState; readonly hearts: number }
+  | { readonly type: 'addHearts'; readonly count: number };
 
 /** Fresh state for a level, used both on entry and on Restart. */
 export function initGameState(initial: BoardState, hearts: number): GameState {
@@ -100,6 +68,7 @@ export function initGameState(initial: BoardState, hearts: number): GameState {
     blockedArrows: [],
     blockerArrows: [],
     lastOutcome: undefined,
+    lastHeartDeducted: false,
     taps: 0,
   };
 }
@@ -108,6 +77,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'restart':
       return initGameState(action.initial, action.hearts);
+
+    case 'addHearts': {
+      const newHearts = state.session.heartsLeft + action.count;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          heartsLeft: newHearts,
+          status: newHearts > 0 && state.session.state.remaining > 0 ? 'playing' : state.session.status,
+        },
+      };
+    }
 
     case 'departed': {
       if (!state.departing.includes(action.arrowIndex)) return state;
@@ -130,10 +111,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (outcome.kind === 'invalid') return state;
 
       if (outcome.kind === 'blocked') {
+        const heartDeducted = session.heartsLeft < state.session.heartsLeft;
         return {
           ...state,
           session,
           lastOutcome: outcome,
+          lastHeartDeducted: heartDeducted,
           taps: state.taps + 1,
           // The standing marks. Deliberately never cleared by a later tap — only a
           // restart wipes them, because they describe what happened in *this*
@@ -143,6 +126,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           highlight: {
             blocked: arrowIndex,
             blocker: outcome.blockerIndex,
+            ...(outcome.freeCells !== undefined ? { freeCells: outcome.freeCells } : {}),
             nonce: (state.highlight?.nonce ?? 0) + 1,
           },
         };
@@ -152,6 +136,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         session,
         lastOutcome: outcome,
+        lastHeartDeducted: false,
         taps: state.taps + 1,
         departing: [...state.departing, arrowIndex],
         highlight: undefined,

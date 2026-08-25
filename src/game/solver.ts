@@ -22,8 +22,8 @@
  *               arrow is free. See `docs/MECHANIC_ANALYSIS.md`.
  */
 
-import { castRay, isAlive, isGateOpen, stateKey } from './board';
-import { applyOutcome, isCleared, legalMoves, resolveTap } from './rules';
+import { castRay, isAlive } from './board';
+import { applyOutcome, isCleared, resolveTap } from './rules';
 import { type Board, type BoardState, EMPTY, NO_GROUP } from './types';
 
 /**
@@ -33,22 +33,6 @@ import { type Board, type BoardState, EMPTY, NO_GROUP } from './types';
  * enough to sit in an `Int32Array` without overflow arithmetic.
  */
 const PERMANENT = 1 << 29;
-
-/**
- * How many points along a game `blunderRate` is measured at, and how many of the
- * moves on offer it checks at each.
- *
- * Both exist because measuring one move costs a full search, so the exhaustive
- * version is `steps x moves x search` — quadratic in arrows with a search inside
- * it. On the small shutter boards this was written against that was free; once
- * they grew it made the level build take longer than everything else put together.
- *
- * A sample is entirely adequate here. `blunderRate` is a curation dial read to two
- * decimal places and compared against a band, not a value anything depends on
- * being exact.
- */
-const BLUNDER_SAMPLE_STEPS = 12;
-const BLUNDER_SAMPLE_MOVES = 8;
 
 /**
  * The result of asking "can this be finished?".
@@ -157,34 +141,6 @@ export function blockingGraphOf(board: Board, state: BoardState): BlockingGraph 
 
     while (r >= 0 && r < board.rows && c >= 0 && c < board.cols) {
       const cell = r * board.cols + c;
-
-      if (board.hasObstacles) {
-        if (board.walls[cell] === 1) {
-          blockedForever[y] = true;
-          break;
-        }
-        const gate = board.gateGroup[cell]!;
-        if (gate !== NO_GROUP && !isGateOpen(board, state, cell)) {
-          if (board.gateOpens[cell] === 1) {
-            // Shut until its colour clears: depend on every arrow of that colour.
-            //
-            // Unless the arrow wears that colour itself, in which case the gate is
-            // waiting on an arrow that is waiting on the gate. `dependOn` skips
-            // self — correct for a body lying across its own ray, and exactly
-            // wrong here, where self is a blocker that nothing can ever remove.
-            if (arrow.group === gate) {
-              blockedForever[y] = true;
-              break;
-            }
-            for (const member of membersOf[gate]!) dependOn(member);
-          } else {
-            // A shutter that has already sealed. Nothing reopens it, ever.
-            blockedForever[y] = true;
-            break;
-          }
-        }
-      }
-
       const occupant = state.occupancy[cell]!;
       if (occupant !== EMPTY) dependOn(occupant);
 
@@ -289,112 +245,17 @@ function peel(
  * The single entry point the level validator and the hint system both call, so
  * "solvable" means the same thing everywhere in the project.
  */
-export function solve(board: Board, state: BoardState, options?: SolveOptions): SolveOutcome {
+export function solve(board: Board, state: BoardState, _options?: SolveOptions): SolveOutcome {
   if (isCleared(state)) return { kind: 'solved', solution: [] };
-  if (board.hasShutters) return searchSolve(board, state, options?.budget ?? SEARCH_BUDGET);
   return peel(board, state).outcome;
 }
 
-/**
- * Solve a board where tap order matters, by search.
- *
- * A `shuts` gate breaks the property the rest of this file rests on: it lets a tap
- * *add* a constraint, so an arrow that is free now may not be free later, and
- * "delete the graph in topological order" stops describing the problem. There is
- * no cheap characterisation to fall back on, so this is a depth-first search
- * memoised on the set of surviving arrows.
- *
- * Memoising on `alive` alone is sound because the rest of the state is a function
- * of it: occupancy is fixed per arrow, and every gate reads its group's survivor
- * count. Two paths that leave the same arrows standing face literally the same
- * board, so the second one has nothing new to learn.
- *
- * Legal moves are tried in a deliberate order — the ones that cannot close a
- * shutter first. On a solvable board that ordering usually walks straight to an
- * answer without backtracking, because "take the move that forecloses nothing" is
- * exactly the right instinct here.
- */
-function searchSolve(board: Board, state: BoardState, budget: number): SolveOutcome {
-  const seen = new Set<string>();
-  const path: number[] = [];
-  let visited = 0;
-  let exhausted = false;
-
-  // How many arrows of each colour are needed to keep some shutter open. Leaving
-  // the last one seals it, so those taps are the ones worth deferring.
-  const shutterGroups = new Set<number>();
-  for (let cell = 0; cell < board.cellCount; cell += 1) {
-    const group = board.gateGroup[cell]!;
-    if (group !== NO_GROUP && board.gateOpens[cell] === 0) shutterGroups.add(group);
-  }
-
-  const closesAShutter = (current: BoardState, arrowIndex: number): boolean => {
-    const group = board.arrows[arrowIndex]!.group;
-    return group !== NO_GROUP && shutterGroups.has(group) && current.groupsLeft[group] === 1;
-  };
-
-  const search = (current: BoardState): boolean => {
-    if (isCleared(current)) return true;
-    if (visited >= budget) {
-      exhausted = true;
-      return false;
-    }
-    const key = stateKey(current);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    visited += 1;
-
-    const moves = legalMoves(board, current);
-    moves.sort((a, b) => Number(closesAShutter(current, a)) - Number(closesAShutter(current, b)));
-
-    for (const move of moves) {
-      const outcome = resolveTap(board, current, move);
-      if (outcome.kind !== 'escaped') continue;
-      path.push(move);
-      if (search(applyOutcome(current, outcome))) return true;
-      path.pop();
-    }
-    return false;
-  };
-
-  if (search(state)) return { kind: 'solved', solution: [...path] };
-  if (exhausted) {
-    return {
-      kind: 'unknown',
-      reason: `search gave up after ${budget} states without finding a winning order`,
-    };
-  }
-  return { kind: 'unsolvable', reason: 'no tap order clears this board' };
-}
-
-/**
- * Is there any way to finish from here?
- *
- * Note this is deliberately false for `unknown`: an unproven board must never be
- * treated as a safe one. On device it cannot arise — every shipped level was
- * proved at build time — and off-device it is exactly the answer the validator
- * needs to reject a candidate.
- */
 export function isSolvable(board: Board, state: BoardState, options?: SolveOptions): boolean {
   return solve(board, state, options).kind === 'solved';
 }
 
-/**
- * Has the player already lost, without knowing it?
- *
- * Only meaningful on a shutter board. `PlaySession.status` catches the blunt case
- * — nothing left that can be tapped — but a shutter can seal on an arrow while
- * plenty of others are still free, leaving a board that is lost several taps
- * before it looks lost. Playing on in that position is a waste of the player's
- * time, so the screen checks this after every move and offers a restart.
- *
- * Lives here rather than in `rules.ts` because it needs the solver, and the rules
- * module must not depend on it.
- */
-export function isDoomed(board: Board, state: BoardState, options?: SolveOptions): boolean {
-  if (!board.hasShutters) return false;
-  if (isCleared(state)) return false;
-  return solve(board, state, options).kind !== 'solved';
+export function isDoomed(_board: Board, _state: BoardState, _options?: SolveOptions): boolean {
+  return false;
 }
 
 /**
@@ -499,73 +360,14 @@ export interface DifficultyMetrics {
 function trace(
   board: Board,
   state: BoardState,
-  options?: SolveOptions,
+  _options?: SolveOptions,
 ): {
   outcome: SolveOutcome;
   frontierSizes: number[];
   aliveCounts: number[];
   blunderRate: number;
 } {
-  if (!board.hasShutters) return { ...peel(board, state), blunderRate: 0 };
-
-  const outcome = solve(board, state, options);
-  const frontierSizes: number[] = [];
-  const aliveCounts: number[] = [];
-  if (outcome.kind !== 'solved') {
-    return { outcome, frontierSizes, aliveCounts, blunderRate: 0 };
-  }
-
-  let current = state;
-  let blunderShareTotal = 0;
-  let steps = 0;
-
-  // Sampled, not exhaustive, and that is a hard requirement rather than a
-  // shortcut. Measuring every legal move at every step costs one full search per
-  // move — `steps x moves x search` — which is unbounded work for a *metric*, and
-  // it stalled the level build outright once shutter boards grew past a handful of
-  // arrows. A sample answers the question this number is for ("roughly what share
-  // of the taps on offer are traps") to far better precision than the number is
-  // ever read to.
-  const stepStride = Math.max(1, Math.ceil(outcome.solution.length / BLUNDER_SAMPLE_STEPS));
-
-  for (let index = 0; index < outcome.solution.length; index += 1) {
-    const move = outcome.solution[index]!;
-    const moves = legalMoves(board, current);
-    frontierSizes.push(moves.length);
-    aliveCounts.push(current.remaining);
-
-    if (moves.length > 0 && index % stepStride === 0) {
-      const sample = moves.slice(0, BLUNDER_SAMPLE_MOVES);
-      let blunders = 0;
-      let judged = 0;
-      for (const candidate of sample) {
-        const result = resolveTap(board, current, candidate);
-        if (result.kind !== 'escaped') continue;
-        // Judged one at a time rather than through `isDoomed`, because a move the
-        // search could not settle inside the budget is genuinely unknown — and this
-        // number means "share of the taps on offer that provably lose". Counting an
-        // unproven move as a trap would inflate it; counting it as safe would hide
-        // one. Leaving it out of the denominator does neither.
-        const verdict = solve(board, applyOutcome(current, result), options).kind;
-        if (verdict === 'unknown') continue;
-        judged += 1;
-        if (verdict !== 'solved') blunders += 1;
-      }
-      if (judged > 0) {
-        blunderShareTotal += blunders / judged;
-        steps += 1;
-      }
-    }
-
-    current = applyOutcome(current, resolveTap(board, current, move));
-  }
-
-  return {
-    outcome,
-    frontierSizes,
-    aliveCounts,
-    blunderRate: steps === 0 ? 0 : blunderShareTotal / steps,
-  };
+  return { ...peel(board, state), blunderRate: 0 };
 }
 
 /** Longest path in the blocking DAG — the deepest "must precede" chain. */
@@ -657,18 +459,11 @@ export function analyze(
   const solvable = outcome.kind === 'solved';
   const solutionLength = outcome.kind === 'solved' ? outcome.solution.length : 0;
 
-  // Drop the final step before measuring choice: with one arrow left the frontier
-  // is always exactly 1, which would drag `minFrontier` to 1 on every board.
   const choiceSteps = frontierSizes.slice(0, -1);
   const minFrontier = choiceSteps.length > 0 ? Math.min(...choiceSteps) : frontierSizes.length;
   const avgFrontier =
     choiceSteps.length > 0 ? choiceSteps.reduce((a, b) => a + b, 0) / choiceSteps.length : 0;
 
-  // At each step a blind player picks uniformly among the arrows still on the
-  // board and keeps picking until one works. That is a geometric distribution
-  // with success chance free/alive, so the expected number of *wrong* picks
-  // before landing a right one is (alive - free) / free. Summing over every step
-  // gives the hearts such a player would spend clearing the level.
   let expectedBlindMistakes = 0;
   for (let step = 0; step < frontierSizes.length; step += 1) {
     const total = aliveCounts[step]!;
@@ -682,19 +477,12 @@ export function analyze(
   const crowding = arrowCount === 0 ? 0 : countCrowding(board, state) / arrowCount;
   const dependencyDepth = longestChain(board, state);
 
-  // A blunt heuristic, intentionally: it orders candidates for a human to judge.
-  // Tracing load (length, turns, crowding) dominates, because that is the actual
-  // skill; blind-mistake pressure is the second term because it decides whether
-  // five hearts is enough.
   const raw =
     Math.min(3, avgBodyLength / 4) +
     Math.min(1.5, avgTurns / 2) +
     Math.min(1.5, crowding / 2) +
     Math.min(2, expectedBlindMistakes / 4) +
     density * 1.5 +
-    // Planning pressure, where it exists at all. Capped low on purpose: a level
-    // that demands planning is harder, but not several bands harder — misreading
-    // the board is still the thing that costs most players the level.
     Math.min(1.5, blunderRate * 4);
   const suggestedDifficulty = Math.max(1, Math.min(5, Math.round(raw)));
 
@@ -713,7 +501,7 @@ export function analyze(
     expectedBlindMistakes,
     dependencyDepth,
     blunderRate,
-    orderMatters: board.hasShutters,
+    orderMatters: false,
     suggestedDifficulty,
   };
 }
@@ -730,7 +518,7 @@ export function solveBruteForce(board: Board, state: BoardState): boolean {
 
   const search = (current: BoardState): boolean => {
     if (isCleared(current)) return true;
-    const key = stateKey(current);
+    const key = current.alive.join(',');
     if (seen.has(key)) return false;
     seen.add(key);
 

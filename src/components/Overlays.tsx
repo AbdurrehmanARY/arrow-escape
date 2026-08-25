@@ -176,42 +176,58 @@ export interface FailOverlayProps {
   visible: boolean;
   /**
    * Whether the board left behind can still be cleared.
-   *
-   * True on every level without a shutter gate, which is nearly all of them — and
-   * saying so is the difference between a loss that reads as fair and one that
-   * reads as the game cheating. On a shutter board it can be false, and claiming
-   * otherwise would be a lie the player can check.
    */
   stillWinnable: boolean;
+  /** Arrows remaining on board when failed. Used to detect Near-Miss state (<= 2). */
+  remainingArrows?: number;
   onRetry: () => void;
   onLevels: () => void;
+  /** Callback to watch a rewarded ad and recover +2 extra hearts. */
+  onNearMiss?: () => void;
 }
 
 export const FailOverlay = memo(function FailOverlay({
   palette,
   visible,
   stillWinnable,
+  remainingArrows,
   onRetry,
   onLevels,
+  onNearMiss,
 }: FailOverlayProps) {
+  const isNearMiss = remainingArrows !== undefined && remainingArrows > 0 && remainingArrows <= 2;
+
   return (
     <Sheet palette={palette} visible={visible}>
-      <Text style={[styles.eyebrow, { color: palette.textFaint }]}>OUT OF HEARTS</Text>
-      <Text style={[styles.title, { color: palette.text }]}>Not quite</Text>
+      <Text style={[styles.eyebrow, { color: isNearMiss ? palette.accent : palette.textFaint }]}>
+        {isNearMiss ? 'NEAR MISS — SO CLOSE!' : 'OUT OF HEARTS'}
+      </Text>
+      <Text style={[styles.title, { color: palette.text }]}>
+        {isNearMiss ? `${remainingArrows} Arrow${remainingArrows === 1 ? '' : 's'} Left!` : 'Not quite'}
+      </Text>
 
       <Text style={[styles.body, { color: palette.textMuted }]}>
-        {stillWinnable
+        {isNearMiss
+          ? 'You were just one step away from clearing this level! Get +2 extra hearts to finish it right now.'
+          : stillWinnable
           ? 'The board behind this is still perfectly winnable — nothing you tapped ever broke it. Five arrows just weren’t where you thought they were.'
           : 'Five wrong reads, and a gate closed on something that still needed to get out. Both are fixable from the start.'}
       </Text>
-      <Text style={[styles.bodySmall, { color: palette.textFaint }]}>
-        Trace each arrowhead straight out to the edge before you tap. If anything crosses that line,
-        it can&apos;t leave yet.
-      </Text>
+
+      {isNearMiss && onNearMiss ? (
+        <View style={{ marginTop: spacing.md, width: '100%' }}>
+          <Action
+            palette={palette}
+            label="+2 Hearts (Watch Ad)"
+            onPress={onNearMiss}
+            primary
+          />
+        </View>
+      ) : null}
 
       <View style={styles.actions}>
         <Action palette={palette} label="Levels" onPress={onLevels} />
-        <Action palette={palette} label="Try again" onPress={onRetry} primary />
+        <Action palette={palette} label="Try again" onPress={onRetry} primary={!isNearMiss} />
       </View>
     </Sheet>
   );

@@ -27,6 +27,7 @@ import {
   type AuthFailure,
 } from '@services/auth';
 import { isBackendConfigured } from '@services/supabase';
+import { syncProfile } from '@services/sync';
 import { useChallengeStore } from './challengeStore';
 import { useLeagueStore } from './leagueStore';
 import { useProgressStore } from './progressStore';
@@ -68,6 +69,7 @@ interface AuthState {
  */
 export async function syncEverything(): Promise<void> {
   await Promise.allSettled([
+    syncProfile(),
     useProgressStore.getState().pullAndPush(),
     useChallengeStore.getState().pullAndPush(),
     useLeagueStore.getState().pushWeek(Date.now()),

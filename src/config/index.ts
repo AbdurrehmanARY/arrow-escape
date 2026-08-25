@@ -31,6 +31,7 @@ export const USE_TEST_ADS = __DEV__;
  */
 export const AD_UNIT_IDS = {
   rewarded: 'ca-app-pub-0000000000000000/0000000000',
+  interstitial: 'ca-app-pub-0000000000000000/0000000000',
 } as const;
 
 /** Board sizes above this get a smaller minimum cell, so 12x12 still fits a phone. */

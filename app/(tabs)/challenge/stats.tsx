@@ -15,7 +15,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, ScreenHeader, useTheme } from '@components';
+import { ChallengeBadges, Screen, ScreenHeader, useTheme } from '@components';
 import { today } from '@challenge';
 import { statsOf, useChallengeStore } from '@state/challengeStore';
 import { radius, spacing, typography, type Palette } from '@theme';
@@ -50,6 +50,8 @@ export default function ChallengeStatsScreen() {
         onBack={() => router.back()}
       />
 
+      <ChallengeBadges palette={palette} />
+
       {all.length === 0 ? (
         <Empty palette={palette} />
       ) : (
@@ -57,6 +59,7 @@ export default function ChallengeStatsScreen() {
           <Section palette={palette} title="Streaks">
             <Row palette={palette} label="Current streak" value={`${stats.currentStreak} days`} />
             <Row palette={palette} label="Longest streak" value={`${stats.longestStreak} days`} />
+            <Row palette={palette} label="Highest win streak" value={`${stats.highestWinStreak} wins`} />
           </Section>
 
           <Section palette={palette} title="Results">

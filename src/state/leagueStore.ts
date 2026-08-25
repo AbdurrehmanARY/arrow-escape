@@ -41,6 +41,8 @@ interface LeagueState extends PersistedLeague {
   addClear: (levelId: number, arrows: number, atMs: number) => void;
   /** Record a challenge win, which is worth its bonus rather than its arrows. */
   addChallengeWin: (atMs: number) => void;
+  /** Add arbitrary bonus points (e.g. daily streak rewards). */
+  addBonusPoints: (points: number, atMs?: number) => void;
   resetLeague: () => void;
   /**
    * Push this week's arrows to the account.
@@ -98,6 +100,17 @@ export const useLeagueStore = create<LeagueState>((set, get) => ({
     const id = weekOf(atMs).id;
     const next: PersistedLeague = {
       weeks: prune({ ...weeks, [id]: (weeks[id] ?? 0) + CHALLENGE_BONUS }),
+      counted,
+    };
+    set(next);
+    persist(next);
+  },
+
+  addBonusPoints: (points, atMs = Date.now()) => {
+    const { weeks, counted } = get();
+    const id = weekOf(atMs).id;
+    const next: PersistedLeague = {
+      weeks: prune({ ...weeks, [id]: (weeks[id] ?? 0) + points }),
       counted,
     };
     set(next);

@@ -12,11 +12,12 @@
  */
 
 import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { Screen, ScreenHeader, useTheme } from '@components';
 import { rewardProgress, today, type RewardProgress } from '@challenge';
+import { rewardArt } from '@challenge/rewardArt';
 import { statsOf, useChallengeStore } from '@state/challengeStore';
 import { radius, spacing, typography, type Palette } from '@theme';
 
@@ -68,6 +69,7 @@ export default function ChallengeRewardsScreen() {
 
 function RewardCard({ palette, reward }: { palette: Palette; reward: RewardProgress }) {
   const { definition, earned, current, fraction } = reward;
+  const art = rewardArt(definition.id);
 
   return (
     <View
@@ -82,14 +84,26 @@ function RewardCard({ palette, reward }: { palette: Palette; reward: RewardProgr
       <View
         style={[
           styles.glyphWrap,
-          { backgroundColor: earned ? palette.success : palette.surfaceRaised },
+          // The art carries its own material and its own ring, so a coloured disc
+          // behind it would be a second badge drawn around the badge. Only the
+          // glyph fallback needs a ground to sit on.
+          art ? undefined : { backgroundColor: earned ? palette.success : palette.surfaceRaised },
         ]}
       >
-        <Text
-          style={[styles.glyph, { color: earned ? palette.textOnAccent : palette.textFaint }]}
-        >
-          {definition.glyph}
-        </Text>
+        {art ? (
+          <Image
+            source={earned ? art.earned : art.locked}
+            style={styles.art}
+            resizeMode="contain"
+            accessibilityIgnoresInvertColors
+          />
+        ) : (
+          <Text
+            style={[styles.glyph, { color: earned ? palette.textOnAccent : palette.textFaint }]}
+          >
+            {definition.glyph}
+          </Text>
+        )}
       </View>
 
       <View style={styles.cardBody}>
@@ -139,6 +153,7 @@ const styles = StyleSheet.create({
   },
   glyphWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   glyph: { fontSize: 22, fontWeight: '800' },
+  art: { width: 48, height: 48 },
   cardBody: { flex: 1, gap: 3 },
   name: { ...typography.body, fontWeight: '700' },
   description: { ...typography.small },

@@ -29,8 +29,6 @@ import {
   buildLevel,
   type ArrowSpec,
   type DifficultyMetrics,
-  type GateMode,
-  type GateSpec,
   type LevelDefinition,
   isSolvable,
   legalMoves,
@@ -80,8 +78,6 @@ export interface GenerateOptions {
   /** How many random boards to try before settling for the best so far. */
   readonly attempts: number;
   readonly hearts: number;
-  /** A gate to try to add once the board is grown and known solvable. */
-  readonly gate?: GateRequest;
   /** Filled in as attempts run, for the density probe. Tooling only. */
   readonly stats?: GenerateStats;
   /**
@@ -109,12 +105,6 @@ export interface GenerateStats {
   unsolvable: number;
   /** Grew and solved. */
   ok: number;
-}
-
-export interface GateRequest {
-  readonly mode: GateMode;
-  readonly groupCount: number;
-  readonly cellsPerGroup: number;
 }
 
 export interface Candidate {
@@ -699,124 +689,7 @@ function repairBoard(
   return stuckArrows(current).length === 0 ? current : undefined;
 }
 
-/** Colour names, in the order groups are handed out. Purely for reading level files. */
-const GROUP_NAMES = ['red', 'blue', 'green', 'violet', 'amber'] as const;
 
-/**
- * Try to add gates to a board that is already grown and already solvable.
- *
- * Placement is by rejection rather than by construction, and that is a considered
- * choice. Constructing a provably-safe gate means reasoning about the canonical
- * solution order and which arrows can be brought forward past which others — real
- * work, easy to get subtly wrong, and it would bias every gated level towards the
- * same shape. Throwing gates at the board and asking the solver is a few
- * milliseconds per try and produces placements nobody would have thought of.
- *
- * The acceptance test differs by mode, and the difference is the whole point:
- *
- * - `opens` only has to leave the board solvable, and must deepen it. A gate that
- *   changes no dependency is scenery the player pays attention to for nothing.
- * - `shuts` has to leave the board solvable *and* genuinely order-dependent. A
- *   shutter that can never actually trap anybody is worse than no shutter, because
- *   it teaches the player to fear something harmless.
- */
-function addGates(
-  rng: () => number,
-  level: LevelDefinition,
-  request: GateRequest,
-  attempts: number,
-): LevelDefinition | undefined {
-  const built = buildLevel(level);
-  if (!built.ok) return undefined;
-
-  const baselineDepth = analyze(
-    built.value.board,
-    built.value.initial,
-    SCREEN_BUDGET_OPTIONS,
-  ).dependencyDepth;
-
-  // Gate cells have to be free: `buildLevel` rejects a gate sitting on an arrow.
-  const occupied = new Set<number>();
-  for (const arrow of level.arrows) {
-    for (const cell of arrow.body) occupied.add(cell[0]! * level.cols + cell[1]!);
-  }
-  const free: number[] = [];
-  for (let cell = 0; cell < level.rows * level.cols; cell += 1) {
-    if (!occupied.has(cell)) free.push(cell);
-  }
-
-  const groupCount = Math.min(request.groupCount, GROUP_NAMES.length);
-  if (free.length < groupCount * request.cellsPerGroup) return undefined;
-  if (level.arrows.length < groupCount * 2 + 2) return undefined;
-
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const takenCells = new Set<number>();
-    const takenArrows = new Set<number>();
-    const gates: GateSpec[] = [];
-    const groupOf = new Map<number, string>();
-
-    let ok = true;
-    for (let g = 0; g < groupCount && ok; g += 1) {
-      const name = GROUP_NAMES[g]!;
-
-      // A colour wants at least two arrows — a single-arrow colour reads as one
-      // arrow with a hat on, not as a group the player has to track.
-      const members = 1 + Math.floor(rng() * 2);
-      for (let m = 0; m < members; m += 1) {
-        for (let tries = 0; tries < 8; tries += 1) {
-          const pick = Math.floor(rng() * level.arrows.length);
-          if (takenArrows.has(pick)) continue;
-          takenArrows.add(pick);
-          groupOf.set(pick, name);
-          break;
-        }
-      }
-
-      const cells: number[][] = [];
-      for (let c = 0; c < request.cellsPerGroup; c += 1) {
-        let placed = false;
-        for (let tries = 0; tries < 12 && !placed; tries += 1) {
-          const cell = free[Math.floor(rng() * free.length)]!;
-          if (takenCells.has(cell)) continue;
-          takenCells.add(cell);
-          cells.push([Math.floor(cell / level.cols), cell % level.cols]);
-          placed = true;
-        }
-        if (!placed) ok = false;
-      }
-      if (cells.length === 0) ok = false;
-      else gates.push({ cells, group: name, mode: request.mode });
-    }
-
-    if (!ok || groupOf.size === 0) continue;
-
-    const candidate: LevelDefinition = {
-      ...level,
-      arrows: level.arrows.map((arrow, index) => {
-        const group = groupOf.get(index);
-        return group === undefined ? arrow : { ...arrow, group };
-      }),
-      gates,
-    };
-
-    const rebuilt = buildLevel(candidate);
-    if (!rebuilt.ok) continue;
-
-    const { board, initial } = rebuilt.value;
-    if (!isSolvable(board, initial, SCREEN_BUDGET_OPTIONS)) continue;
-
-    const metrics = analyze(board, initial, SCREEN_BUDGET_OPTIONS);
-    if (request.mode === 'shuts') {
-      if (metrics.blunderRate <= 0) continue;
-    } else if (metrics.dependencyDepth <= baselineDepth) {
-      continue;
-    }
-
-    return candidate;
-  }
-
-  return undefined;
-}
 
 /** Generate one level, returning the best-scoring candidate found. */
 export function generateLevel(
@@ -880,22 +753,6 @@ export function generateLevel(
       continue;
     }
     if (options.stats) options.stats.ok += 1;
-
-    // Gates go on last, onto a board already known to work. Adding them earlier
-    // would mean the repair pass fighting the gate constraint at the same time as
-    // the cycle constraint, and repair is only cheap because it has one job.
-    if (options.gate) {
-      const gated = addGates(rng, playable, options.gate, 24);
-      // A level that asked for a gate and could not get one is not a level — the
-      // plan said this board is a planning level, and silently shipping it as an
-      // ordinary one would put a `shuts` name on a board with no shutter in it.
-      if (!gated) continue;
-      playable = gated;
-
-      const regrown = buildLevel(playable);
-      if (!regrown.ok) continue;
-      built = regrown;
-    }
 
     const { board, initial } = built.value;
     const metrics = analyze(board, initial, SCREEN_BUDGET_OPTIONS);

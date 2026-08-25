@@ -20,3 +20,8 @@ export * from './PauseMenu';
 export * from './Pressable';
 export * from './Screen';
 export * from './sound';
+export * from './ChallengeBadges';
+export * from './MonthlyTrophyModal';
+export * from './DummyAdModal';
+export * from './AwardInfoLayout';
+export * from './StreakRewardModal';

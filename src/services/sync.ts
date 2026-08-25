@@ -79,6 +79,31 @@ async function currentUserId(): Promise<string | undefined> {
   return data.session?.user.id;
 }
 
+/** Sync or update player display name in Supabase profiles table. */
+export async function syncProfile(name?: string): Promise<string | undefined> {
+  const client = supabase();
+  if (!client) return undefined;
+  const { data } = await client.auth.getSession();
+  const user = data.session?.user;
+  if (!user) return undefined;
+
+  const fallbackName =
+    user.user_metadata?.full_name ??
+    user.user_metadata?.name ??
+    (user.email ? user.email.split('@')[0] : 'Player');
+
+  const displayName = name?.trim() || fallbackName;
+
+  try {
+    await client
+      .from('profiles')
+      .upsert({ id: user.id, display_name: displayName, updated_at: new Date().toISOString() });
+    return displayName;
+  } catch {
+    return displayName;
+  }
+}
+
 /**
  * Merge level records with the account's copy.
  *

@@ -80,13 +80,6 @@ export interface Palette {
   arrowVariants?: readonly string[];
 
   /**
-   * Permanently impassable cells.
-   *
-   * Deliberately board furniture rather than a fifth arrow colour: a wall is part
-   * of the room, and anything that reads as a snake will be traced as one.
-   */
-  wall: string;
-  /**
    * Colours for arrow colour groups, and for the gates keyed to them.
    *
    * A group's colour is the only way a player can connect "these arrows" to "that

@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Switch, Text, View, type GestureResponderEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { Screen, ScreenHeader, Springy, useSheetSound, useTheme, withClick } from '@components';
@@ -38,6 +38,10 @@ const FAILURE_TEXT: Record<string, string> = {
   'no-play-services':
     'Google Play Services is missing or out of date on this device. Sign-in needs it.',
   rejected: 'Google did not accept that sign-in. Try again, or use another account.',
+  // Deliberately not phrased as something the player can retry their way out of.
+  // Nothing they do changes it, and "try again" on an unfixable error is the
+  // message that makes an app feel broken rather than unfinished.
+  misconfigured: 'Sign-in is not set up for this build yet. This is not a problem with your device.',
 };
 
 export default function AccountScreen() {
@@ -259,11 +263,11 @@ export default function AccountScreen() {
       <Confirm
         visible={confirmLogout}
         palette={palette}
-        title="Log out"
+        title="Log Out"
         highlight={email}
         detail={synced ? `Synced ${synced}` : undefined}
-        body="Any progress not yet synced will stay on this device."
-        confirmLabel="Log out"
+        body="Any unsaved progress will be lost when logging out."
+        confirmLabel="Log Out"
         onConfirm={() => {
           setConfirmLogout(false);
           void signOut();
@@ -346,10 +350,10 @@ function Confirm({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Springy style={styles.scrim} onPress={onCancel}>
-        <Springy
+      <Pressable style={styles.scrim} onPress={onCancel}>
+        <Pressable
           style={[styles.sheet, { backgroundColor: palette.surface }]}
-          onPress={(event) => event.stopPropagation()}
+          onPress={(event: GestureResponderEvent) => event.stopPropagation()}
         >
           <Text style={[styles.sheetTitle, { color: palette.text }]}>{title}</Text>
           {highlight ? (
@@ -364,8 +368,8 @@ function Confirm({
             <Action palette={palette} label={confirmLabel} tone="danger" onPress={onConfirm} />
             <Action palette={palette} label="Cancel" tone="primary" onPress={onCancel} />
           </View>
-        </Springy>
-      </Springy>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

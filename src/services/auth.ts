@@ -38,11 +38,7 @@
  */
 
 import Constants from 'expo-constants';
-import {
-  GoogleSignin,
-  isErrorWithCode,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
+import { NativeModules, TurboModuleRegistry } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 
 import { supabase } from './supabase';
@@ -57,12 +53,63 @@ export type AuthFailure =
   | 'no-play-services'
   /** Network, DNS, or the provider unreachable. */
   | 'network'
+  /**
+   * This build is not registered with Google: wrong signing key for the package,
+   * or a `webClientId` that is not a Web client.
+   *
+   * Separate from `rejected` because the player can do nothing about it and the
+   * developer can fix it in one place — conflating the two costs an afternoon.
+   */
+  | 'misconfigured'
   /** Anything Google or Supabase rejected — wrong client id, blocked account. */
   | 'rejected';
 
 export type AuthResult =
   | { readonly ok: true; readonly session: Session }
   | { readonly ok: false; readonly reason: AuthFailure; readonly detail?: string };
+
+interface GoogleSigninModule {
+  GoogleSignin: {
+    configure: (options: unknown) => void;
+    hasPlayServices: (options?: unknown) => Promise<boolean>;
+    signOut: () => Promise<void>;
+    signIn: () => Promise<any>;
+    signInSilently: () => Promise<any>;
+    revokeAccess: () => Promise<void>;
+  };
+  isErrorWithCode: (error: unknown) => error is { code: string | number };
+  statusCodes: Record<string, string>;
+}
+
+let sdk: GoogleSigninModule | undefined;
+let sdkChecked = false;
+
+function hasNativeGoogleSignin(): boolean {
+  try {
+    if (TurboModuleRegistry.get('RNGoogleSignin') != null) return true;
+    return NativeModules['RNGoogleSignin'] != null;
+  } catch {
+    return false;
+  }
+}
+
+function loadSdk(): GoogleSigninModule | undefined {
+  if (sdkChecked) return sdk;
+  sdkChecked = true;
+
+  if (!hasNativeGoogleSignin()) {
+    sdk = undefined;
+    return sdk;
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    sdk = require('@react-native-google-signin/google-signin') as GoogleSigninModule;
+  } catch {
+    sdk = undefined;
+  }
+  return sdk;
+}
 
 /**
  * The Web OAuth client id, from `app.json` -> `expo.extra.google.webClientId`.
@@ -83,7 +130,7 @@ function webClientId(): string | undefined {
 
 /** Whether native sign-in can run at all in this build. */
 export function isGoogleConfigured(): boolean {
-  return webClientId() !== undefined;
+  return webClientId() !== undefined && loadSdk() !== undefined;
 }
 
 /**
@@ -128,10 +175,11 @@ let configured = false;
  */
 export function configureGoogleSignIn(): void {
   if (configured) return;
+  const module = loadSdk();
   const id = webClientId();
-  if (!id) return;
+  if (!module || !id) return;
 
-  GoogleSignin.configure({
+  module.GoogleSignin.configure({
     // Yes, the *Web* client id — see the note at the top of this file.
     webClientId: id,
     // No `offlineAccess`: a server auth code is only needed when a backend wants to
@@ -150,15 +198,16 @@ export function configureGoogleSignIn(): void {
  * handling.
  */
 export async function signInWithGoogle(): Promise<AuthResult> {
+  const module = loadSdk();
   const client = supabase();
-  if (!client || !isGoogleConfigured()) return { ok: false, reason: 'not-configured' };
+  if (!module || !client || !isGoogleConfigured()) return { ok: false, reason: 'not-configured' };
 
   configureGoogleSignIn();
 
   try {
     // Checked explicitly so a missing or stale Play Services reports itself rather
     // than surfacing as a generic failure. It is the usual emulator problem.
-    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    await module.GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
     // Drop any cached Google credential before opening the sheet.
     //
@@ -171,12 +220,12 @@ export async function signInWithGoogle(): Promise<AuthResult> {
     // This does *not* affect the silent restore on launch — see
     // `restoreGoogleSession`, which is what keeps a returning player signed in.
     try {
-      await GoogleSignin.signOut();
+      await module.GoogleSignin.signOut();
     } catch {
       // Nothing cached. Normal on a first run.
     }
 
-    const response = await GoogleSignin.signIn();
+    const response = await module.GoogleSignin.signIn();
     if (response.type === 'cancelled') return { ok: false, reason: 'cancelled' };
 
     const idToken = response.data.idToken;
@@ -207,14 +256,38 @@ export async function signInWithGoogle(): Promise<AuthResult> {
     }
     return { ok: true, session: data.session };
   } catch (error) {
-    if (isErrorWithCode(error)) {
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) return { ok: false, reason: 'cancelled' };
-      if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+    const errObj = error as { code?: string | number };
+    if (errObj && errObj.code !== undefined) {
+      const codeStr = String(errObj.code);
+      if (
+        codeStr === '12501' ||
+        codeStr === 'SIGN_IN_CANCELLED' ||
+        (module.statusCodes && codeStr === module.statusCodes.SIGN_IN_CANCELLED)
+      ) {
+        return { ok: false, reason: 'cancelled' };
+      }
+      if (
+        codeStr === '12500' ||
+        codeStr === 'PLAY_SERVICES_NOT_AVAILABLE' ||
+        (module.statusCodes && codeStr === module.statusCodes.PLAY_SERVICES_NOT_AVAILABLE)
+      ) {
         return { ok: false, reason: 'no-play-services' };
       }
-      if (error.code === statusCodes.IN_PROGRESS) {
-        // A second tap while the sheet is already open. Not a failure to report.
+      if (
+        codeStr === '12502' ||
+        codeStr === 'IN_PROGRESS' ||
+        (module.statusCodes && codeStr === module.statusCodes.IN_PROGRESS)
+      ) {
         return { ok: false, reason: 'cancelled' };
+      }
+      if (codeStr === 'DEVELOPER_ERROR' || codeStr === '10') {
+        return {
+          ok: false,
+          reason: 'misconfigured',
+          detail:
+            'Play Services rejected this build. The APK signing SHA-1 is probably ' +
+            'not registered against this package name in Google Cloud Console.',
+        };
       }
     }
     return {
@@ -233,8 +306,9 @@ export async function signInWithGoogle(): Promise<AuthResult> {
  * restore.
  */
 export async function restoreGoogleSession(): Promise<Session | undefined> {
+  const module = loadSdk();
   const client = supabase();
-  if (!client || !isGoogleConfigured()) return undefined;
+  if (!module || !client || !isGoogleConfigured()) return undefined;
 
   // A Supabase session already in the keystore beats asking Google again.
   const existing = await currentSession();
@@ -242,7 +316,7 @@ export async function restoreGoogleSession(): Promise<Session | undefined> {
 
   configureGoogleSignIn();
   try {
-    const response = await GoogleSignin.signInSilently();
+    const response = await module.GoogleSignin.signInSilently();
     if (response.type !== 'success' || !response.data.idToken) return undefined;
 
     const { data } = await client.auth.signInWithIdToken({
@@ -275,10 +349,13 @@ export async function signOut(): Promise<void> {
   const client = supabase();
   if (client) await client.auth.signOut();
 
-  try {
-    await GoogleSignin.signOut();
-  } catch {
-    // Already signed out, or never configured. Nothing to recover from.
+  const module = loadSdk();
+  if (module) {
+    try {
+      await module.GoogleSignin.signOut();
+    } catch {
+      // Already signed out, or never configured. Nothing to recover from.
+    }
   }
 }
 
@@ -297,12 +374,14 @@ export async function deleteAccount(): Promise<boolean> {
   const { error } = await client.functions.invoke('delete-account');
   if (error) return false;
 
-  try {
-    // Revoke rather than sign out: the player asked to be forgotten, so the app's
-    // permission to see their Google identity should go too.
-    await GoogleSignin.revokeAccess();
-  } catch {
-    // Best effort — the account is already gone server-side.
+  const module = loadSdk();
+  if (module) {
+    try {
+      await module.GoogleSignin.revokeAccess();
+    } catch {
+      // Best effort — the account is already gone server-side.
+    }
   }
   return true;
 }
+

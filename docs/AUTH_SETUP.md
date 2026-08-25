@@ -54,36 +54,48 @@ At [console.cloud.google.com](https://console.cloud.google.com) → **APIs & Ser
 **a. Web application** — despite the name, this is the one the _app_ names in code.
 
 Its client id is the **audience** of the ID token Google issues, and it is what
-Supabase verifies. Already wired:
+Supabase verifies. Wired in `app.json` → `expo.extra.google.webClientId`:
 
 ```
-920357438418-gu2mb1tso2g6jir8emcqrito04ukomqt.apps.googleusercontent.com
+920357438418-5v1bpaavm7ssqsgfsomsghosnrf0b7qp.apps.googleusercontent.com
 ```
 
 > ⚠️ **Confirm this is a _Web application_ client, not an Android one.** Passing an
 > Android client id as `webClientId` is the single most common failure in this flow:
 > Google signs the user in, returns **no ID token**, and nothing explains why. The
 > app detects exactly this case and says so.
+>
+> This document previously printed the **Android** client id here, under this very
+> warning. The app was never wired with it — `app.json` has always held the id
+> above — but anyone following these steps would have pasted the wrong value into
+> Supabase's Authorized Client IDs and got a rejected token with nothing to explain
+> it. If sign-in has ever failed for you, check that list first.
 
-**b. Android** — authorises _this app_ to use the Web client. Never named in code.
+**b. Android** — authorises _this app_ to use the Web client. Never named in code,
+and never entered into Supabase.
+
+```
+920357438418-gu2mb1tso2g6jir8emcqrito04ukomqt.apps.googleusercontent.com
+```
 
 - Package name: `com.abdurrehmanary.arrowpath`
-- SHA-1: `85:DA:69:F8:BF:D0:2A:CC:74:BC:B4:73:B6:AC:3B:58:EB:39:94:AD`
+- Local APK build SHA-1: `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`
+- EAS Upload SHA-1: `85:DA:69:F8:BF:D0:2A:CC:74:BC:B4:73:B6:AC:3B:58:EB:39:94:AD`
 
-> ⚠️ That SHA-1 is your **EAS upload key**. Once you enrol in Play App Signing —
-> mandatory for new apps — Google re-signs your AAB with a _different_ key, and
-> Play Store installs will present a different fingerprint. Sign-in will work in
-> your sideloaded APK and fail in production. Before going live, add the **App
-> signing key** SHA-1 from Play Console → _Setup → App integrity_ as a second
-> Android client. It does not exist until your first AAB upload.
+> ⚠️ Register both SHA-1 fingerprints above in Google Cloud Console under Android OAuth Clients for `com.abdurrehmanary.arrowpath`. Once you enrol in Play App Signing — mandatory for new apps — Google re-signs your AAB with a _different_ key, and Play Store installs will present a different fingerprint. Sign-in will work in your sideloaded APK and fail in production. Before going live, add the **App signing key** SHA-1 from Play Console → _Setup → App integrity_ as an additional Android client.
 
 ### 3. Enable Google in Supabase
 
 **Authentication → Providers → Google**, switch it on.
 
-- Paste the **Web** client id and secret.
+- Paste the **Web** client id and secret — `…5v1bpaavm7ssqsgfsomsghosnrf0b7qp`,
+  the one in `app.json`, not the Android one.
 - In **Authorized Client IDs**, add the same Web client id. This is what lets
   Supabase accept an ID token minted by the native picker.
+
+> The value here must match `app.json` → `expo.extra.google.webClientId` exactly.
+> It is the token's audience, so a mismatch means Google signs the player in and
+> Supabase then refuses the token it was handed.
 
 **No redirect URL is needed.** The native flow never leaves the app, so there is
 nothing to redirect back to — this step existed only for the old browser flow.
@@ -170,11 +182,19 @@ a separate provider needing its own Play Games Services configuration, and Supab
 does not support it natively — it needs a custom token flow. Worth doing later; it
 is not a checkbox.
 
-**Nothing syncs yet.** Signing in creates an account and proves who someone is. It
-does **not** upload progress, challenge records, or league scores — that needs
-tables, row-level security policies, and a sync routine, none of which exist. The
-Account screen says "saved on this device" for exactly this reason, and will keep
-being right until that work is done.
+**Sync is built, but the tables have to be created before it does anything.** The
+routine exists and is wired in — `progressStore`, `challengeStore` and
+`leagueStore` each call into `services/sync.ts` already. What is missing is the
+schema on the server.
+
+Run [`supabase/migrations/0001_progress_and_leagues.sql`](../supabase/migrations/0001_progress_and_leagues.sql)
+once, in the Supabase SQL editor. It is idempotent, it creates all four tables with
+their row-level security policies, and it installs a trigger that gives every new
+account a `profiles` row — plus a backfill for accounts that signed in before it
+ran, so nobody who already logged in is left without one.
+
+Until then `syncReachable()` returns false, and the Account screen honestly says
+"saved on this device". That is the check working, not the sync failing.
 
 **Leagues still show only you.** A leaderboard needs other players' scores, which
 needs the sync above plus a query. The screen is built and the week/zone maths is

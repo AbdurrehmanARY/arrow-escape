@@ -87,7 +87,6 @@ const DARK_GROUP_COLORS = ['#F0894B', '#56B4E9', '#4FCB8B', '#E58FC2', '#E6C34A'
 // ---------------------------------------------------------------------------
 
 const paperPalette: Palette = {
-  wall: '#B9B1A0',
   groupColors: LIGHT_GROUP_COLORS,
   scheme: 'light',
   background: '#EEEBE4',
@@ -123,7 +122,6 @@ const paperPalette: Palette = {
 };
 
 const midnightPalette: Palette = {
-  wall: '#39415F',
   groupColors: DARK_GROUP_COLORS,
   scheme: 'dark',
   background: '#0E1120',
@@ -180,7 +178,6 @@ const midnightPalette: Palette = {
  *   the entire game. The neon lives in the accents, where nothing is being traced.
  */
 const kineticNeonPalette: Palette = {
-  wall: '#2A3350',
   groupColors: DARK_GROUP_COLORS,
   scheme: 'dark',
   background: '#0A0E1A',
@@ -236,7 +233,6 @@ const noodlePalette: Palette = {
 };
 
 const boldPalette: Palette = {
-  wall: '#8A6B00',
   groupColors: LIGHT_GROUP_COLORS,
   scheme: 'light',
   background: '#F5C518',
@@ -272,7 +268,6 @@ const boldPalette: Palette = {
 };
 
 const blueprintPalette: Palette = {
-  wall: '#27689A',
   groupColors: DARK_GROUP_COLORS,
   scheme: 'dark',
   background: '#0A2A43',
@@ -311,12 +306,55 @@ const blueprintPalette: Palette = {
 // The registry
 // ---------------------------------------------------------------------------
 
+const arrowPalette: Palette = {
+  groupColors: LIGHT_GROUP_COLORS,
+  scheme: 'light',
+  background: '#FFFFFF',
+  board: '#FFFFFF',
+  boardBorder: '#E2E8F0',
+  pattern: '#CBD5E1',
+
+  arrow: '#18181B',
+  arrowShadow: 'rgba(0, 0, 0, 0.20)',
+  arrowHighlight: 'rgba(255, 255, 255, 0.25)',
+  arrowBlocked: '#EF4444',
+  arrowBlocker: '#F59E0B',
+  arrowSafe: '#10B981',
+  arrowHinted: '#3F3F46',
+
+  surface: '#FFFFFF',
+  surfaceRaised: '#F1F5F9',
+  border: '#E2E8F0',
+
+  text: '#0F172A',
+  textMuted: '#64748B',
+  textFaint: '#94A3B8',
+  textOnAccent: '#FFFFFF',
+
+  accent: '#8B5CF6',
+  accentMuted: '#EDE9FE',
+  success: '#10B981',
+  successMuted: '#D1FAE5',
+  danger: '#EF4444',
+  dangerMuted: '#FEE2E2',
+  heart: '#EF4444',
+  heartSpent: '#CBD5E1',
+};
+
 export const THEMES: readonly Theme[] = [
   {
     id: 'paper',
     name: 'Paper',
     description: 'Warm paper, charcoal arrows, dotted grid. The default look.',
     palette: paperPalette,
+    arrow: classicArrow,
+    board: dottedBoard,
+  },
+  {
+    id: 'arrow',
+    name: 'Arrow Theme',
+    description: 'Crisp white primary surfaces, refined gray secondary borders, and vibrant purple accents.',
+    palette: arrowPalette,
     arrow: classicArrow,
     board: dottedBoard,
   },

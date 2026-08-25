@@ -62,8 +62,8 @@ export function resolveTap(board: Board, state: BoardState, arrowIndex: number):
     arrowIndex,
     blockerIndex: ray.blockerArrow,
     blockerKind: ray.blockedBy,
-    blockerGroup: ray.blockerGroup,
     blockedAt: ray.blockedAt,
+    freeCells: ray.freeCells,
   };
 }
 
@@ -226,9 +226,8 @@ export function tapArrow(
  * solver, which `rules.ts` deliberately cannot import — that check lives in
  * `isDoomed` and is called by the screen, which can see both modules.
  */
-function statusAfter(board: Board, state: BoardState): GameStatus {
+function statusAfter(_board: Board, state: BoardState): GameStatus {
   if (isCleared(state)) return 'won';
-  if (board.hasShutters && !hasLegalMove(board, state)) return 'stuck';
   return 'playing';
 }
 

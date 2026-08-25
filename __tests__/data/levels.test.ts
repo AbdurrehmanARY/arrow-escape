@@ -17,7 +17,6 @@ import {
   buildLevel,
   indexOfArrow,
   legalMoves,
-  NO_GROUP,
   solve,
   verifySolution,
 } from '@game';
@@ -358,55 +357,7 @@ describe('dense levels', () => {
   });
 });
 
-describe('gates in the shipped library', () => {
-  const built = ALL_IDS.map((id) => {
-    const level = levelById(id)!;
-    const result = buildLevel(level);
-    if (!result.ok) throw new Error(`level ${id}: ${result.error}`);
-    return { id, level, ...result.value };
-  });
 
-  const shutterLevels = built.filter((entry) => entry.board.hasShutters);
-  const gatedLevels = built.filter((entry) => entry.board.hasObstacles);
-
-  it('ships enough gated levels for the mechanic to be learnable', () => {
-    // A mechanic that appears five times in six hundred levels is a curiosity, not
-    // a mechanic — the player meets it, fails once, and never sees it again.
-    expect(gatedLevels.length).toBeGreaterThan(80);
-    expect(shutterLevels.length).toBeGreaterThan(25);
-  });
-
-  it('survives the round trip through the codec', () => {
-    // Gates, colours and walls are all optional fields the encoder omits when they
-    // are absent, which is exactly the shape of bug that ships a level whose gates
-    // silently vanished.
-    for (const entry of gatedLevels) {
-      expect(entry.board.groups.length).toBeGreaterThan(0);
-      const coloured = entry.board.arrows.filter((arrow) => arrow.group !== NO_GROUP);
-      expect(coloured.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('gives every shutter level genuine order-dependence', () => {
-    // The reason a shutter is worth its cost. A level named for a closing gate had
-    // better contain a tap that actually closes one on you, or the name is a lie
-    // and the mechanic teaches nothing.
-    for (const entry of shutterLevels) {
-      const metrics = analyze(entry.board, entry.initial);
-      expect(metrics.orderMatters).toBe(true);
-      expect(metrics.blunderRate).toBeGreaterThan(0);
-    }
-  });
-
-  it('leaves every other level order-proof', () => {
-    // The complement, and the more important half: 560 levels still play by the
-    // rule that no tap order can lose you the board.
-    for (const entry of built) {
-      if (entry.board.hasShutters) continue;
-      expect(analyze(entry.board, entry.initial).blunderRate).toBe(0);
-    }
-  });
-});
 
 describe('board sizes', () => {
   it('includes boards far larger than a phone screen', () => {

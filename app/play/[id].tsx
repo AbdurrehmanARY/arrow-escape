@@ -19,22 +19,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 import { SkiaBoard } from '@render/SkiaBoard';
-import { Celebration, computeBoardLayout, ConfirmDialog, FailOverlay, Hud, initialScaleForTier, PauseMenu, PillButton, Screen, Springy, StuckOverlay, useTheme, WinOverlay, withClick } from '@components';
+import { Celebration, computeBoardLayout, ConfirmDialog, DummyAdModal, FailOverlay, Hud, initialScaleForTier, PauseMenu, PillButton, Screen, StuckOverlay, useTheme, WinOverlay } from '@components';
 import { earnedCount, today } from '@challenge';
 import {
   buildLevel,
-  colOf,
   emptyBoardState,
   findAllSafeMoves,
   findSafeMove,
   isDoomed,
-  rowOf,
 } from '@game';
 import { LEVEL_COUNT, levelById, tierOf } from '@data/levels';
 import { TIER_LABELS } from '@game/codec';
 import { WIN_OVERLAY_DELAY_MS } from '@config';
-import { availability, preload, showRewarded } from '@services/ads';
+import { availability, preload, recordLevelCompleteAndCheckInterstitial, showRewarded } from '@services/ads';
 import { playMusic, playSfx, playSting, type SfxName } from '@services/audio';
+import { triggerCollisionHaptic, triggerHintHaptic } from '@services/haptics';
 import { gameReducer, initGameState } from '@state/gameReducer';
 import { useHintStore } from '@state/hintStore';
 
@@ -61,7 +60,7 @@ const HINT_FADE_MS = 500;
  * The safe-area inset is added separately at the call site, because it is a
  * property of the device rather than of the layout.
  */
-const CHROME_HEIGHT = 268;
+const CHROME_HEIGHT = 64;
 
 /**
  * Smallest a cell may be drawn.
@@ -156,12 +155,14 @@ export default function PlayScreen() {
   const tier: DifficultyTier = tierOf(levelId) ?? 'medium';
   const built = useMemo(() => (level ? buildLevel(level) : undefined), [level]);
 
-  const hearts = level?.hearts ?? 5;
+  const hearts = 3;
   const [state, dispatch] = useReducer(
     gameReducer,
     built?.ok ? initGameState(built.value.initial, hearts) : undefined,
     (initial) => initial ?? initGameState(emptyBoardState(), hearts),
   );
+
+  const [showDummyAdModal, setShowDummyAdModal] = useState(false);
 
   const [hintedArrow, setHintedArrow] = useState<number | undefined>(undefined);
   // Kept for the fade *sequencing* — the timers below use it to hold the hint
@@ -178,19 +179,11 @@ export default function PlayScreen() {
    * on screen now, and `notify` is the only way it gets set, so a message can
    * never appear silently.
    */
-  const [hintNotice, setHintNotice] = useState<string | undefined>(undefined);
-  const [earning, setEarning] = useState(false);
-  /**
-   * The overlay waits a beat after the win so the board clearing is visible.
-   *
-   * The confetti and the banner run inside this window; the overlay waits for it
-   * to finish. Both halves matter and they are not the same thing — the burst marks
-   * the moment, and the delay is what stops a modal landing on top of the last
-   * snake threading out, which is the best thing in the game to watch.
-   */
+  const [_hintNotice, setHintNotice] = useState<string | undefined>(undefined);
+  const [earning] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(false);
   /** Bumped to send the board back to fit-to-screen. */
-  const [fitNonce, setFitNonce] = useState(0);
+  const [fitNonce] = useState(0);
   const [paused, setPaused] = useState(false);
   /** Camera focus for hint navigation. */
   const [focusX, setFocusX] = useState(0);
@@ -311,6 +304,9 @@ export default function PlayScreen() {
 
     if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+    // Evaluate ad monetization policy (grace period & cadence)
+    void recordLevelCompleteAndCheckInterstitial();
+
     // Only the overlay is delayed, so the board clearing is visible before
     // anything covers it.
     const timer = setTimeout(() => setOverlayVisible(true), WIN_OVERLAY_DELAY_MS);
@@ -365,10 +361,9 @@ export default function PlayScreen() {
     return hintedArrow !== undefined ? [hintedArrow] : [];
   }, [assist, built, hintedArrow, state.session.state, status]);
 
-  const viewportWidth = width - spacing.lg * 2;
-  // Insets are part of the chrome the board must not sit under — the status bar
-  // at the top and the gesture pill at the bottom both eat real height.
-  const viewportHeight = Math.max(220, height - CHROME_HEIGHT - insets.top - insets.bottom);
+  const viewportWidth = Math.min(width, 600);
+  const availableVertical = Math.max(220, height - insets.top - insets.bottom);
+  const viewportHeight = Math.max(220, availableVertical - CHROME_HEIGHT);
   const layout = useMemo(
     () =>
       built?.ok
@@ -391,8 +386,6 @@ export default function PlayScreen() {
         viewportHeight / layout.height,
         1,
       );
-      // `layout.cellSize` is what turns the readability floor from a guess into
-      // a measurement: on-screen cell size is exactly cellSize x scale.
       return initialScaleForTier(tier, fit, layout.cellSize);
     },
     [tier, layout.width, layout.height, layout.cellSize, viewportWidth, viewportHeight],
@@ -462,7 +455,7 @@ export default function PlayScreen() {
       if (!built?.ok) return;
 
       const now = Date.now();
-      if (lastTap.current.index === index && now - lastTap.current.at < 60) return;
+      if (lastTap.current.index === index && now - lastTap.current.at < 120) return;
       lastTap.current = { index, at: now };
 
       setHintedArrow(undefined);
@@ -486,8 +479,14 @@ export default function PlayScreen() {
     const outcome = state.lastOutcome;
     if (outcome?.kind === 'blocked') {
       playSfx('collision');
-      playSfx('heartLost');
-      if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      if (state.lastHeartDeducted) {
+        playSfx('heartLost');
+        if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+      const clearTimer = setTimeout(() => {
+        dispatch({ type: 'clearHighlight' });
+      }, 260);
+      return () => clearTimeout(clearTimer);
     } else if (outcome?.kind === 'escaped') {
       playSfx('arrowRelease');
       if (haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -530,6 +529,10 @@ export default function PlayScreen() {
    */
   const pendingHintArrowRef = useRef<number | null>(null);
 
+  const onCollisionHit = useCallback(() => {
+    triggerCollisionHaptic(haptics);
+  }, [haptics]);
+
   /**
    * Start the hint highlight and its auto-expire timer.
    *
@@ -540,7 +543,7 @@ export default function PlayScreen() {
     setHintedArrow(arrowIndex);
     setHintFading(false);
     playSfx('hintUsed');
-    if (haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerHintHaptic(haptics);
 
     // Clear any existing hint timers.
     if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
@@ -587,61 +590,43 @@ export default function PlayScreen() {
     }
 
     if (!spendHint()) return;
-    // Counted for the challenge record. A challenge cleared with hints is still a
-    // win, but it is not a perfect one — see `challengeStats`.
     hintsUsedRef.current += 1;
 
-    // Navigate the camera to the hinted arrow if it might be off-screen.
-    // The highlight starts only after the camera arrives, so the player sees
-    // the glow on the arrow rather than during transit.
+    // Pan camera smoothly to the hinted arrow's head position:
     const arrow = built.value.board.arrows[hint.arrowIndex];
-    if (arrow && layout) {
-      const headCell = arrow.body[0]!;
-      const headX = layout.originX + colOf(headCell, built.value.board.cols) * layout.cellSize + layout.cellSize / 2;
-      const headY = layout.originY + rowOf(headCell, built.value.board.cols) * layout.cellSize + layout.cellSize / 2;
-
-      // Store the pending arrow and kick off the camera move.
-      pendingHintArrowRef.current = hint.arrowIndex;
-      setFocusX(headX);
-      setFocusY(headY);
+    if (arrow && arrow.body[0] !== undefined) {
+      const headCell = arrow.body[0];
+      const col = headCell % built.value.board.cols;
+      const row = Math.floor(headCell / built.value.board.cols);
+      const fx = (col + 0.5 + boardStyle.padCells) * layout.cellSize;
+      const fy = (row + 0.5 + boardStyle.padCells) * layout.cellSize;
+      setFocusX(fx);
+      setFocusY(fy);
       setFocusNonce((n) => n + 1);
-    } else {
-      // No camera move needed — activate immediately.
-      activateHintHighlight(hint.arrowIndex);
     }
-  }, [built, spendHint, state.session.state, status, layout, activateHintHighlight, notify]);
 
-  /**
-   * Watch an ad, then give the hint it earned — without a second tap.
-   *
-   * The old flow granted a hint credit and stopped, leaving the player looking at
-   * a button that now said something different and had to be pressed again. They
-   * asked for a hint, sat through an advertisement for it, and were asked to ask
-   * again. The ad is the price; the hint is the thing bought, so it arrives.
-   */
-  const onEarnHint = useCallback(async () => {
-    setEarning(true);
-    const outcome = await showRewarded();
-    setEarning(false);
+    pendingHintArrowRef.current = null;
+    activateHintHighlight(hint.arrowIndex);
+  }, [built, spendHint, state.session.state, status, activateHintHighlight, notify, boardStyle.padCells, layout.cellSize]);
 
-    if (outcome.kind === 'earned') {
-      grantHints();
-      playSfx('rewardCollected');
-      applyHint();
-    } else if (outcome.kind === 'dismissed') {
-      notify('No hint earned — the ad was closed early.');
-    } else {
-      notify(outcome.reason);
-    }
-  }, [grantHints, notify, applyHint]);
+  const onEarnHint = useCallback(() => {
+    setShowDummyAdModal(true);
+  }, []);
 
-  /**
-   * The Hint button, whatever state the player is in.
-   *
-   * One entry point for all three cases, so the button never has to be pressed
-   * twice to do the thing it is named after: spend a hint if there is one, earn
-   * one first if an ad is ready, and otherwise say plainly why not.
-   */
+  const handleDummyAdClose = useCallback(
+    (earned: boolean) => {
+      setShowDummyAdModal(false);
+      if (earned) {
+        grantHints();
+        playSfx('rewardCollected');
+        applyHint();
+      } else {
+        notify('No hint earned — the ad was closed early.');
+      }
+    },
+    [grantHints, applyHint, notify],
+  );
+
   const onHint = useCallback(() => {
     if (!built?.ok || status !== 'playing') return;
 
@@ -650,13 +635,8 @@ export default function PlayScreen() {
       return;
     }
 
-    if (availability() === 'ready') {
-      void onEarnHint();
-      return;
-    }
-
-    notify('Out of hints. Connect to earn one — or restart, which is always free.');
-  }, [built, status, applyHint, onEarnHint, notify]);
+    onEarnHint();
+  }, [built, status, applyHint, onEarnHint]);
 
   useEffect(() => {
     if (hintsAvailable === 0) preload();
@@ -694,136 +674,67 @@ export default function PlayScreen() {
     );
   }
 
-  return (
-    <Screen>
-      {/*
-        One row of chrome above the board, not two.
+    return (
+      <Screen>
+        {/* ---- Top Header Bar (5% of whole screen) ------------------------- */}
+        <View style={styles.headerWrap}>
+          <Hud
+            palette={palette}
+            tierLabel={tierLabel}
+            heartsLeft={state.session.heartsLeft}
+            maxHearts={3}
+            onBack={() => router.back()}
+            onRestart={onRestartPressed}
+            onHint={earning ? () => undefined : onHint}
+            earning={earning}
+          />
+        </View>
 
-        Everything that led away from the level — back, settings — is behind the
-        pause button now. Those were three tap targets along the top edge of a
-        screen whose only verb is "tap an arrow", and none of them was ever wanted
-        mid-move.
-      */}
-      <Hud
-        palette={palette}
-        levelName={level.name}
-        levelNumber={level.id}
-        tierLabel={tierLabel}
-        heartsLeft={state.session.heartsLeft}
-        maxHearts={state.session.maxHearts}
-        arrowsLeft={state.session.state.remaining}
-        arrowsTotal={built.value.board.arrows.length}
-        onPause={() => {
-          playSfx('pause');
-          setPaused(true);
-        }}
-      />
+        {/* ---- Arrow Board Section (95% of whole screen) ------------------- */}
+        <View style={styles.boardWrap}>
+          <SkiaBoard
+            board={built.value.board}
+            state={state.session.state}
+            cellSize={layout.cellSize}
+            width={layout.width}
+            height={layout.height}
+            originX={layout.originX}
+            originY={layout.originY}
+            viewportWidth={viewportWidth}
+            viewportHeight={viewportHeight}
+            palette={palette}
+            arrowStyle={arrowStyle}
+            boardStyle={boardStyle}
+            initialScale={computedInitialScale}
+            fitNonce={fitNonce}
+            focusX={focusX}
+            focusY={focusY}
+            focusNonce={focusNonce}
+            onFocusComplete={onCameraFocusComplete}
+            safeArrows={safeArrows}
+            blockedArrows={state.blockedArrows}
+            blockerArrows={state.blockerArrows}
+            shakeArrow={state.highlight?.blocked}
+            shakeNonce={state.highlight?.nonce ?? 0}
+            freeCells={state.highlight?.freeCells ?? 0}
+            onCollisionHit={onCollisionHit}
+            departingArrows={state.departing}
+            onDepartComplete={onDepartComplete}
+            reducedMotion={reducedMotion}
+            onTapArrow={onTapArrow}
+            onPressArrow={onPressArrow}
+            onTapEmpty={onTapEmpty}
+            disabled={status !== 'playing'}
+            hintedArrow={hintedArrow}
+          />
+        </View>
 
-      <View style={styles.boardWrap}>
-        {/*
-          One Skia canvas, replacing the SVG board and the view that used to
-          transform it. The camera is a matrix inside the canvas rather than a
-          transform on a view the size of the whole level, and every arrow at rest
-          is recorded into a single picture — see `src/render/SkiaBoard.tsx`.
-        */}
-        <SkiaBoard
-          board={built.value.board}
-          state={state.session.state}
-          cellSize={layout.cellSize}
-          width={layout.width}
-          height={layout.height}
-          originX={layout.originX}
-          originY={layout.originY}
-          viewportWidth={viewportWidth}
-          viewportHeight={viewportHeight}
+        {/* ---- Simulated Dummy Ad Modal ----------------------------------- */}
+        <DummyAdModal
+          visible={showDummyAdModal}
+          onClose={handleDummyAdClose}
           palette={palette}
-          arrowStyle={arrowStyle}
-          boardStyle={boardStyle}
-          initialScale={computedInitialScale}
-          fitNonce={fitNonce}
-          focusX={focusX}
-          focusY={focusY}
-          focusNonce={focusNonce}
-          onFocusComplete={onCameraFocusComplete}
-          safeArrows={safeArrows}
-          blockedArrows={state.blockedArrows}
-          blockerArrows={state.blockerArrows}
-          shakeArrow={state.highlight?.blocked}
-          shakeNonce={state.highlight?.nonce ?? 0}
-          departingArrows={state.departing}
-          onDepartComplete={onDepartComplete}
-          reducedMotion={reducedMotion}
-          onTapArrow={onTapArrow}
-          onPressArrow={onPressArrow}
-          onTapEmpty={onTapEmpty}
-          disabled={status !== 'playing'}
-          hintedArrow={hintedArrow}
         />
-
-        {layout.oversized ? (
-          <View style={styles.panRow}>
-            <Text style={[styles.panHint, { color: palette.textFaint }]}>
-              {built.value.board.rows}×{built.value.board.cols} — drag to pan, pinch to zoom
-            </Text>
-            <Springy
-              accessibilityRole="button"
-              accessibilityLabel="Fit board to screen"
-              onPress={withClick(() => setFitNonce((n) => n + 1))}
-              style={[
-                styles.fitButton,
-                { borderColor: palette.border, backgroundColor: palette.surfaceRaised },
-              ]}
-            >
-              <Text style={[styles.fitLabel, { color: palette.textMuted }]}>Fit</Text>
-            </Springy>
-          </View>
-        ) : null}
-      </View>
-
-
-
-      <View style={styles.actions}>
-        <PillButton palette={palette} label="Restart" icon="↺" onPress={onRestartPressed} />
-        {/*
-          One button, one handler, whatever the hint situation is.
-
-          It used to be two buttons with two handlers and a condition deciding
-          which one you got — which is how "watch an ad" ended up being a
-          different action from "get a hint" rather than the price of one. The
-          label still tells the truth about what pressing it will cost.
-        */}
-        <PillButton
-          palette={palette}
-          label={
-            earning
-              ? 'Loading…'
-              : hintsAvailable > 0
-                ? `Hint (${hintsAvailable})`
-                : adReady
-                  ? 'Watch ad · Hint'
-                  : 'Hint'
-          }
-          icon="💡"
-          onPress={earning ? () => undefined : onHint}
-          primary
-        />
-      </View>
-
-      {hintNotice ? (
-        <Text style={[styles.notice, { color: palette.textMuted }]}>{hintNotice}</Text>
-      ) : null}
-
-      {hintsAvailable === 0 && !adReady ? (
-        <Springy
-          accessibilityRole="button"
-          onPress={withClick(doRestart)}
-          style={styles.freeAlternative}
-        >
-          <Text style={[styles.freeAlternativeLabel, { color: palette.textFaint }]}>
-            Restarting is always free.
-          </Text>
-        </Springy>
-      ) : null}
 
       {/*
         Fires from the win itself rather than from its own state flag.
@@ -886,8 +797,17 @@ export default function PlayScreen() {
         palette={palette}
         visible={status === 'failed'}
         stillWinnable={!doomed}
+        remainingArrows={state.session.state.remaining}
         onRetry={doRestart}
         onLevels={() => router.replace('/levels')}
+        onNearMiss={() => {
+          showRewarded().then((outcome) => {
+            if (outcome.kind === 'earned') {
+              dispatch({ type: 'addHearts', count: 2 });
+              if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+          });
+        }}
       />
 
       <StuckOverlay
@@ -912,7 +832,8 @@ export default function PlayScreen() {
 }
 
 const styles = StyleSheet.create({
-  boardWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  headerWrap: { width: '100%', flexShrink: 0, justifyContent: 'center' },
+  boardWrap: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
   panRow: {
     flexDirection: 'row',
     alignItems: 'center',

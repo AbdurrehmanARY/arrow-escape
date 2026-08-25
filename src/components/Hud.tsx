@@ -1,106 +1,93 @@
 /**
- * Hud.tsx — the chrome around the board.
+ * Hud.tsx — Header bar above the arrow board matching the custom screenshot design.
  *
- * Purpose:      Level identity, hearts, and progress, laid out so none of it
- *               competes with the board.
- * Responsibilities:
- *               - `Hud`        — the top bar: pause, level, tier, hearts, progress.
- *               - `PillButton` — the shared button shape used below the board.
- * Notes:        Every colour comes from the active palette, so the HUD reskins
- *               with the board rather than needing its own theme pass.
- *
- *               This is **one row plus a bar**, and keeping it to that is the
- *               point. The play screen previously carried a second row of chrome
- *               above this one holding a back button, a settings button and a hint
- *               count — three tap targets on a screen whose only verb is "tap an
- *               arrow", none of them wanted mid-move. They live in `PauseMenu` now.
+ * Header contains EXACTLY 4 items:
+ * 1. Circular Back button (<)
+ * 2. Circular Restart button (↻)
+ * 3. Middle: Tier Label + 3 Hearts centered
+ * 4. Blue Pill Hint button (📹 Hint)
  */
 
 import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 
-import { MIN_TOUCH_TARGET, type Palette, radius, spacing, tabularNums, typography } from '@theme';
+import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
 import { Springy, useGlow } from './Pressable';
 import { withClick } from './sound';
 
 export interface HudProps {
   palette: Palette;
-  levelName: string;
-  levelNumber: number;
-  /** Human-readable tier, e.g. "Tricky". The label is only useful if it is shown. */
   tierLabel: string;
   heartsLeft: number;
-  maxHearts: number;
-  arrowsLeft: number;
-  arrowsTotal: number;
-  onPause: () => void;
+  maxHearts?: number;
+  onBack: () => void;
+  onRestart: () => void;
+  onHint: () => void;
+  earning?: boolean;
 }
 
-/**
- * The top bar: pause, level identity, hearts, and how much board is left.
- *
- * Hearts are drawn as filled and spent rather than as a count, because "three
- * left" has to be readable in peripheral vision while the player is concentrating
- * on the board. A number would need reading; a row of shapes does not.
- *
- * The progress bar earns its two pixels on the big boards. A 60x60 level takes a
- * hundred taps and most of it is off-screen at any moment, so "am I nearly done"
- * became a question the screen could not answer — the arrows-left count alone
- * tells you nothing without knowing what you started with.
- */
 function HudInner({
   palette,
-  levelName,
-  levelNumber,
   tierLabel,
   heartsLeft,
-  maxHearts,
-  arrowsLeft,
-  arrowsTotal,
-  onPause,
+  maxHearts = 3,
+  onBack,
+  onRestart,
+  onHint,
+  earning = false,
 }: HudProps) {
-  const cleared = Math.max(0, arrowsTotal - arrowsLeft);
-  const progress = arrowsTotal === 0 ? 0 : cleared / arrowsTotal;
-
   return (
-    <View style={styles.hud}>
-      <View style={styles.hudRow}>
-        {/*
-          Deliberately not wrapped in `withClick`: the play screen answers this
-          press with `pause`, and a generic click underneath it would be two
-          sounds for one tap.
-        */}
+    <View style={styles.hudHeader}>
+      {/* ---- Left Controls: Back & Restart -------------------------------- */}
+      <View style={styles.leftGroup}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Pause"
-          onPress={onPause}
+          accessibilityLabel="Back"
+          onPress={withClick(onBack)}
           style={({ pressed }) => [
-            styles.pause,
-            { backgroundColor: palette.surfaceRaised, borderColor: palette.border },
-            pressed && styles.pillPressed,
+            styles.circleBtn,
+            { backgroundColor: palette.accentMuted },
+            pressed && styles.pressed,
           ]}
+          hitSlop={8}
         >
-          <Text style={[styles.pauseGlyph, { color: palette.textMuted }]}>❙❙</Text>
+          <FontAwesome name="chevron-left" size={16} color={palette.accent} />
         </Pressable>
 
-        <View style={styles.identity}>
-          <Text style={[styles.levelLabel, { color: palette.textFaint }]} numberOfLines={1}>
-            LEVEL {levelNumber} · {tierLabel.toUpperCase()}
-          </Text>
-          <Text style={[styles.levelName, { color: palette.text }]} numberOfLines={1}>
-            {levelName}
-          </Text>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Restart"
+          onPress={withClick(onRestart)}
+          style={({ pressed }) => [
+            styles.circleBtn,
+            { backgroundColor: palette.accentMuted },
+            pressed && styles.pressed,
+          ]}
+          hitSlop={8}
+        >
+          <FontAwesome name="undo" size={16} color={palette.accent} />
+        </Pressable>
+      </View>
+
+      {/* ---- Middle: Tier Name + 3 Hearts -------------------------------- */}
+      <View style={styles.centerGroup}>
+        <Text style={[styles.tierTitle, { color: palette.accent }]} numberOfLines={1}>
+          {tierLabel}
+        </Text>
 
         <View
-          style={styles.hearts}
+          style={styles.heartsRow}
           accessibilityLabel={`${heartsLeft} of ${maxHearts} hearts left`}
         >
           {Array.from({ length: maxHearts }, (_, i) => (
             <Text
               key={i}
-              style={[styles.heart, { color: i < heartsLeft ? palette.heart : palette.heartSpent }]}
+              style={[
+                styles.heart,
+                { color: i < heartsLeft ? palette.heart : palette.heartSpent },
+              ]}
             >
               ♥
             </Text>
@@ -108,23 +95,18 @@ function HudInner({
         </View>
       </View>
 
-      <View
-        style={styles.progressRow}
-        accessibilityLabel={`${cleared} of ${arrowsTotal} arrows off the board`}
+      {/* ---- Right: Hint Pill Button -------------------------------------- */}
+      <Springy
+        accessibilityRole="button"
+        accessibilityLabel="Hint"
+        onPress={withClick(onHint)}
+        style={[styles.hintPill, { backgroundColor: palette.accent }]}
       >
-        <View style={[styles.track, { backgroundColor: palette.border }]}>
-          <View
-            style={[
-              styles.fill,
-              { backgroundColor: palette.accent, width: `${Math.round(progress * 100)}%` },
-            ]}
-          />
-        </View>
-        <Text style={[styles.progressLabel, { color: palette.textFaint }]}>
-          {cleared}/{arrowsTotal}
+        <FontAwesome name="video-camera" size={14} color={palette.textOnAccent} />
+        <Text style={[styles.hintText, { color: palette.textOnAccent }]}>
+          {earning ? 'Loading…' : 'Hint'}
         </Text>
-        {/* tabular figures: this counts up mid-level and must not shift the bar. */}
-      </View>
+      </Springy>
     </View>
   );
 }
@@ -133,11 +115,8 @@ export interface PillButtonProps {
   palette: Palette;
   label: string;
   onPress: () => void;
-  /** Renders in the accent colour — for the one action you most want tapped. */
   primary?: boolean;
-  /** Renders as "currently on" — for toggles. */
   active?: boolean;
-  /** Small leading glyph. */
   icon?: string;
 }
 
@@ -157,8 +136,6 @@ export const PillButton = memo(function PillButton({
   const borderColor = primary || active ? palette.accent : palette.border;
   const color = primary ? palette.textOnAccent : active ? palette.text : palette.textMuted;
 
-  // The one action a screen most wants tapped carries the strongest elevation;
-  // everything else rests. See `glow` in `@theme`.
   const elevation = useGlow(palette.accent, primary ? 'primary' : 'rest');
 
   return (
@@ -181,37 +158,61 @@ export const PillButton = memo(function PillButton({
 export const Hud = memo(HudInner);
 
 const styles = StyleSheet.create({
-  hud: { marginBottom: spacing.md },
-  hudRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-
-  pause: {
-    width: MIN_TOUCH_TARGET,
-    height: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-  },
-  pauseGlyph: { fontSize: 13, letterSpacing: -1 },
-
-  // Takes the slack so a long level name truncates instead of shoving the hearts
-  // off the edge. The hearts are the thing that must never move.
-  identity: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
-  levelLabel: { ...typography.tiny, letterSpacing: 1.1 },
-  levelName: { ...typography.title, marginTop: 1 },
-
-  hearts: { flexDirection: 'row', gap: 3, flexShrink: 0 },
-  heart: { fontSize: 19 },
-
-  progressRow: {
+  hudHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.xs,
   },
-  track: { flexGrow: 1, height: 3, borderRadius: radius.pill, overflow: 'hidden' },
-  fill: { height: 3, borderRadius: radius.pill },
-  progressLabel: { ...typography.tiny, ...tabularNums },
+  leftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  circleBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.6,
+  },
+  centerGroup: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tierTitle: {
+    ...typography.body,
+    fontWeight: '800',
+    fontSize: 16,
+    marginBottom: 1,
+  },
+  heartsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    alignItems: 'center',
+  },
+  heart: {
+    fontSize: 18,
+  },
+  hintPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    height: 40,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+  },
+  hintText: {
+    ...typography.body,
+    fontWeight: '800',
+    fontSize: 15,
+  },
 
   pill: {
     flexDirection: 'row',
@@ -225,7 +226,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
   },
-  pillPressed: { opacity: 0.6 },
   pillIcon: { fontSize: 15 },
   pillLabel: { ...typography.body, fontWeight: '700' },
 });
