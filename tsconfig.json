@@ -75,6 +75,15 @@
       ],
       "@brand": [
         "./src/brand/index.ts"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ],
+      "@infrastructure/*": [
+        "./src/infrastructure/*"
+      ],
+      "@features/*": [
+        "./src/features/*"
       ]
     }
   },

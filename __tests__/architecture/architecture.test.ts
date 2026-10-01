@@ -24,10 +24,18 @@
  *               matters is that the *mechanism* is proven on one case per rule
  *               type: a forbidden layer edge, a barrel bypass, the sanctioned
  *               exceptions, and the clean-tree baseline.
+ *
+ *               The feature-based layers (ARCHITECTURE.md §4) get a second block
+ *               below. Those rules are seeded more densely, and deliberately so:
+ *               they were added *before* any file existed in `src/features`,
+ *               `src/shared` or `src/infrastructure`, so at the moment they were
+ *               written every one of them was unfalsifiable in the real tree. A
+ *               rule nobody has seen fail is a rule that does not exist, and these
+ *               were the rules the whole migration would rest on.
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const CHECKER = join(process.cwd(), 'tools', 'check-architecture.ts');
@@ -86,6 +94,30 @@ function runChecker(): Result {
 }
 
 /**
+ * Remove the directories `withSeededFile` had to create, walking up to `src/`.
+ *
+ * Purpose: Seeding a `src/features/gameplay/components/` rule means creating three
+ *          directories that did not exist. Removing the file alone leaves them
+ *          behind, and `src/features/**` is a *layer* — an orphaned empty
+ *          `src/features/gameplay/` changes what `layerOf` resolves for every
+ *          later assertion in this file, and would make a green run depend on
+ *          whether it ran first. `rmdirSync` throws `ENOTEMPTY` rather than
+ *          recursing, which is exactly the guard wanted here: it can only ever
+ *          remove directories this suite emptied.
+ */
+function pruneEmptyDirs(from: string): void {
+  const src = join(process.cwd(), 'src');
+  for (let dir = from; dir.startsWith(src) && dir !== src; dir = join(dir, '..')) {
+    if (!existsSync(dir)) continue;
+    try {
+      rmdirSync(dir);
+    } catch {
+      return;
+    }
+  }
+}
+
+/**
  * Plant a file, run the checker, then remove it whatever happens.
  *
  * The cleanup is in a `finally` on purpose: an assertion that throws mid-test
@@ -93,12 +125,14 @@ function runChecker(): Result {
  */
 function withSeededFile(relativePath: string, contents: string, check: (r: Result) => void): void {
   const full = join(process.cwd(), relativePath);
-  mkdirSync(join(full, '..'), { recursive: true });
+  const dir = join(full, '..');
+  mkdirSync(dir, { recursive: true });
   writeFileSync(full, contents, 'utf8');
   try {
     check(runChecker());
   } finally {
     rmSync(full, { force: true });
+    pruneEmptyDirs(dir);
   }
 }
 
@@ -199,6 +233,201 @@ describe('architecture boundaries', () => {
     const result = runChecker();
     expect(result.output).toContain('No architecture violations');
     expect(result.status).toBe(0);
+  });
+});
+
+describe('feature-based layers', () => {
+  it('fails when one feature imports another', () => {
+    withSeededFile(
+      'src/features/gameplay/components/__seed.ts',
+      "import { serveAd } from '@features/ads/services/ads';\nexport const seed = serveAd;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('features/gameplay/ must not import features/ads/');
+      },
+    );
+  });
+
+  it('fails when shared code imports a feature', () => {
+    // This is the rule that makes `shared` mean "owned by nobody". A shared
+    // component reaching into a feature is a feature wearing a disguise.
+    withSeededFile(
+      'src/shared/components/__seed.ts',
+      "import { Hud } from '@features/gameplay/components/Hud';\nexport const seed = Hud;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('shared/ must not import features/gameplay/');
+      },
+    );
+  });
+
+  it('fails when infrastructure imports a feature', () => {
+    withSeededFile(
+      'src/infrastructure/storage/__seed.ts',
+      "import { serveAd } from '@features/ads/services/ads';\nexport const seed = serveAd;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('infrastructure/ must not import features/ads/');
+      },
+    );
+  });
+
+  it('fails when shared code imports a store', () => {
+    withSeededFile(
+      'src/shared/components/__seed.ts',
+      "import { useSettingsStore } from '@state/settingsStore';\nexport const seed = useSettingsStore;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('shared/ must not import state/');
+      },
+    );
+  });
+
+  it('fails when shared code imports infrastructure', () => {
+    withSeededFile(
+      'src/shared/components/__seed.ts',
+      "import { loadSlice } from '@infrastructure/storage/storage';\nexport const seed = loadSlice;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('shared/ must not import infrastructure/');
+      },
+    );
+  });
+
+  it('fails when infrastructure imports a store', () => {
+    // The `services -> state` ban, carried across the rename. `storage.ts` and
+    // `sync.ts` are moving into `infrastructure/`, and both currently sit in the
+    // middle of a cycle with `state/challengeStore`; this is what stops the move
+    // from importing that cycle along with it.
+    withSeededFile(
+      'src/infrastructure/storage/__seed.ts',
+      "import { useSettingsStore } from '@state/settingsStore';\nexport const seed = useSettingsStore;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('infrastructure/ must not import state/');
+      },
+    );
+  });
+
+  it('fails when a feature leaves its root by relative path', () => {
+    // The rule that closes the checker-invisible gap. `targetLayer` ignores a
+    // relative specifier that lands in another layer, so this edge would go
+    // unnoticed forever if it were merely un-checked rather than banned.
+    withSeededFile(
+      'src/features/gameplay/components/__seed.ts',
+      "import { Screen } from '../../../shared/components/Screen';\nexport const seed = Screen;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('by alias, not by relative path');
+      },
+    );
+  });
+
+  it('fails when the engine facade imports React', () => {
+    withSeededFile(
+      'src/features/gameplay/engine/__seed.ts',
+      "import { useMemo } from 'react';\nexport const seed = useMemo;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('engine/ must only re-export @game');
+        expect(result.output).toContain('"react"');
+      },
+    );
+  });
+
+  it('fails when the engine facade reaches past @game', () => {
+    // The engine stays at `src/game` and this directory re-exports it. The moment
+    // the facade gains a dependency of its own it stops being a thin surface and
+    // becomes a second engine with none of the guarantees.
+    withSeededFile(
+      'src/features/gameplay/engine/__seed.ts',
+      "import { Hud } from '@components/Hud';\nexport const seed = Hud;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('engine/ must only re-export @game');
+      },
+    );
+  });
+
+  it('allows the engine facade to re-export @game', () => {
+    // A facade rule that forbids the only legal facade is not a boundary, it is an
+    // obstacle — so the shape Phase 6 will actually create has to pass too.
+    withSeededFile(
+      'src/features/gameplay/engine/__seed_ok.ts',
+      "export * from '@game';\n",
+      (result) => {
+        expect(result.status).toBe(0);
+        expect(result.output).toContain('No architecture violations');
+      },
+    );
+  });
+
+  it('allows the engine facade to deep-import the engine', () => {
+    withSeededFile(
+      'src/features/gameplay/engine/__seed_ok.ts',
+      "export { encodeLevel } from '@game/codec';\n",
+      (result) => {
+        expect(result.status).toBe(0);
+        expect(result.output).toContain('No architecture violations');
+      },
+    );
+  });
+
+  it('allows a feature to import shared code', () => {
+    // Dependencies point *down* into `shared`. Without this case, a rule that
+    // banned the direction outright would look identical to one banning the
+    // opposite, and both would satisfy every "fails when" test above.
+    withSeededFile(
+      'src/features/gameplay/components/__seed_ok.ts',
+      "import { Screen } from '@shared/components/Screen';\nexport const seed = Screen;\n",
+      (result) => {
+        expect(result.status).toBe(0);
+        expect(result.output).toContain('No architecture violations');
+      },
+    );
+  });
+
+  it('allows a feature to reach its own sub-folders without a barrel', () => {
+    withSeededFile(
+      'src/features/gameplay/hooks/__seed_ok.ts',
+      "import { solve } from '@features/gameplay/engine';\nexport const seed = solve;\n",
+      (result) => {
+        expect(result.status).toBe(0);
+        expect(result.output).toContain('No architecture violations');
+      },
+    );
+  });
+
+  it('allows infrastructure to import shared code', () => {
+    withSeededFile(
+      'src/infrastructure/sync/__seed_ok.ts',
+      "import { Screen } from '@shared/components/Screen';\nexport const seed = Screen;\n",
+      (result) => {
+        expect(result.status).toBe(0);
+        expect(result.output).toContain('No architecture violations');
+      },
+    );
+  });
+
+  it('allows shared code to reach its own sub-folders by relative path', () => {
+    withSeededFile(
+      'src/shared/hooks/__seed_ok.ts',
+      "import { Screen } from '../components/Screen';\nexport const seed = Screen;\n",
+      (result) => {
+        expect(result.status).toBe(0);
+        expect(result.output).toContain('No architecture violations');
+      },
+    );
+  });
+
+  it('leaves no feature directories behind after every seeded case', () => {
+    // `src/features/**` is a layer, so an orphaned empty `src/features/gameplay/`
+    // left behind by an earlier run would silently change what every later
+    // assertion in this file means — and a green suite would then depend on
+    // whether it happened to run first.
+    for (const dir of ['src/features', 'src/shared', 'src/infrastructure']) {
+      expect(existsSync(join(process.cwd(), dir))).toBe(false);
+    }
   });
 });
 

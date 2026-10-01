@@ -34,6 +34,12 @@ module.exports = {
     '^@brand$': '<rootDir>/src/brand',
     '^@data$': '<rootDir>/src/data',
     '^@data/(.*)$': '<rootDir>/src/data/$1',
+    // The feature-based migration. `@features/gameplay/...` resolves the feature
+    // itself; these mirror tsconfig.json exactly, because a mapping that exists in
+    // one and not the other is a test that passes for the wrong reason.
+    '^@shared/(.*)$': '<rootDir>/src/shared/$1',
+    '^@infrastructure/(.*)$': '<rootDir>/src/infrastructure/$1',
+    '^@features/(.*)$': '<rootDir>/src/features/$1',
   },
   // `index.ts` is a pure re-export barrel with no logic of its own; counting it
   // only ever drags the number down without telling us anything.

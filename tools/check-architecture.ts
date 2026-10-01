@@ -22,11 +22,21 @@
  *               test suite plants each violation in turn and asserts this script
  *               catches it. If you change a rule here, its test must change too.
  *
+ *               The `features/`, `shared/` and `infrastructure/` layers are the
+ *               feature-based migration described in docs/FEATURE_MIGRATION.md.
+ *               They are enforced here **before** any file moves into them. Adding
+ *               the folders without the rules would have been worse than useless:
+ *               `layerOf` reads the second path segment, so a `src/features`
+ *               directory resolves to a layer named `features`, which no
+ *               `FORBIDDEN` key mentions and no alias maps — the checker would
+ *               have printed "No architecture violations." and exited 0 while
+ *               enforcing nothing at all.
+ *
  * Run: `npm run architecture:check`
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 const ROOT = process.cwd();
 const SCAN = ['app', 'src', '__tests__', 'tools'] as const;
@@ -55,29 +65,88 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** The top-level layer a file belongs to, e.g. `src/game` -> `game`. */
+/**
+ * The layer a file belongs to, e.g. `src/game` -> `game`.
+ *
+ * Notes:   A **feature is a layer in its own right**: `src/features/gameplay/x.ts`
+ *          resolves to `features/gameplay`, not to a flat `features`. That is the
+ *          whole point of the split — `features/gameplay` importing
+ *          `features/ads` is exactly the coupling feature ownership exists to
+ *          stop, and a single flat `features` key cannot express it, because every
+ *          feature would then be allowed to import every other one.
+ */
 function layerOf(file: string): string | null {
   const rel = relative(ROOT, file).split(sep);
-  const [top, second] = rel;
-  if (top === 'src' && second !== undefined) return second;
+  const [top, second, third] = rel;
+  if (top === 'src' && second !== undefined) {
+    if (second === 'features' && third !== undefined) return `features/${third}`;
+    return second;
+  }
   if (top === 'app') return 'app';
   if (top === 'tools') return 'tools';
   return null;
 }
 
+/** The `src/` sub-roots that own an entire subtree, with the feature compound case. */
+const OWNED_ROOTS = new Set(['shared', 'infrastructure']);
+
+/**
+ * The root a file must not leave by relative path, or null when it has none.
+ *
+ * Purpose: `targetLayer` only resolves a relative specifier when it lands back in
+ *          the *same* layer, so a relative import that crosses into another layer
+ *          is invisible to every rule above. That is not a hypothetical: the
+ *          repository's two import cycles both run through
+ *          `src/challenge/rewards.ts -> '../state/challengeStore'`, which the
+ *          checker has never once looked at. Legacy layers keep that blind spot —
+ *          turning it on for them would surface `tools -> src/game`, which is
+ *          legitimate — but the new roots do not get to start their life with it.
+ *
+ * Returns:    An absolute path fragment such as `\features\gameplay\`, or null.
+ */
+function ownedRoot(file: string): string | null {
+  const rel = relative(ROOT, file).split(sep);
+  const [top, second, third] = rel;
+  if (top !== 'src' || second === undefined) return null;
+  if (OWNED_ROOTS.has(second)) return `${sep}${second}${sep}`;
+  if (second === 'features' && third !== undefined) return `${sep}features${sep}${third}${sep}`;
+  return null;
+}
+
+/**
+ * True for the pure engine's re-export facade, `src/features/gameplay/engine/`.
+ *
+ * Purpose: The engine stays physically at `src/game` — it is guarded by a purity
+ *          rule, a jest coverage gate keyed on that exact path, and ten off-device
+ *          `tools/` importers, and moving all three at once buys nothing — so
+ *          `features/gameplay/engine/` re-exports it instead. A facade that
+ *          quietly grows a helper function, or reaches for a platform package, has
+ *          stopped being a facade and has started being a second engine with none
+ *          of the guarantees, so this is checked directly rather than assumed.
+ */
+function isEngineFacade(file: string): boolean {
+  const rel = relative(ROOT, file).split(sep);
+  return rel[0] === 'src' && rel[1] === 'features' && rel[2] === 'gameplay' && rel[3] === 'engine';
+}
+
+/** Aliases that name a layer. Anything else beginning with `@` is a package. */
+const LAYER_ALIASES = new Set([
+  'game', 'render', 'components', 'theme', 'state', 'services', 'config',
+  'data', 'challenge', 'league', 'brand', 'shared', 'infrastructure', 'features',
+]);
+
 /** The layer an import specifier points at, or null if it is not a layer edge. */
 function targetLayer(from: string, spec: string): string | null {
   if (EXTERNAL.test(spec)) return null;
   if (spec.startsWith('@')) {
-    const alias = spec.slice(1).split('/')[0];
+    const [alias, second] = spec.slice(1).split('/');
     if (alias === undefined) return null;
-    if (
-      ['game', 'render', 'components', 'theme', 'state', 'services', 'config',
-        'data', 'challenge', 'league', 'brand'].includes(alias)
-    ) {
-      return alias;
-    }
-    return null;
+    if (!LAYER_ALIASES.has(alias)) return null;
+    // `@features/gameplay/components/Hud` names the feature, not the root, so it
+    // has to match `layerOf`'s compound form exactly or the two disagree about
+    // which layer an edge belongs to and every rule silently stops applying.
+    if (alias === 'features') return second === undefined ? null : `features/${second}`;
+    return alias;
   }
   if (spec.startsWith('.')) {
     const fromDir = join(relative(ROOT, from), '..');
@@ -115,6 +184,69 @@ const FORBIDDEN: Record<string, string[]> = {
 };
 
 /**
+ * ARCHITECTURE.md §4. Layers `shared/` may never import.
+ *
+ * Purpose: `shared/` holds code with no owner — the point of it is that any feature
+ *          can use it without asking. That only holds while it depends on nothing
+ *          above it, so the ban is on `app`, any `features/*`, `infrastructure`,
+ *          `tools` and `state` (a shared component reading a feature's zustand
+ *          store is not shared, it is a feature wearing a disguise).
+ * Notes:    The pinned layers stay reachable during the migration. Banning `game`,
+ *          `render`, `data` and `components` here would be defensible once every
+ *          caller has moved, and would be churn while half of them have not.
+ */
+const FORBIDDEN_SHARED = ['app', 'features', 'infrastructure', 'tools', 'state'];
+
+/**
+ * ARCHITECTURE.md §4. Layers `infrastructure/` may never import.
+ *
+ * Purpose: Platform adapters — storage, sync, the database client, analytics. This
+ *          is the old `services` layer's ban list verbatim, plus `features` and
+ *          `tools`, and the first half of that list is load-bearing: keeping
+ *          `services -> state` banned means moving `storage.ts` and `sync.ts` into
+ *          `infrastructure/` cannot quietly import the cycle those two files sit
+ *          in the middle of today.
+ */
+const FORBIDDEN_INFRASTRUCTURE = [
+  'app', 'features', 'tools', 'components', 'state', 'render', 'hooks',
+];
+
+/**
+ * The layers a file may not import, for any layer including the new ones.
+ *
+ * Purpose: Features are resolved dynamically rather than through `FORBIDDEN`,
+ *          because each one needs a ban list that names its *siblings*: a feature
+ *          that cannot import any other feature still allows every pair of them to
+ *          reach into each other, which is the coupling the migration exists to
+ *          remove. Listing them as `features` here would be meaningless — the
+ *          target of such an edge is `features/gameplay`, not `features`.
+ */
+/**
+ * Whether an edge into `target` is banned by `banned`.
+ *
+ * Purpose: The new layers are compound — the target of an alias import is
+ *          `features/gameplay`, not `features` — so an exact `includes` match
+ *          would never fire for them. `shared/` bans `features`, and the target it
+ *          has to catch is `features/gameplay`; testing those two strings for
+ *          equality says they are different and the rule silently does nothing.
+ *
+ *          This does not change any existing rule. Every legacy entry in
+ *          `FORBIDDEN` names a single segment, so `target === b` still matches and
+ *          `target.startsWith(b + '/')` cannot accidentally fire: nothing resolves
+ *          to a layer whose name is another layer's name followed by a slash.
+ */
+function isBanned(banned: string[], target: string): boolean {
+  return banned.some((b) => target === b || target.startsWith(`${b}/`));
+}
+
+function forbiddenFor(from: string): string[] {
+  if (from.startsWith('features/')) return ['app', 'tools'];
+  if (from === 'shared') return FORBIDDEN_SHARED;
+  if (from === 'infrastructure') return FORBIDDEN_INFRASTRUCTURE;
+  return FORBIDDEN[from] ?? [];
+}
+
+/**
  * ARCHITECTURE.md §2. Layers that must be reached through their own barrel.
  *
  * `services` is exempt, and deliberately so. Its barrel is minimal by design:
@@ -123,8 +255,19 @@ const FORBIDDEN: Record<string, string[]> = {
  * contradict that file's own header. A deep `@services/x` is the intended API
  * there, not a violation — so the rule is waived rather than "fixed" into a
  * regression. See ARCHITECTURE.md §2.
+ *
+ * `shared` and `infrastructure` are exempt for a different reason: they are
+ * sub-rooted by design (`shared/components`, `shared/hooks`,
+ * `infrastructure/storage`, `infrastructure/sync`) and have no barrel at all.
+ * Requiring one would mean inventing an `index.ts` whose only purpose is to make
+ * this rule happy, which is the kind of file that ends up being the layer's
+ * highest-blast-radius import. Intra-feature paths never reach this rule at all —
+ * `target === from` short-circuits first — so a feature's own sub-folders stay
+ * directly importable without any waiver.
  */
-const DEEP_IMPORT_ALLOWED = new Set(['game', 'services']);
+const DEEP_IMPORT_ALLOWED = new Set([
+  'game', 'services', 'shared', 'infrastructure',
+]);
 
 /**
  * Imports that are allowed to reach past a barrel anyway, with a reason each.
@@ -191,11 +334,59 @@ for (const dir of SCAN) {
         continue;
       }
 
+      // The engine facade sits inside `features/gameplay` but is not part of it: it
+      // is the engine's public surface and nothing else. It is checked before the
+      // forbidden-edge rule so that a facade reaching for a platform package is
+      // reported as a purity break rather than as an ordinary banned edge, which
+      // is the distinction `game/` itself gets and the reason the check above has
+      // to come first.
+      //
+      // Its own files may re-export each other relatively — a facade is allowed to
+      // have more than one file, it just may not reach outside itself or sideways.
+      if (isEngineFacade(file)) {
+        const sideways =
+          !spec.startsWith('.') ||
+          !resolve(dirname(file), spec).includes(`${sep}features${sep}gameplay${sep}engine${sep}`);
+        if (isPlatform(spec) || (targetLayer(file, spec) !== 'game' && sideways)) {
+          violations.push(
+            `${rel}: features/gameplay/engine/ must only re-export @game — it cannot import "${spec}" (ARCHITECTURE.md §4)`,
+          );
+          continue;
+        }
+      }
+
+      // A relative import that leaves its own root is invisible to every rule
+      // below, so it is rejected outright rather than merely un-checked. See
+      // `ownedRoot` for why the legacy layers keep the blind spot.
+      const owned = ownedRoot(file);
+      if (owned && spec.startsWith('.')) {
+        if (!resolve(dirname(file), spec).includes(owned)) {
+          violations.push(
+            `${rel}: must reach outside its own root by alias, not by relative path ("${spec}") — a cross-root relative import is not checkable`,
+          );
+          continue;
+        }
+      }
+
       const target = targetLayer(file, spec);
       if (!target || !from) continue;
 
-      const banned = FORBIDDEN[from];
-      if (banned && banned.includes(target)) {
+      // Sibling features. `forbiddenFor` cannot express this: the banned target is
+      // a specific feature, not a layer name, so it is matched here where both
+      // sides of the edge are known.
+      if (
+        from.startsWith('features/') &&
+        target.startsWith('features/') &&
+        target !== from
+      ) {
+        violations.push(
+          `${rel}: ${from}/ must not import ${target}/ ("${spec}") — features do not depend on each other (ARCHITECTURE.md §4)`,
+        );
+        continue;
+      }
+
+      const banned = forbiddenFor(from);
+      if (isBanned(banned, target)) {
         violations.push(`${rel}: ${from}/ must not import ${target}/ ("${spec}")`);
         continue;
       }
