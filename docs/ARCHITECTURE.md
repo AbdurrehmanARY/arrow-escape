@@ -181,3 +181,80 @@ Phase 21 turns Section 3 into a validator run by `tools/validate.ts`. It must:
 
 Until that validator exists, this document is the only thing standing between the
 repository and drift. It is not enough on its own.
+---
+
+## 10. The feature-based layers
+
+Added by [FEATURE_MIGRATION.md](FEATURE_MIGRATION.md). Sections 1–9 describe the
+horizontal layers that are being reorganised; this section describes the
+`features/`, `shared/` and `infrastructure/` layers that replace them.
+
+**These rules are enforced before a single file moves.** Section 9's argument is
+that an unenforced rule is only a review argument. That cuts harder here than it
+did for the layer matrix: `layerOf()` reads the second path segment, so a
+`src/features` directory resolves to a layer named `features`, which appeared in no
+rule table and mapped from no alias. Creating the directories first would have left
+the checker printing "No architecture violations." and exiting 0 over a tree it was
+not examining.
+
+| layer | may import | must NOT import |
+|---|---|---|
+| `features/<name>/` | `shared/`, `infrastructure/`, and the pinned layers (`game/`, `render/`, `theme/`, `data/`, `components/`, `state/`, `config/`, `brand/`) | **any other `features/<name>/`**, `app/`, `tools/` |
+| `shared/` | `features/*` no — downward only: `@theme`, `@game`, and its own sub-roots | `features/*`, `app/`, `infrastructure/`, `tools/`, `state/` |
+| `infrastructure/` | `shared/`, platform APIs | `features/*`, `app/`, `tools/`, `components/`, `state/`, `render/`, `hooks/` |
+
+### 10.1 A feature is a layer, not a folder
+
+`src/features/gameplay/` resolves to `features/gameplay`, and `src/features/ads/`
+to `features/ads`. They may not import each other.
+
+The flat alternative — one `features` key that every feature is allowed to import
+— is worse than no rule at all, because it reads as protection while permitting
+every edge the migration exists to remove. Two features that both need the same
+thing means the thing was never either of their responsibility; it belongs in
+`shared/`.
+
+### 10.2 The engine facade
+
+The engine **stays at `src/game/`**. It is guarded by the purity rule in §1, by a
+jest coverage gate keyed on that exact path, and by ten off-device `tools/`
+importers. Moving all three at once buys no architectural benefit.
+
+`src/features/gameplay/engine/` is therefore a **thin re-export** of `@game` and
+nothing else. It may import `@game`, `@game/*`, and its own files. It may not
+import a platform package, and it may not reach any other layer. The moment it
+grows a dependency of its own it has stopped being a surface for the engine and
+become a second engine with none of the engine's guarantees.
+
+### 10.3 Cross-root relative imports are banned in the new layers
+
+`targetLayer()` resolves a relative specifier only when it lands back in the same
+layer, so a relative import that crosses into another layer is invisible to every
+rule above. This is not hypothetical: both live cycles in the repository run
+through `src/challenge/rewards.ts -> '../state/challengeStore'`, which the checker
+has never inspected.
+
+The legacy layers keep that blind spot deliberately — enabling it there would
+surface the legitimate `tools/ -> src/game` edge, and that is a separate decision
+about a separate rule. The new roots do not start their life with it: a file under
+`features/`, `shared/` or `infrastructure/` may use a relative path **inside its own
+root** and nothing else.
+
+### 10.4 Barrels
+
+`shared/` and `infrastructure/` are exempt from §2, like `game/` and `services/`:
+they are sub-rooted by design (`shared/components`, `shared/hooks`,
+`infrastructure/storage`) and have no barrel. Requiring one would mean inventing an
+`index.ts` whose only purpose is to satisfy a rule.
+
+A feature's **own** sub-folders need no exemption. An intra-feature import resolves
+to the same layer on both sides, so §2 never applies to it.
+
+### 10.5 What is pinned
+
+`game/`, `data/`, `render/`, `theme/`, `config/`, `brand/`, root `app/`, root
+`assets/`, `tools/` and `__tests__/` are **not** moving. `game/` and `render/` are
+pinned by the guarantees above; `app/` and `assets/` are pinned by Expo Router and
+Metro (`main: "expo-router/entry"`, and `app.json` plus 34 static `require()` paths
+in `audioAssets.ts`); `tools/` is pinned because `levels:validate` runs inside
+`npm run verify`. Full reasoning in FEATURE_MIGRATION.md §6.

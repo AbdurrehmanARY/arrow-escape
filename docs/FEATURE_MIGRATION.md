@@ -15,11 +15,21 @@
 
 | area | files | notes |
 |---|---|---|
-| `src/` | **113** | 13 top-level layers |
+| `src/` | **92** | 12 top-level layers, plus 20 `data/levels/*.json` packs (not `.ts`) |
 | `app/` | **24** | 5 tabs, 3 nested `_layout`, 16 leaf routes |
-| `__tests__/` | **32** | 380 tests / 31 suites |
+| `__tests__/` | **32** | 396 tests / 31 suites (16 added by Phase 0) |
 | `tools/` | **30** (+6 `_scratch-*`) | `curriculum.ts` 1158, `shapeArt.ts` 1356, `shapeGlyphs.ts` 617 |
-| **`.ts`/`.tsx` total** | **≈199** | every one is an import-rewrite surface |
+| **`.ts`/`.tsx` total** | **178** | every one is an import-rewrite surface |
+
+> **Correction (Phase 0).** This table originally read `src/` = **113**, **13**
+> top-level layers, **≈199** `.ts`/`.tsx` total, and 380 tests. Re-measuring gave
+> 92 `.ts`/`.tsx` under `src/` (69 `.ts` + 23 `.tsx`) across **12** directories,
+> and **178** across `src/` + `app/` + `__tests__/` + `tools/`. The 113 figure had
+> swept the 20 level packs — `.json` — into a `.ts`/`.tsx` count; 199 repeated the
+> same mistake at the total. `src/challenge/` was likewise listed as 8 files
+> against 7 on disk (see §4.7). Nothing else in this document was affected: the
+> per-directory counts, the consumer counts in the table below, the cycles in §3
+> and the lockstep break list in §7 were all re-verified and stand.
 
 **The five most-coupled files** — each is a blast radius, not a file move:
 
@@ -255,7 +265,7 @@ The barrel exists and is used by nobody.
 session**. `require()` paths are static — Metro cannot resolve them dynamically — so
 another move re-breaks all 34 by hand. **Recommendation: do not move audio assets.**
 
-### 4.7 `src/challenge/` — 8 files → `ACH`
+### 4.7 `src/challenge/` — 7 files → `ACH`
 
 | file | LOC | consumers | note |
 |---|---|---|---|
@@ -497,7 +507,7 @@ Decision:    `gameReducer.ts` moves to `features/gameplay/store/` AS A REDUCER, 
 | phase | work | gate |
 |---|---|---|
 | **1** | **This inventory.** Read-only. | ✅ done |
-| **0** ⬅ inserted | Extend `check-architecture.ts` + its 11 seeded tests to know `features`/`shared`/`infrastructure`. **Before creating them** — otherwise the enforcer goes blind (§2.1) | `architecture:check` green **and** proven to fail on a seeded `features → infrastructure` violation |
+| **0** ⬅ inserted | Extend `check-architecture.ts` + its seeded tests to know `features`/`shared`/`infrastructure`. **Before creating them** — otherwise the enforcer goes blind (§2.1) | ✅ **done** — see below |
 | 2 | Create folders only where a real file lands | — |
 | 3 | `app/` — audit only, no move (deviation §6) | — |
 | 4 | Home | `verify` green |
@@ -510,6 +520,37 @@ Decision:    `gameReducer.ts` moves to `features/gameplay/store/` AS A REDUCER, 
 | 16 | Dependency audit + cycle check | — |
 | 17 | Full validation | all green |
 
+### 9.1 Phase 0, as delivered
+
+Commit `8aa0031`, on top of checkpoint `02c3424`. Rules live in
+`ARCHITECTURE.md` **§10**; implementation in `tools/check-architecture.ts`.
+
+| rule | mechanism |
+|---|---|
+| a feature is its own layer | `layerOf()` → `features/<name>`; `isBanned()` matches on segment boundaries so `shared`'s `'features'` entry actually catches `features/gameplay` |
+| features do not depend on each other | sibling comparison in the scan loop, where both ends of the edge are known |
+| `shared/` depends on nothing above it | `FORBIDDEN_SHARED` |
+| `infrastructure/` keeps the `services` bans | `FORBIDDEN_INFRASTRUCTURE` |
+| the engine facade stays thin | `isEngineFacade()` — `@game` only, no platform, own files only |
+| no cross-root relative imports | `ownedRoot()` |
+| `shared`/`infrastructure` need no barrel | added to `DEEP_IMPORT_ALLOWED` |
+
+**Proof.** 16 new seeded cases (9 failing rules, 7 legal shapes) — 27 tests in
+`__tests__/architecture/`, all passing. `src/features`, `src/shared` and
+`src/infrastructure` do not exist yet, so every one of those rules was written
+against an empty tree; without the seeds they would have been unfalsifiable.
+Each seed also prunes the directories it created, because an orphaned empty
+`src/features/gameplay/` changes what `layerOf()` resolves for every later
+assertion in that file.
+
+Aliases `@features/*`, `@shared/*`, `@infrastructure/*` added to **both**
+`tsconfig.json` and `jest.config.js` — a mapping present in one and not the other
+is a test that passes for the wrong reason.
+
+**Gate:** typecheck, lint, 31 suites / 396 tests, 1,000 levels, and
+`architecture:check` (615 imports, 0 violations, unchanged). No source file has
+moved.
+
 **Per-phase ritual:** `tsc --noEmit` → `lint` → `test` → `levels:validate` →
 `architecture:check`, plus `git status --porcelain` before/after. **Never** reset, stash,
 clean or revert (`ARCHITECTURE.md:167`, `AGENTS.md`).
@@ -520,7 +561,7 @@ clean or revert (`ARCHITECTURE.md:167`, `AGENTS.md`).
 
 - **No device.** `AGENTS.md`: every phase must end in something testable on a physical
   Android device. The previous session's Android build and on-device test **never ran**.
-- **`npm test` proves the domain, not the app.** 380 tests cover `src/game`, geometry,
+- **`npm test` proves the domain, not the app.** 396 tests cover `src/game`, geometry,
   hit-testing, storage, stores. **No test renders a screen end-to-end.** A feature
   migration is precisely the kind of change those tests cannot see.
 - Therefore phases 6–8 are validated by `tsc`/`jest`/the architecture checker **plus a

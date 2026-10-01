@@ -25,7 +25,7 @@
  *               type: a forbidden layer edge, a barrel bypass, the sanctioned
  *               exceptions, and the clean-tree baseline.
  *
- *               The feature-based layers (ARCHITECTURE.md §4) get a second block
+ *               The feature-based layers (ARCHITECTURE.md §10) get a second block
  *               below. Those rules are seeded more densely, and deliberately so:
  *               they were added *before* any file existed in `src/features`,
  *               `src/shared` or `src/infrastructure`, so at the moment they were

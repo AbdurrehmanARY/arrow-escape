@@ -1,14 +1,20 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** Feature-based migration **Phase 1 (inventory) complete** — see
-> [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md). Read-only phase: no source file
-> changed. It maps all 199 `.ts`/`.tsx` files to a proposed feature home, records **9
+> **Last updated:** Feature-based migration **Phase 0 (enforcement) and Phase 1 (inventory)
+> complete** — see [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
+> Phase 1 mapped all 178 `.ts`/`.tsx` files to a proposed feature home, recorded **9
 > documented deviations** (notably `src/game/`, `src/data/`, `src/render/` and `app/`
 > pinned, because moving them disarms the architecture checker or the level pipeline),
-> finds **2 real import cycles** through `src/challenge/rewards.ts`, and flags that
-> `src/components/index.ts` is imported by all 22 screens. Migration has **not started**;
-> it is blocked on five open decisions listed in that document.
+> found **2 real import cycles** through `src/challenge/rewards.ts`, and flagged that
+> `src/components/index.ts` is imported by all 22 screens.
+> **Phase 0 (commit `8aa0031`) re-armed `tools/check-architecture.ts` for the new layers
+> *before* any file moves** — rules in `ARCHITECTURE.md` §10, proven by 16 new seeded
+> cases. Without it, creating `src/features/` would have left the checker printing
+> "No architecture violations." and exiting 0 while enforcing nothing, and the
+> `game/` purity guarantee would have stopped being verified silently.
+> **No source file has moved.** Migration is blocked on device validation, which is
+> unavailable in this environment.
 > Previous: Master Growth & Design Brief completed and approved — see [docs/MASTER_BRIEF_GROWTH_DESIGN.md](MASTER_BRIEF_GROWTH_DESIGN.md). Includes codebase audit, 10 key decisions, 10-tier computable difficulty formula, 1,000-level sawtooth pacing, 2026 ad monetization architecture & eCPM benchmarks, micro-haptics specs, LiveOps/retention schedule, telemetry schema, and 6-month roadmap.
 > Release state and the full remaining checklist live in [PROGRESS.md](PROGRESS.md).
 

@@ -8,8 +8,10 @@
  * Responsibilities:
  *               - Resolve every import in app/, src/, __tests__/ and tools/ to the
  *                 layer it belongs to.
- *               - Assert no forbidden edge exists (ARCHITECTURE.md §3).
+ *               - Assert no forbidden edge exists (ARCHITECTURE.md §3, §10).
  *               - Assert no import reaches past a barrel (§2).
+ *               - Assert a feature, shared or infrastructure file does not leave
+ *                 its own root by relative path (§10.3).
  * Notes:        **This is a separate script from `validate.ts` on purpose.**
  *               `levels:validate` is wired into `npm run verify` and its job is
  *               proving the level library is sound; folding architecture checks
@@ -184,7 +186,7 @@ const FORBIDDEN: Record<string, string[]> = {
 };
 
 /**
- * ARCHITECTURE.md §4. Layers `shared/` may never import.
+ * ARCHITECTURE.md §10. Layers `shared/` may never import.
  *
  * Purpose: `shared/` holds code with no owner — the point of it is that any feature
  *          can use it without asking. That only holds while it depends on nothing
@@ -198,7 +200,7 @@ const FORBIDDEN: Record<string, string[]> = {
 const FORBIDDEN_SHARED = ['app', 'features', 'infrastructure', 'tools', 'state'];
 
 /**
- * ARCHITECTURE.md §4. Layers `infrastructure/` may never import.
+ * ARCHITECTURE.md §10. Layers `infrastructure/` may never import.
  *
  * Purpose: Platform adapters — storage, sync, the database client, analytics. This
  *          is the old `services` layer's ban list verbatim, plus `features` and
@@ -349,7 +351,7 @@ for (const dir of SCAN) {
           !resolve(dirname(file), spec).includes(`${sep}features${sep}gameplay${sep}engine${sep}`);
         if (isPlatform(spec) || (targetLayer(file, spec) !== 'game' && sideways)) {
           violations.push(
-            `${rel}: features/gameplay/engine/ must only re-export @game — it cannot import "${spec}" (ARCHITECTURE.md §4)`,
+            `${rel}: features/gameplay/engine/ must only re-export @game — it cannot import "${spec}" (ARCHITECTURE.md §10)`,
           );
           continue;
         }
@@ -380,7 +382,7 @@ for (const dir of SCAN) {
         target !== from
       ) {
         violations.push(
-          `${rel}: ${from}/ must not import ${target}/ ("${spec}") — features do not depend on each other (ARCHITECTURE.md §4)`,
+          `${rel}: ${from}/ must not import ${target}/ ("${spec}") — features do not depend on each other (ARCHITECTURE.md §10)`,
         );
         continue;
       }

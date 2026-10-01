@@ -1,5 +1,12 @@
 # Implementation — ArrowPath Repository Architecture Reorganization
 
+> **This document is the completed horizontal layer migration, and it stays the record
+> of that work.** A second, separate reorganization is now underway: the
+> feature-based architecture (`features/`, `shared/`, `infrastructure/`). Its plan,
+> inventory and decisions live in **[docs/FEATURE_MIGRATION.md](docs/FEATURE_MIGRATION.md)**,
+> with the new boundary rules in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §10.
+> Sections 0–V below describe what was already done and are not being redone.
+
 **Purpose:** A 23-phase, behaviour-preserving repository reorganization. Each phase
 reads before it moves, moves one responsibility at a time, fixes imports, runs the
 full gate, and stops if behaviour changes.
