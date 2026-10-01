@@ -30,7 +30,7 @@
 import { exitPath, NO_GROUP, type ArrowId, type Board, type BoardState } from '@game';
 import type { ArrowStyle, BoardStyle, Palette } from '@theme';
 
-import { buildArrowGeometry, cellCentre, type Point } from '../components/arrowGeometry';
+import { buildArrowGeometry, cellCentre, type Point } from './arrowGeometry';
 
 export type GroupShapeCue = 'circle' | 'square' | 'triangle' | 'diamond' | 'star';
 
@@ -236,9 +236,10 @@ export function buildScene(input: SceneInput): Scene {
     const geometry = buildArrowGeometry(board, index, cellSize, originX, originY, arrowStyle);
     const { body, forward, tip, baseLeft, baseRight, stroke } = geometry;
 
-    // How far the head must travel to be fully clear. Purely geometric: the ray is
-    // clear by definition whenever an arrow is allowed to leave.
-    const rayLength = (exitPath(board, index).length + 1) * cellSize;
+    // How far the head must travel so the ENTIRE arrow body (tail to head)
+    // completely clears the board boundary.
+    const exitRayCells = exitPath(board, index).length + arrow.body.length + 2;
+    const rayLength = exitRayCells * cellSize;
     const bodyLength = (body.length - 1) * cellSize;
     const head = body[body.length - 1]!;
 

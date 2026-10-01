@@ -46,12 +46,18 @@ coverage/
 
 # build output captured for inspection; the level packs themselves are committed
 # Build and verification transcripts, written by npm scripts when run to a file.
-/build.log
-/verify.log
-/jest-levels.log
+# This single rule covers every transcript (`build.log`, `gradle-build.log`,
+# `metro-dev.log`, ...) rather than the three names we happened to hit first.
+/*.log
 
 # JetBrains IDE settings — local to one machine.
 .idea/
+
+# VS Code workspace settings — same reasoning as `.idea/` above.
+.vscode/
+
+# Python bytecode left behind by the offline QA scripts in the repo root.
+__pycache__/
 
 # Claude Code local settings and scratch files.
 .claude/settings.local.json

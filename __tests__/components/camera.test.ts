@@ -9,7 +9,7 @@
  * actually produces.
  */
 
-import { clampScale, clampTranslation, fitScale } from '@components/camera';
+import { clampScale, clampTranslation, fitScale } from '@render/camera';
 
 /** A phone-sized viewport, and an Extreme board drawn at the minimum cell size. */
 const VIEWPORT = { width: 360, height: 520 };

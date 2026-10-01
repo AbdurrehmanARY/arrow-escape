@@ -154,7 +154,7 @@ function buildOne(planIndex: number): BuildResult {
 
   throw new Error(
     `level ${plan.id} "${plan.name}": no solvable ${plan.shape} board found — ` +
-      'loosen the plan (fewer arrows, shorter bodies, or a bigger grid)',
+    'loosen the plan (fewer arrows, shorter bodies, or a bigger grid)',
   );
 }
 
@@ -223,7 +223,7 @@ writeFileSync(
  * on demand and is cached, so only the levels actually played are ever expanded.
  */
 
-import { decodeLevel, type EncodedLevel, type LevelPack, type DifficultyTier } from '@game/codec';
+import { decodeLevel, type EncodedLevel, type LevelPack, type DifficultyTier } from '@game';
 import type { LevelDefinition } from '@game';
 
 ${imports}
@@ -309,20 +309,20 @@ for (const tier of TIER_ORDER) {
   const blinds = rows.map((r) => r.blind);
   console.log(
     `  ${tier.padEnd(13)} ${String(rows.length).padStart(4)}   ` +
-      `${avg((r) => r.arrows)
-        .toFixed(1)
-        .padStart(10)}   ` +
-      `${avg((r) => r.cells)
-        .toFixed(0)
-        .padStart(9)}   ` +
-      `${(avg((r) => r.coverage) * 100).toFixed(0).padStart(3)}%   ` +
-      `${Math.min(...blinds)
-        .toFixed(1)
-        .padStart(6)} / ${avg((r) => r.blind)
+    `${avg((r) => r.arrows)
+      .toFixed(1)
+      .padStart(10)}   ` +
+    `${avg((r) => r.cells)
+      .toFixed(0)
+      .padStart(9)}   ` +
+    `${(avg((r) => r.coverage) * 100).toFixed(0).padStart(3)}%   ` +
+    `${Math.min(...blinds)
+      .toFixed(1)
+      .padStart(6)} / ${avg((r) => r.blind)
         .toFixed(1)
         .padStart(6)} / ${Math.max(...blinds)
-        .toFixed(1)
-        .padStart(6)}`,
+          .toFixed(1)
+          .padStart(6)}`,
   );
 }
 
@@ -338,7 +338,7 @@ const plannedShutters = CURRICULUM.filter((plan) => isPlanningLevel(plan.id)).le
 console.log('');
 console.log(
   `  ${tuned.length - offTarget.length}/${tuned.length} tuned levels landed in their target band ` +
-    `(dense levels excluded — they are deliberately off-target).`,
+  `(dense levels excluded — they are deliberately off-target).`,
 );
 console.log(`  ${oversized} boards are oversized and need zoom and pan.`);
 console.log(`  ${totalArrows} arrows across the library.`);
@@ -359,22 +359,22 @@ const meanCoverage = coverages.reduce((sum, c) => sum + c, 0) / coverages.length
 const belowTarget = coverages.filter((c) => c < 0.8).length;
 console.log(
   `  playable area covered ${(coverages[0]! * 100).toFixed(0)}% / ` +
-    `${(meanCoverage * 100).toFixed(0)}% / ${(coverages[coverages.length - 1]! * 100).toFixed(0)}% ` +
-    `(min/avg/max) across ${packedResults.length} packed levels; ${belowTarget} under 80%.`,
+  `${(meanCoverage * 100).toFixed(0)}% / ${(coverages[coverages.length - 1]! * 100).toFixed(0)}% ` +
+  `(min/avg/max) across ${packedResults.length} packed levels; ${belowTarget} under 80%.`,
 );
 if (shutsLevels.length > 0) {
   const shutterFill = shutsLevels.reduce((sum, r) => sum + r.coverage, 0) / shutsLevels.length;
   console.log(
     `  the ${shutsLevels.length} shutter levels sit at ${(shutterFill * 100).toFixed(0)}% by design — ` +
-      'an order has to be readable off the board.',
+    'an order has to be readable off the board.',
   );
 }
 
 console.log(
   `  ${shutsLevels.length} of ${plannedShutters} planned shutter levels got one` +
-    (shutsLevels.length > 0
-      ? `, blunder rate avg ${(
-          shutsLevels.reduce((sum, r) => sum + r.blunderRate, 0) / shutsLevels.length
-        ).toFixed(2)}.`
-      : '.'),
+  (shutsLevels.length > 0
+    ? `, blunder rate avg ${(
+      shutsLevels.reduce((sum, r) => sum + r.blunderRate, 0) / shutsLevels.length
+    ).toFixed(2)}.`
+    : '.'),
 );

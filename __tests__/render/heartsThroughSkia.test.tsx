@@ -27,7 +27,7 @@ import { act, create } from 'react-test-renderer';
 
 import { buildLevel, parseAscii, EMPTY } from '@game';
 import { defaultTheme } from '@theme';
-import { gameReducer, initGameState, type GameState } from '@state/gameReducer';
+import { gameReducer, initGameState, type GameState } from '@state';
 
 import { arrowAtBoardPoint, toBoardPoint } from '../../src/render/hitTest';
 

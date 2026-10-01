@@ -5,14 +5,12 @@
  * matching the design specs from the user's screenshots.
  */
 
-import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Springy } from './Pressable';
+import { MonthlyTrophyBadge } from './MonthlyTrophyBadge';
 import { withClick } from './sound';
-import { fonts, radius, spacing, typography, type Palette } from '@theme';
-
-const TROPHY_ACTIVE = require('../../assets/challenge/trophy_active.jpg');
-const TROPHY_INACTIVE = require('../../assets/challenge/trophy_inactive.jpg');
+import { fonts, radius, spacing, type Palette } from '@theme';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -38,12 +36,12 @@ export function MonthlyTrophyModal({
   year,
   wins,
   totalDays,
-  completedAt,
   onGoToMonth,
   palette,
 }: MonthlyTrophyModalProps) {
-  const isCompleted = wins >= totalDays;
+  const isCompleted = wins >= totalDays && totalDays > 0;
   const monthName = MONTHS[month - 1] ?? 'Month';
+  const progressPercent = totalDays > 0 ? Math.min(100, Math.round((wins / totalDays) * 100)) : 0;
 
   return (
     <Modal
@@ -62,69 +60,58 @@ export function MonthlyTrophyModal({
         >
           {/* ---- Trophy Image Header --------------------------------------- */}
           <View style={styles.imageContainer}>
-            <Image
-              source={isCompleted ? TROPHY_ACTIVE : TROPHY_INACTIVE}
-              style={styles.trophyImage}
-              resizeMode="contain"
-            />
+            <MonthlyTrophyBadge month={month} earned={isCompleted} size={150} />
           </View>
 
-          {isCompleted ? (
-            /* ---- Earned / Completed Layout ---------------------------------- */
-            <View style={styles.content}>
+          {/* ---- Title & Progress ------------------------------------------ */}
+          <View style={styles.content}>
+            <Text style={[styles.title, { color: palette.accent }]}>
+              {monthName} {year}
+            </Text>
+
+            {/* Progress bar pill track */}
+            <View
+              style={[
+                styles.progressTrack,
+                { backgroundColor: palette.surfaceRaised, borderColor: palette.border },
+              ]}
+            >
               <View
                 style={[
-                  styles.datePill,
-                  { backgroundColor: palette.surfaceRaised, borderColor: palette.border },
+                  styles.progressFill,
+                  {
+                    backgroundColor: palette.success,
+                    width: isCompleted ? '100%' : `${Math.max(16, progressPercent)}%`,
+                  },
                 ]}
               >
-                <Text style={[styles.datePillText, { color: palette.textMuted }]}>
-                  {completedAt ?? `${monthName} ${year}`}
-                </Text>
+                <Text style={styles.progressCount}>{wins}</Text>
               </View>
-
-              <Text style={[styles.completedTitle, { color: palette.text }]}>
-                You completed the {monthName} {year} challenge!
+              <Text style={[styles.progressTotal, { color: palette.textMuted }]}>
+                {totalDays}
               </Text>
             </View>
-          ) : (
-            /* ---- In-Progress / Locked Layout -------------------------------- */
-            <View style={styles.content}>
-              <Text style={[styles.lockedTitle, { color: palette.accent }]}>
-                {monthName} {year}
-              </Text>
 
-              <View style={styles.progressRow}>
-                <View
-                  style={[
-                    styles.progressTrack,
-                    { backgroundColor: palette.surfaceRaised, borderColor: palette.border },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        backgroundColor: palette.success,
-                        width: `${Math.max(14, Math.round((wins / totalDays) * 100))}%`,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.progressCount, { color: palette.textOnAccent }]}>
-                      {wins}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[styles.progressTotal, { color: palette.textFaint }]}>
-                  {totalDays}
+            {/* Completion status text */}
+            {isCompleted ? (
+              <View style={styles.completedBlock}>
+                <Text style={[styles.completedHeadline, { color: palette.success }]}>
+                  All Days Cleared!
+                </Text>
+                <Text style={[styles.progressSubtitle, { color: palette.textMuted }]}>
+                  {wins} / {totalDays} Days Completed
                 </Text>
               </View>
-            </View>
-          )}
+            ) : (
+              <Text style={[styles.progressSubtitle, { color: palette.textMuted }]}>
+                {wins} / {totalDays} Days Completed
+              </Text>
+            )}
+          </View>
 
-          {/* ---- Action Buttons --------------------------------------------- */}
+          {/* ---- Exactly Two Actions: Go to month + Close ------------------- */}
           <View style={styles.actions}>
-            {!isCompleted && onGoToMonth && (
+            {onGoToMonth && (
               <Springy
                 accessibilityRole="button"
                 accessibilityLabel="Go to month"
@@ -132,15 +119,17 @@ export function MonthlyTrophyModal({
                   onClose();
                   onGoToMonth();
                 })}
-                style={[styles.primaryButton, { backgroundColor: '#5B67F6' }]}
+                style={[styles.primaryButton, { backgroundColor: palette.accent }]}
               >
-                <Text style={styles.primaryButtonText}>Go to month</Text>
+                <Text style={[styles.primaryButtonText, { color: palette.textOnAccent }]}>
+                  Go to month
+                </Text>
               </Springy>
             )}
 
             <Springy
               accessibilityRole="button"
-              accessibilityLabel="Close modal"
+              accessibilityLabel="Close"
               onPress={withClick(onClose)}
               style={[
                 styles.secondaryButton,
@@ -183,80 +172,76 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
   },
   imageContainer: {
-    width: 140,
-    height: 140,
+    width: 160,
+    height: 160,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  trophyImage: {
-    width: 140,
-    height: 140,
   },
   content: {
     alignItems: 'center',
     width: '100%',
     gap: spacing.sm,
   },
-  datePill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-  },
-  datePillText: {
-    ...typography.small,
-    fontWeight: '700',
-  },
-  completedTitle: {
-    fontFamily: fonts.displayExtra,
-    fontWeight: '800',
-    fontSize: 20,
-    textAlign: 'center',
-    lineHeight: 26,
-    paddingHorizontal: spacing.sm,
-  },
-  lockedTitle: {
+  title: {
     fontFamily: fonts.displayExtra,
     fontWeight: '800',
     fontSize: 22,
     textAlign: 'center',
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingHorizontal: spacing.md,
-    gap: spacing.md,
-    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
   },
   progressTrack: {
-    flex: 1,
-    height: 32,
-    borderRadius: 16,
+    width: 200,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
     overflow: 'hidden',
-    justifyContent: 'center',
+    position: 'relative',
   },
   progressFill: {
-    height: '100%',
-    borderRadius: 16,
-    alignItems: 'flex-end',
+    height: 30,
+    minWidth: 30,
+    borderRadius: 15,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingRight: spacing.sm,
+    paddingHorizontal: 8,
   },
   progressCount: {
-    ...typography.small,
+    color: '#FFFFFF',
+    fontFamily: fonts.displayExtra,
     fontWeight: '800',
+    fontSize: 14,
   },
   progressTotal: {
     fontFamily: fonts.displayExtra,
     fontWeight: '800',
-    fontSize: 16,
+    fontSize: 15,
+    marginRight: 10,
+  },
+  completedBlock: {
+    alignItems: 'center',
+    gap: 2,
+    marginTop: spacing.xs,
+  },
+  completedHeadline: {
+    fontFamily: fonts.displayExtra,
+    fontWeight: '800',
+    fontSize: 17,
+    textAlign: 'center',
+  },
+  progressSubtitle: {
+    fontFamily: fonts.displayExtra,
+    fontWeight: '700',
+    fontSize: 14,
+    textAlign: 'center',
   },
   actions: {
     width: '100%',
     gap: spacing.sm,
-    marginTop: spacing.xs,
+    marginTop: spacing.md,
   },
   primaryButton: {
     height: 48,

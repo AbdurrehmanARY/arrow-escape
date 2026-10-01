@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { STREAK_REWARDS, useStreakStore, type StreakReward } from '@state/streakStore';
+import { STREAK_REWARDS, useStreakStore, type StreakReward } from '@state';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 import { Springy } from './Pressable';
 import { withClick } from './sound';

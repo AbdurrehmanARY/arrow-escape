@@ -20,7 +20,7 @@ import {
   playableUpTo,
   totalMistakes,
   type LevelRecord,
-} from '@state/progressStore';
+} from '@state';
 
 const cleared = (mistakes = 1): LevelRecord => ({
   bestMistakes: mistakes,

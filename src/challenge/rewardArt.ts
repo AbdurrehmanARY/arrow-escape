@@ -38,44 +38,44 @@ export interface RewardArt {
  */
 const ART: Record<string, RewardArt> = {
   'first-win': {
-    earned: require('../../assets/challenge/level_legend_active.jpg'),
-    locked: require('../../assets/challenge/level_legend_inactive.jpg'),
+    earned: require('../../assets/awards/level_legend_active.png'),
+    locked: require('../../assets/awards/level_legend_locked.png'),
   },
   'won-5': {
-    earned: require('../../assets/challenge/level_legend_active.jpg'),
-    locked: require('../../assets/challenge/level_legend_inactive.jpg'),
+    earned: require('../../assets/awards/level_legend_active.png'),
+    locked: require('../../assets/awards/level_legend_locked.png'),
   },
   'won-25': {
-    earned: require('../../assets/challenge/level_legend_active.jpg'),
-    locked: require('../../assets/challenge/level_legend_inactive.jpg'),
+    earned: require('../../assets/awards/level_legend_active.png'),
+    locked: require('../../assets/awards/level_legend_locked.png'),
   },
   'won-100': {
-    earned: require('../../assets/challenge/trophy_active.jpg'),
-    locked: require('../../assets/challenge/trophy_inactive.jpg'),
+    earned: require('../../assets/records/largest streak.png'),
+    locked: require('../../assets/records/largest streak_locked.png'),
   },
   'streak-3': {
-    earned: require('../../assets/challenge/league_climber_active.jpg'),
-    locked: require('../../assets/challenge/league_climber_inactive.jpg'),
+    earned: require('../../assets/awards/league_climber_active.png'),
+    locked: require('../../assets/awards/league_climber_locked.png'),
   },
   'streak-7': {
-    earned: require('../../assets/challenge/league_fighter_active.jpg'),
-    locked: require('../../assets/challenge/league_fighter_inactive.jpg'),
+    earned: require('../../assets/awards/league_fighter_active.png'),
+    locked: require('../../assets/awards/league_fighter_locked.png'),
   },
   'streak-30': {
-    earned: require('../../assets/challenge/trophy_active.jpg'),
-    locked: require('../../assets/challenge/trophy_inactive.jpg'),
+    earned: require('../../assets/records/largest streak.png'),
+    locked: require('../../assets/records/largest streak_locked.png'),
   },
   'perfect-1': {
-    earned: require('../../assets/challenge/perfect_play_active.jpg'),
-    locked: require('../../assets/challenge/perfect_play_inactive.jpg'),
+    earned: require('../../assets/awards/perfect_play_active.png'),
+    locked: require('../../assets/awards/perfect_play_locked.png'),
   },
   'perfect-10': {
-    earned: require('../../assets/challenge/perfect_play_active.jpg'),
-    locked: require('../../assets/challenge/perfect_play_inactive.jpg'),
+    earned: require('../../assets/awards/perfect_play_active.png'),
+    locked: require('../../assets/awards/perfect_play_locked.png'),
   },
   'perfect-50': {
-    earned: require('../../assets/challenge/unstoppable_active.jpg'),
-    locked: require('../../assets/challenge/unstoppable_inactive.jpg'),
+    earned: require('../../assets/awards/unstoppable_active.png'),
+    locked: require('../../assets/awards/unstoppable_locked.png'),
   },
 };
 

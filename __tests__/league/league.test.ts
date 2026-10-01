@@ -81,8 +81,8 @@ describe('the countdown', () => {
     expect(msRemaining(week, week.endMs + 100_000)).toBe(0);
   });
 
-  it('reads as days and hours while there is a day left', () => {
-    expect(formatRemaining((5 * 24 + 13) * 3600_000)).toBe('5d 13h');
+  it('reads as days while there is more than a day left', () => {
+    expect(formatRemaining((5 * 24 + 13) * 3600_000)).toBe('5 days');
   });
 
   it('drops to hours and minutes inside the last day', () => {

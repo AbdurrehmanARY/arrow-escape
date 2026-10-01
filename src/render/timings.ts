@@ -31,9 +31,6 @@ const MS_PER_CELL = 30;
 const MIN_RELEASE_MS = 300;
 const MAX_RELEASE_MS = 1000;
 
-/** How long the lurch-and-recoil of a blocked tap takes. */
-export const SHAKE_MS = 260;
-
 /** How long this arrow's exit should take, from how far it has to go. */
 export function releaseDurationMs(travelCells: number): number {
   return Math.max(MIN_RELEASE_MS, Math.min(MAX_RELEASE_MS, Math.round(travelCells * MS_PER_CELL)));

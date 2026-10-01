@@ -18,22 +18,22 @@
  *               zeroes for next November is not a collection, it is a to-do list.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, useTheme, withClick } from '@components';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { MonthlyTrophyBadge, MonthlyTrophyModal, Screen, useTheme, withClick } from '@components';
+import { playMusic } from '@services/audio';
 import {
-  CHALLENGE_START,
   challengeId,
   daysInMonth,
-  rewardProgress,
   today,
-  type RewardProgress,
+  useCalculatedRewards,
+  type CalculatedRewardItem,
 } from '@challenge';
-import { rewardArt } from '@challenge/rewardArt';
-import { statsOf, useChallengeStore } from '@state/challengeStore';
-import { clearedCount, perfectCount, useProgressStore } from '@state/progressStore';
+import { statsOf, useChallengeStore , clearedCount, perfectCount, useProgressStore } from '@state';
+
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 const MONTHS = [
@@ -41,29 +41,23 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ] as const;
 
-const TROPHY_ACTIVE = require('../../assets/challenge/trophy_active.jpg');
-const TROPHY_INACTIVE = require('../../assets/challenge/trophy_inactive.jpg');
-
-const FLAME_ACTIVE = require('../../assets/challenge/flame_active.jpg');
-const FLAME_INACTIVE = require('../../assets/challenge/flame_inactive.jpg');
-const CROWN_ACTIVE = require('../../assets/challenge/crown_active.jpg');
-const CROWN_INACTIVE = require('../../assets/challenge/crown_inactive.jpg');
-const ARROW_ACTIVE = require('../../assets/challenge/arrow_active.jpg');
-const ARROW_INACTIVE = require('../../assets/challenge/arrow_inactive.jpg');
-
 function getAwardInfoRoute(id: string): string {
   switch (id) {
-    case 'first-win':
+    case 'level-legend':
       return '/challenge/info/level-legend';
-    case 'perfect-1':
+    case 'perfect-play':
       return '/challenge/info/perfect-play';
-    case 'perfect-50':
+    case 'unstoppable':
       return '/challenge/info/unstoppable';
-    case 'streak-3':
+    case 'league-climber':
       return '/challenge/info/league-climber';
-    case 'streak-7':
+    case 'league-fighter':
       return '/challenge/info/league-fighter';
-    case 'won-100':
+    case 'longest-streak':
+      return '/challenge/info/longest-streak';
+    case 'highest-win-streak':
+      return '/challenge/info/highest-win-streak';
+    case 'most-wins':
       return '/challenge/info/most-wins';
     default:
       return '/challenge/info/level-legend';
@@ -76,22 +70,35 @@ export default function CollectionScreen() {
 
   const records = useChallengeStore((state) => state.records);
   const progressRecords = useProgressStore((state) => state.records);
-  const _bestPerfect = useProgressStore((state) => state.bestPerfectStreak);
+
+  useEffect(() => {
+    playMusic('menu');
+  }, []);
 
   const now = useMemo(() => today(), []);
   const stats = useMemo(() => statsOf({ records }, now), [records, now]);
-  const rewards = useMemo(() => rewardProgress(stats), [stats]);
+
+  const calculatedRewards = useCalculatedRewards();
+  const rewardsList = useMemo(
+    () =>
+      Object.values(calculatedRewards).filter(
+        (item) =>
+          item.id !== 'longest-streak' &&
+          item.id !== 'highest-win-streak' &&
+          item.id !== 'most-wins',
+      ),
+    [calculatedRewards],
+  );
 
   const cleared = useMemo(() => clearedCount(progressRecords), [progressRecords]);
   const perfect = useMemo(() => perfectCount(progressRecords), [progressRecords]);
 
   /**
-   * One entry per month of the current year that has already begun.
+   * All 12 monthly challenge trophies (January through December) for the current year.
    */
   const trophies = useMemo(() => {
     const out: { month: number; won: number; days: number }[] = [];
-    const from = now.year === CHALLENGE_START.year ? CHALLENGE_START.month : 1;
-    for (let month = from; month <= now.month; month += 1) {
+    for (let month = 1; month <= 12; month += 1) {
       const days = daysInMonth(now.year, month);
       let won = 0;
       for (let day = 1; day <= days; day += 1) {
@@ -99,8 +106,15 @@ export default function CollectionScreen() {
       }
       out.push({ month, won, days });
     }
-    return out.reverse();
+    return out;
   }, [records, now]);
+
+  const [modalMonth, setModalMonth] = useState<number | null>(null);
+
+  const modalTrophy = useMemo(
+    () => (modalMonth !== null ? trophies.find((t) => t.month === modalMonth) : undefined),
+    [modalMonth, trophies],
+  );
 
   return (
     <Screen scroll>
@@ -108,39 +122,68 @@ export default function CollectionScreen() {
 
       {/* ---- Records --------------------------------------------------- */}
       <SectionTitle palette={palette} label="Records" />
-      <View style={styles.row}>
-        <Tile
-          palette={palette}
-          image={stats.longestStreak > 0 ? FLAME_ACTIVE : FLAME_INACTIVE}
-          value={`${stats.longestStreak} days`}
-          label="Longest streak"
-          onPress={() => router.push('/challenge/info/longest-streak' as any)}
-        />
-        <Tile
-          palette={palette}
-          image={stats.highestWinStreak > 0 ? CROWN_ACTIVE : CROWN_INACTIVE}
-          value={`${stats.highestWinStreak} streak`}
-          label="Highest win streak"
-          onPress={() => router.push('/challenge/info/highest-win-streak' as any)}
-        />
-        <Tile
-          palette={palette}
-          image={stats.won > 0 ? ARROW_ACTIVE : ARROW_INACTIVE}
-          value={`${stats.won} wins`}
-          label="Most wins"
-          onPress={() => router.push('/challenge/info/most-wins' as any)}
-        />
+      <View style={styles.grid}>
+        {calculatedRewards['longest-streak'] ? (
+          <Tile
+            palette={palette}
+            image={calculatedRewards['longest-streak'].image}
+            state={calculatedRewards['longest-streak'].state}
+            label="Longest Streak"
+            subText={
+              calculatedRewards['longest-streak'].state === 'active'
+                ? `${stats.longestStreak} days`
+                : calculatedRewards['longest-streak'].state === 'inactive'
+                  ? `${stats.longestStreak}/7 days`
+                  : 'Locked'
+            }
+            onPress={() => router.push('/challenge/info/longest-streak' as any)}
+          />
+        ) : null}
+
+        {calculatedRewards['highest-win-streak'] ? (
+          <Tile
+            palette={palette}
+            image={calculatedRewards['highest-win-streak'].image}
+            state={calculatedRewards['highest-win-streak'].state}
+            label="Highest Win Streak"
+            subText={
+              calculatedRewards['highest-win-streak'].state === 'active'
+                ? `${stats.highestWinStreak} wins`
+                : calculatedRewards['highest-win-streak'].state === 'inactive'
+                  ? `${stats.highestWinStreak}/10 wins`
+                  : 'Locked'
+            }
+            onPress={() => router.push('/challenge/info/highest-win-streak' as any)}
+          />
+        ) : null}
+
+        {calculatedRewards['most-wins'] ? (
+          <Tile
+            palette={palette}
+            image={calculatedRewards['most-wins'].image}
+            state={calculatedRewards['most-wins'].state}
+            label="Most Wins"
+            subText={
+              calculatedRewards['most-wins'].state === 'active'
+                ? `${stats.won} wins`
+                : calculatedRewards['most-wins'].state === 'inactive'
+                  ? `${stats.won}/30 wins`
+                  : 'Locked'
+            }
+            onPress={() => router.push('/challenge/info/most-wins' as any)}
+          />
+        ) : null}
       </View>
 
       {/* ---- Awards ---------------------------------------------------- */}
       <SectionTitle palette={palette} label="Awards" />
       <View style={styles.grid}>
-        {rewards.map((reward) => (
+        {rewardsList.map((item) => (
           <AwardTile
-            key={reward.definition.id}
+            key={item.id}
             palette={palette}
-            reward={reward}
-            onPress={() => router.push(getAwardInfoRoute(reward.definition.id) as any)}
+            item={item}
+            onPress={() => router.push(getAwardInfoRoute(item.id) as any)}
           />
         ))}
       </View>
@@ -159,10 +202,11 @@ export default function CollectionScreen() {
             <TrophyTile
               key={month}
               palette={palette}
+              month={month}
               label={MONTHS[month - 1]!}
               won={won}
               days={days}
-              onPress={() => router.push('/challenge/history')}
+              onPress={() => setModalMonth(month)}
             />
           ))}
         </View>
@@ -171,6 +215,23 @@ export default function CollectionScreen() {
       <Text style={[styles.footnote, { color: palette.textFaint }]}>
         {perfect} of your {cleared} cleared levels were read without a single mistake.
       </Text>
+
+      <MonthlyTrophyModal
+        visible={modalMonth !== null}
+        month={modalMonth ?? 1}
+        year={now.year}
+        wins={modalTrophy?.won ?? 0}
+        totalDays={modalTrophy?.days ?? 30}
+        palette={palette}
+        onClose={() => setModalMonth(null)}
+        onGoToMonth={() => {
+          const m = modalMonth;
+          setModalMonth(null);
+          if (m) {
+            router.push({ pathname: '/challenge', params: { month: m, year: now.year } } as any);
+          }
+        }}
+      />
     </Screen>
   );
 }
@@ -184,134 +245,132 @@ function SectionTitle({ palette, label }: { palette: Palette; label: string }) {
   );
 }
 
-/** A record tile: 3D artwork, title, and count. */
+/** A record tile: 3D artwork card, title, and date. */
 function Tile({
   palette,
   image,
-  value,
+  state,
   label,
+  subText,
   onPress,
 }: {
   palette: Palette;
-  image: any;
-  value: string;
+  image?: any | undefined;
+  state?: 'active' | 'inactive' | 'locked';
   label: string;
+  subText: string;
   onPress?: () => void;
 }) {
   return (
     <Pressable style={styles.tileWrap} onPress={withClick(onPress)}>
-      <View
-        style={[
-          styles.tile,
-          {
-            backgroundColor: 'transparent',
-            borderColor: 'transparent',
-            overflow: 'hidden',
-          },
-        ]}
-      >
-        <Image source={image} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+      <View style={[styles.tileCard, { backgroundColor: 'transparent' }]}>
+        <Image
+          source={image}
+          style={[styles.tileImage, state === 'locked' && { opacity: 0.75 }]}
+          resizeMode="contain"
+        />
+        {state === 'locked' ? (
+          <View style={styles.lockBadgeOverlay}>
+            <FontAwesome name="lock" size={11} color="#FFFFFF" />
+          </View>
+        ) : null}
       </View>
       <Text style={[styles.tileLabel, { color: palette.text }]} numberOfLines={2}>
         {label}
       </Text>
-      <Text style={[styles.tileSub, { color: palette.accent, fontWeight: '800' }]}>{value}</Text>
-    </Pressable>
-  );
-}
-
-/** An award tile, dimmed until earned, with its progress underneath. */
-function AwardTile({
-  palette,
-  reward,
-  onPress,
-}: {
-  palette: Palette;
-  reward: RewardProgress;
-  onPress: () => void;
-}) {
-  const { definition, earned, current } = reward;
-  const art = rewardArt(definition.id);
-
-  return (
-    <Pressable style={styles.tileWrap} onPress={withClick(onPress)}>
-      <View
+      <Text
         style={[
-          styles.tile,
+          styles.tileSub,
           {
-            backgroundColor: 'transparent',
-            borderColor: 'transparent',
-            overflow: 'hidden',
+            color:
+              state === 'active'
+                ? palette.accent
+                : state === 'inactive'
+                  ? palette.textMuted
+                  : palette.textFaint,
           },
         ]}
       >
-        {art ? (
-          <Image
-            source={earned ? art.earned : art.locked}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="contain"
-          />
-        ) : (
-          <>
-            <Text
-              style={[styles.tileGlyph, { color: earned ? palette.accent : palette.textFaint }]}
-            >
-              {definition.glyph}
-            </Text>
-            <Text style={[styles.tileValue, { color: earned ? palette.text : palette.textFaint }]}>
-              {definition.threshold}
-            </Text>
-          </>
-        )}
-      </View>
-      <Text style={[styles.tileLabel, { color: palette.text }]} numberOfLines={2}>
-        {definition.name}
-      </Text>
-      <Text style={[styles.tileSub, { color: palette.textMuted }]}>
-        {current} of {definition.threshold}
+        {subText}
       </Text>
     </Pressable>
   );
 }
 
-/** A month's trophy, filling as its days are won. */
+/** An award tile: active/inactive/locked icon card, name, and progress. */
+function AwardTile({
+  palette,
+  item,
+  onPress,
+}: {
+  palette: Palette;
+  item: CalculatedRewardItem;
+  onPress: () => void;
+}) {
+  const { title, current, requirement, state, image } = item;
+
+  return (
+    <Pressable style={styles.tileWrap} onPress={withClick(onPress)}>
+      <View style={[styles.tileCard, { backgroundColor: 'white' }]}>
+        <Image
+          source={image}
+          style={[styles.tileImage, state === 'locked' && { opacity: 0.75 }]}
+          resizeMode="contain"
+        />
+        {state === 'locked' ? (
+          <View style={styles.lockBadgeOverlay}>
+            <FontAwesome name="lock" size={11} color="#FFFFFF" />
+          </View>
+        ) : null}
+      </View>
+      <Text style={[styles.tileLabel, { color: palette.text }]} numberOfLines={2}>
+        {title}
+      </Text>
+      <Text
+        style={[
+          styles.tileSub,
+          {
+            color:
+              state === 'active'
+                ? palette.accent
+                : state === 'inactive'
+                  ? palette.textMuted
+                  : palette.textFaint,
+          },
+        ]}
+      >
+        {state === 'active' ? 'Unlocked' : state === 'inactive' ? `${current} of ${requirement}` : 'Locked'}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** A month's trophy tile. */
 function TrophyTile({
   palette,
+  month,
   label,
   won,
   days,
   onPress,
 }: {
   palette: Palette;
+  month: number;
   label: string;
   won: number;
   days: number;
   onPress: () => void;
 }) {
   return (
-    <View style={styles.tileWrap}>
-      <View
-        style={[
-          styles.tile,
-          {
-            backgroundColor: 'transparent',
-            borderColor: 'transparent',
-            overflow: 'hidden',
-          },
-        ]}
-        onTouchEnd={withClick(onPress)}
-      >
-        <Image
-          source={won === days ? TROPHY_ACTIVE : TROPHY_INACTIVE}
-          style={{ width: '100%', height: '100%' }}
-          resizeMode="contain"
-        />
+    <Pressable style={styles.tileWrap} onPress={withClick(onPress)}>
+      <View style={[styles.tileCard, { backgroundColor: 'transparent' }]}>
+        <MonthlyTrophyBadge month={month} earned={won === days} />
       </View>
       <Text style={[styles.tileLabel, { color: palette.text }]}>{label}</Text>
       <Text style={[styles.tileSub, { color: palette.textMuted }]}>
         {won} of {days}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -328,23 +387,63 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.heading, fontFamily: fonts.displayExtra, fontWeight: '800' },
   rule: { flex: 1, height: 1 },
 
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', gap: '4.5%' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
 
-  tileWrap: { width: '30%', alignItems: 'center', marginBottom: spacing.md },
-  tile: {
+  tileWrap: { width: '31%', alignItems: 'center', marginBottom: spacing.md },
+  tileCard: {
     width: '100%',
     aspectRatio: 1,
-    borderWidth: 1,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    position: 'relative',
+    marginBottom: spacing.xs,
+  },
+  tileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  lockBadgeOverlay: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 15,
+  },
+  tileBadgeOverlay: {
+    position: 'absolute',
+    bottom: 4,
+    alignSelf: 'center',
+    zIndex: 10,
+  },
+  tileBadgeText: {
+    fontSize: 24,
+    lineHeight: 26,
+    fontFamily: fonts.displayExtra,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+    letterSpacing: -0.5,
+    includeFontPadding: false,
   },
   tileGlyph: { fontSize: 24, fontWeight: '800' },
-  tileValue: { ...typography.heading, fontFamily: fonts.displayExtra, fontWeight: '800' },
-  tileLabel: { ...typography.small, fontWeight: '700', fontFamily: fonts.bodyBold, textAlign: 'center', marginTop: spacing.xs },
-  tileSub: { ...typography.small, fontSize: 11, fontWeight: '500' },
+  tileLabel: {
+    ...typography.small,
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.bodyBold,
+    textAlign: 'center',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  tileSub: { ...typography.small, fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 },
 
   year: { ...typography.heading, fontFamily: fonts.displayExtra, fontWeight: '800', marginBottom: spacing.sm },
   empty: { ...typography.body, marginBottom: spacing.lg },

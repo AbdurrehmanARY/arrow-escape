@@ -132,7 +132,8 @@ export function formatRemaining(ms: number): string {
   const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
   const minutes = totalMinutes % 60;
 
-  if (days > 0) return `${days}d ${hours}h`;
+  if (days > 1) return `${days} days`;
+  if (days === 1) return `1 day`;
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }

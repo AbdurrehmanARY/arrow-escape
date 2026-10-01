@@ -25,8 +25,8 @@
  *               shapes the data model rather than the UI.
  */
 
-import { ENCODED_LEVELS } from '@data/levels';
-import type { DifficultyTier } from '@game/codec';
+import { ENCODED_LEVELS } from '@data';
+import type { DifficultyTier } from '@game';
 
 /**
  * The tiers a challenge may use: **Hard and above, with nothing below it.**

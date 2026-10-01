@@ -49,8 +49,8 @@ interface RewardedAdLike {
 interface AdsModule {
   RewardedAd: { createForAdRequest: (unitId: string, options?: unknown) => RewardedAdLike };
   RewardedAdEventType: { LOADED: string; EARNED_REWARD: string };
-  AdEventType: { CLOSED: string; ERROR: string };
-  TestIds: { REWARDED: string };
+  AdEventType: { CLOSED: string; ERROR: string; LOADED: string };
+  TestIds: { REWARDED: string; INTERSTITIAL: string };
   default?: () => { initialize: () => Promise<unknown> };
 }
 
@@ -172,62 +172,104 @@ export function availability(): AdAvailability {
  */
 export function showRewarded(): Promise<RewardOutcome> {
   const module = loadSdk();
-  const ad = rewarded;
 
-  if (!module || !ad) {
+  if (!module) {
     // Simulated/dummy ad mode when native SDK is absent (e.g. Expo Go)
     return new Promise<RewardOutcome>((resolve) => {
       setTimeout(() => {
         resolve({ kind: 'earned' });
-      }, 1200);
-    });
-  }
-  if (!loaded) {
-    return Promise.resolve({
-      kind: 'failed',
-      reason: 'No ad is ready yet. Check your connection and try again.',
+      }, 1500);
     });
   }
 
-  return new Promise<RewardOutcome>((resolve) => {
-    let settled = false;
-    const finish = (outcome: RewardOutcome) => {
-      if (settled) return;
-      settled = true;
-      loaded = false;
-      if (outcome.kind === 'earned') {
-        trackTelemetry({
-          name: 'ad_impression',
-          payload: { format: 'rewarded', placement: 'rewarded_action' },
-        });
+  const prepareAndShow = (ad: RewardedAdLike): Promise<RewardOutcome> => {
+    return new Promise<RewardOutcome>((resolve) => {
+      let settled = false;
+      const finish = (outcome: RewardOutcome) => {
+        if (settled) return;
+        settled = true;
+        loaded = false;
+        if (outcome.kind === 'earned') {
+          trackTelemetry({
+            name: 'ad_impression',
+            payload: { format: 'rewarded', placement: 'rewarded_action' },
+          });
+        }
+        // Immediately start fetching the next one, so a second hint is not a wait.
+        preload();
+        resolve(outcome);
+      };
+
+      let earned = false;
+
+      const offReward = ad.addAdEventListener(module.RewardedAdEventType.EARNED_REWARD, () => {
+        earned = true;
+      });
+      const offClosed = ad.addAdEventListener(module.AdEventType.CLOSED, () => {
+        offReward();
+        offClosed();
+        offError();
+        finish(earned ? { kind: 'earned' } : { kind: 'dismissed' });
+      });
+      const offError = ad.addAdEventListener(module.AdEventType.ERROR, () => {
+        offReward();
+        offClosed();
+        offError();
+        finish({ kind: 'failed', reason: 'The ad could not be shown.' });
+      });
+
+      try {
+        void ad.show();
+      } catch {
+        finish({ kind: 'failed', reason: 'The ad could not be shown.' });
       }
-      // Immediately start fetching the next one, so a second hint is not a wait.
+    });
+  };
+
+  if (loaded && rewarded) {
+    return prepareAndShow(rewarded);
+  }
+
+  // Ad not loaded yet: fetch and wait up to 8s for LOADED event before showing
+  return new Promise<RewardOutcome>((resolve) => {
+    if (!rewarded) {
       preload();
-      resolve(outcome);
+    }
+    const ad = rewarded;
+    if (!ad) {
+      resolve({ kind: 'failed', reason: 'Ad service unavailable.' });
+      return;
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let unsubLoaded: (() => void) | undefined;
+    let unsubError: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      unsubLoaded?.();
+      unsubError?.();
     };
 
-    let earned = false;
+    timer = setTimeout(() => {
+      cleanup();
+      resolve({ kind: 'failed', reason: 'Ad timed out loading. Please check your connection and try again.' });
+    }, 8000);
 
-    const offReward = ad.addAdEventListener(module.RewardedAdEventType.EARNED_REWARD, () => {
-      earned = true;
+    unsubLoaded = ad.addAdEventListener(module.RewardedAdEventType.LOADED, () => {
+      cleanup();
+      prepareAndShow(ad).then(resolve);
     });
-    const offClosed = ad.addAdEventListener(module.AdEventType.CLOSED, () => {
-      offReward();
-      offClosed();
-      offError();
-      finish(earned ? { kind: 'earned' } : { kind: 'dismissed' });
-    });
-    const offError = ad.addAdEventListener(module.AdEventType.ERROR, () => {
-      offReward();
-      offClosed();
-      offError();
-      finish({ kind: 'failed', reason: 'The ad could not be shown.' });
+
+    unsubError = ad.addAdEventListener(module.AdEventType.ERROR, () => {
+      cleanup();
+      resolve({ kind: 'failed', reason: 'Ad failed to load. Check your internet connection.' });
     });
 
     try {
-      void ad.show();
+      ad.load();
     } catch {
-      finish({ kind: 'failed', reason: 'The ad could not be shown.' });
+      // Ignored if already loading
     }
   });
 }
@@ -284,28 +326,35 @@ export function showInterstitial(): Promise<boolean> {
   const module = loadSdk();
   if (!module) {
     // Expo Go simulated mode
+    // eslint-disable-next-line no-console
+    console.log('[AdMob] Interstitial in Expo Go simulated mode.');
     return new Promise((resolve) => setTimeout(() => resolve(true), 800));
   }
 
   return new Promise<boolean>((resolve) => {
     try {
       // In native production, fetch and display InterstitialAd unit
-      const unit = USE_TEST_ADS ? module.TestIds.REWARDED : AD_UNIT_IDS.interstitial;
+      const unit = USE_TEST_ADS ? module.TestIds.INTERSTITIAL : AD_UNIT_IDS.interstitial;
+      // eslint-disable-next-line no-console
+      console.log(`[AdMob] Requesting InterstitialAd with unitId: ${unit}`);
       const interstitial = (module as any).InterstitialAd?.createForAdRequest?.(unit, {
         requestNonPersonalizedAdsOnly: true,
       });
 
       if (!interstitial) {
+        console.warn('[AdMob] InterstitialAd.createForAdRequest returned undefined.');
         resolve(false);
         return;
       }
 
       let unsubClosed: (() => void) | undefined;
       let unsubError: (() => void) | undefined;
+      let unsubLoaded: (() => void) | undefined;
 
       const finish = (shown: boolean) => {
         unsubClosed?.();
         unsubError?.();
+        unsubLoaded?.();
         if (shown) {
           trackTelemetry({
             name: 'ad_impression',
@@ -315,19 +364,31 @@ export function showInterstitial(): Promise<boolean> {
         resolve(shown);
       };
 
-      unsubClosed = interstitial.addAdEventListener(module.AdEventType.CLOSED, () => finish(true));
-      unsubError = interstitial.addAdEventListener(module.AdEventType.ERROR, () => finish(false));
+      unsubClosed = interstitial.addAdEventListener(module.AdEventType.CLOSED, () => {
+        // eslint-disable-next-line no-console
+        console.log('[AdMob] Interstitial CLOSED.');
+        finish(true);
+      });
 
-      interstitial.addAdEventListener(module.RewardedAdEventType?.LOADED || 'loaded', () => {
+      unsubError = interstitial.addAdEventListener(module.AdEventType.ERROR, (err: unknown) => {
+        console.warn('[AdMob] Interstitial ERROR:', err);
+        finish(false);
+      });
+
+      unsubLoaded = interstitial.addAdEventListener(module.AdEventType.LOADED, () => {
+        // eslint-disable-next-line no-console
+        console.log('[AdMob] Interstitial LOADED, showing now...');
         try {
           interstitial.show();
-        } catch {
+        } catch (e) {
+          console.warn('[AdMob] Interstitial show failed:', e);
           finish(false);
         }
       });
 
       interstitial.load();
-    } catch {
+    } catch (e) {
+      console.warn('[AdMob] Exception in showInterstitial:', e);
       resolve(false);
     }
   });

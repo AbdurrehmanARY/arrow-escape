@@ -43,16 +43,29 @@ export function ChallengeBadges({ palette }: { palette: Palette }) {
               styles.card,
               {
                 backgroundColor: palette.surface,
-                borderColor: item.active ? palette.accent : palette.border,
+                borderColor:
+                  item.state === 'active'
+                    ? palette.accent
+                    : item.state === 'inactive'
+                      ? palette.border
+                      : 'rgba(148, 163, 184, 0.25)',
               },
             ]}
           >
             <View style={styles.imageContainer}>
               <Image
                 source={item.image}
-                style={styles.image}
+                style={[
+                  styles.image,
+                  item.state === 'locked' && { opacity: 0.8 },
+                ]}
                 resizeMode="contain"
               />
+              {item.state === 'locked' ? (
+                <View style={styles.lockBadgeOverlay}>
+                  <FontAwesome name="lock" size={12} color="#FFFFFF" />
+                </View>
+              ) : null}
             </View>
 
             <View style={styles.cardContent}>
@@ -62,10 +75,17 @@ export function ChallengeBadges({ palette }: { palette: Palette }) {
               <Text
                 style={[
                   styles.cardValue,
-                  { color: item.active ? palette.accent : palette.textMuted },
+                  {
+                    color:
+                      item.state === 'active'
+                        ? palette.accent
+                        : item.state === 'inactive'
+                          ? palette.textMuted
+                          : palette.textFaint,
+                  },
                 ]}
               >
-                {item.displayValue}
+                {item.state === 'locked' ? `Locked (0/${item.requirement} ${item.unit})` : item.displayValue}
               </Text>
             </View>
 
@@ -102,6 +122,18 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  lockBadgeOverlay: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     alignItems: 'center',
     justifyContent: 'center',
   },

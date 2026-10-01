@@ -16,6 +16,9 @@
       "@game": [
         "./src/game/index.ts"
       ],
+      "@render": [
+        "./src/render/index.ts"
+      ],
       "@render/*": [
         "./src/render/*"
       ],
@@ -49,11 +52,11 @@
       "@state/*": [
         "./src/state/*"
       ],
-      "@screens/*": [
-        "./src/screens/*"
-      ],
       "@services/*": [
         "./src/services/*"
+      ],
+      "@data": [
+        "./src/data/index.ts"
       ],
       "@data/*": [
         "./src/data/*"
@@ -69,6 +72,9 @@
       ],
       "@config": [
         "./src/config/index.ts"
+      ],
+      "@brand": [
+        "./src/brand/index.ts"
       ]
     }
   },

@@ -31,7 +31,7 @@ import {
   type Board,
   type BoardState,
 } from '../src/game';
-import { buildArrowGeometry } from '../src/components/arrowGeometry';
+import { buildArrowGeometry } from '../src/render/arrowGeometry';
 import { ENCODED_LEVELS, levelById } from '../src/data/levels';
 import { defaultTheme } from '../src/theme/themes';
 

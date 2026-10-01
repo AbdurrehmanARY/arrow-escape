@@ -15,7 +15,7 @@
  * the whole animation stack in behind it.
  */
 
-import { initialScaleForTier } from '../../src/components/cameraPresets';
+import { initialScaleForTier } from '../../src/render/cameraPresets';
 
 /** A board small enough that fitting it leaves cells comfortably readable. */
 const COMFORTABLE_CELL = 40;

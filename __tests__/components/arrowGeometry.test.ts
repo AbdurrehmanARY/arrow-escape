@@ -16,7 +16,7 @@ import {
   cellCentre,
   fitCellSize,
   toPointsAttr,
-} from '@components/arrowGeometry';
+} from '@render/arrowGeometry';
 import { THEMES, themeById } from '@theme';
 
 const CELL = 40;

@@ -35,13 +35,13 @@ import {
 
 import { initAds } from '@services/ads';
 import { applyAudioSettings, initAudio } from '@services/audio';
-import { useHintStore } from '@state/hintStore';
-import { useOnboardingStore } from '@state/onboardingStore';
-import { useChallengeStore } from '@state/challengeStore';
-import { useAuthStore } from '@state/authStore';
-import { useLeagueStore } from '@state/leagueStore';
-import { useProgressStore } from '@state/progressStore';
-import { useSettingsStore } from '@state/settingsStore';
+import { useHintStore , useOnboardingStore , useChallengeStore , useAuthStore , useLeagueStore , useProgressStore , useSettingsStore } from '@state';
+
+
+
+
+
+
 
 /**
  * Catches any JavaScript error thrown while rendering and shows it.
@@ -112,6 +112,17 @@ export default function RootLayout() {
       // Settings decide the theme, so the first frame must not happen without them.
       await hydrateSettings();
       if (cancelled) return;
+
+      await initAudio();
+      const currentSettings = useSettingsStore.getState();
+      applyAudioSettings({
+        musicMuted: !currentSettings.music,
+        sfxMuted: !currentSettings.sfx,
+        masterVolume: currentSettings.masterVolume,
+        musicVolume: currentSettings.musicVolume,
+        sfxVolume: currentSettings.sfxVolume,
+      });
+
       setReady(true);
 
       void hydrateProgress();
@@ -120,7 +131,6 @@ export default function RootLayout() {
       void hydrateChallenges();
       void hydrateAuth();
       void hydrateLeague();
-      void initAudio();
       void initAds();
     })();
 

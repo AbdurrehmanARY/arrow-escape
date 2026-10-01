@@ -320,7 +320,7 @@ const arrowPalette: Palette = {
   arrowBlocked: '#EF4444',
   arrowBlocker: '#F59E0B',
   arrowSafe: '#10B981',
-  arrowHinted: '#3F3F46',
+  arrowHinted: '#F59E0B',
 
   surface: '#FFFFFF',
   surfaceRaised: '#F1F5F9',
@@ -370,19 +370,10 @@ export const THEMES: readonly Theme[] = [
     id: 'noodles',
     name: 'Noodles',
     description:
-      'Chunky rounded noodles with eyes, each a different colour. Easier to read, so levels play softer.',
+      'Chunky noodles with eyes, each a different colour. Easier to read, so levels play softer.',
     palette: noodlePalette,
     arrow: {
       ...classicArrow,
-      // Still the chunkiest theme — that is its whole character — but it moved down
-      // with the rest, because on a 60x60 board the old weight left no daylight
-      // between neighbouring noodles at all.
-      head: 'rounded',
-      tail: 'round',
-      strokeRatio: 0.34,
-      headTipRatio: 0.42,
-      headHalfWidthRatio: 0.3,
-      headLengthRatio: 0.34,
       highlight: true,
       eyes: true,
       colorful: true,
@@ -396,11 +387,6 @@ export const THEMES: readonly Theme[] = [
     palette: boldPalette,
     arrow: {
       ...classicArrow,
-      head: 'triangle',
-      tail: 'flat',
-      join: 'miter',
-      strokeRatio: 0.22,
-      headHalfWidthRatio: 0.34,
       shadow: false,
     },
     board: { ...dottedBoard, pattern: 'none', cornerRadius: 14 },
@@ -408,16 +394,10 @@ export const THEMES: readonly Theme[] = [
   {
     id: 'blueprint',
     name: 'Blueprint',
-    description: 'Drafting-table blue with a ruled grid and thin chevron arrowheads.',
+    description: 'Drafting-table blue with a ruled grid.',
     palette: blueprintPalette,
     arrow: {
       ...classicArrow,
-      head: 'chevron',
-      tail: 'square',
-      strokeRatio: 0.16,
-      headTipRatio: 0.46,
-      headHalfWidthRatio: 0.28,
-      headLengthRatio: 0.36,
       shadow: false,
     },
     board: { ...dottedBoard, pattern: 'lines', lineRatio: 0.018, cornerRadius: 10 },
@@ -425,7 +405,7 @@ export const THEMES: readonly Theme[] = [
   {
     id: 'graphite',
     name: 'Graphite',
-    description: 'Slim pencil-tipped arrows on graph paper. The most "puzzle book" of the set.',
+    description: 'Pencil-look arrows on graph paper. The most "puzzle book" of the set.',
     palette: {
       ...paperPalette,
       background: '#F2F1ED',
@@ -437,12 +417,6 @@ export const THEMES: readonly Theme[] = [
     },
     arrow: {
       ...classicArrow,
-      head: 'pencil',
-      tail: 'flat',
-      strokeRatio: 0.17,
-      headTipRatio: 0.5,
-      headHalfWidthRatio: 0.23,
-      headLengthRatio: 0.5,
       shadow: false,
     },
     board: { ...dottedBoard, pattern: 'crosses', lineRatio: 0.022, cornerRadius: 8 },
@@ -455,16 +429,6 @@ export const THEMES: readonly Theme[] = [
     palette: kineticNeonPalette,
     arrow: {
       ...classicArrow,
-      head: 'triangle',
-      tail: 'round',
-      join: 'round',
-      // Slightly slimmer than Paper. On a near-black board a light stroke blooms
-      // optically — it reads heavier than the same weight on white — so it is
-      // taken down a little to keep the daylight between neighbouring snakes that
-      // tracing depends on.
-      strokeRatio: 0.19,
-      headHalfWidthRatio: 0.3,
-      // No shadow: against near-black it does nothing but cost a stroke.
       shadow: false,
       highlight: false,
     },

@@ -6,7 +6,7 @@
  * Responsibilities:
  *               - Emit one SVG board per theme, plus one detail strip showing the
  *                 arrowhead shapes at large size.
- * Notes:        Draws using `src/components/arrowGeometry`, the exact module the
+ * Notes:        Draws using `src/render/arrowGeometry`, the exact module the
  *               app renders from — so this preview cannot quietly disagree with
  *               what ships. If a theme looks wrong here, it looks wrong on the
  *               phone.
@@ -21,7 +21,7 @@ import {
   offsetPoints,
   roundedHeadPath,
   toPointsAttr,
-} from '../src/components/arrowGeometry';
+} from '../src/render/arrowGeometry';
 import { THEMES, type ArrowStyle, type BoardStyle, type Palette, type Theme } from '../src/theme';
 
 const DEMO_BOARD = `
@@ -365,7 +365,7 @@ console.log(`<title>ArrowPath — theme preview</title>
 <div class="masthead">
   <p class="eyebrow">ArrowPath · Phase 1</p>
   <h1>Six themes, one level</h1>
-  <p class="lede">The same board and the same seven snakes, drawn under every theme the game ships. Each board is rendered by <code>src/components/arrowGeometry.ts</code> — the exact module the app draws from — so this is what the phone shows, not an impression of it.</p>
+  <p class="lede">The same board and the same seven snakes, drawn under every theme the game ships. Each board is rendered by <code>src/render/arrowGeometry.ts</code> — the exact module the app draws from — so this is what the phone shows, not an impression of it.</p>
   <p class="lede">A theme sets the palette, the arrow shape, and the board pattern independently, so they mix freely. The strip beneath each board shows all four directions at larger size, for judging an arrowhead on its own.</p>
 </div>
 <div class="rule"></div>

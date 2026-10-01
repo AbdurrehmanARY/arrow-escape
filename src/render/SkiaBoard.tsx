@@ -31,37 +31,29 @@
  *               why it is one small pure function with the maths written out.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Canvas, Circle, Group, Path, Picture } from '@shopify/react-native-skia';
-import {
-  Easing,
-  runOnJS,
-  useAnimatedReaction,
-  useDerivedValue,
-  useSharedValue,
-  withDecay,
-  withRepeat,
-  withSequence,
-  withTiming,
-  type SharedValue,
-} from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { Canvas, Group, Picture } from '@shopify/react-native-skia';
 
-import { EMPTY, type Board, type BoardState } from '@game';
+import type { Board, BoardState } from '@game';
 import type { ArrowStyle, BoardStyle, Palette } from '@theme';
 
-import { clampScale, clampTranslation, fitScale, translationBounds } from '../components/camera';
-import { arrowAtBoardPoint, toBoardPoint } from './hitTest';
+import { ArrowNode } from './arrows/ArrowNode';
+import { DepartingDotsNode } from './effects/DepartingDotsNode';
+import { PressOverlay } from './effects/PressOverlay';
+import { useBoardCamera } from './view/useBoardCamera';
+import { useBoardGestures } from './gestures/useBoardGestures';
 import { buildScene, splitScene, type Scene } from './scene';
-import { buildAllArrowPaths, recordStatic, type ArrowPaths } from './skiaScene';
-import { releaseDurationMs } from './timings';
+import { buildAllArrowPaths, recordStatic } from './skiaScene';
 
-/** Shared with the tap gesture, exactly as before — see `BoardViewport`. */
-export const PAN_SLOP = 14;
-
-/** Cap on fling speed, so a fast flick on a huge board stays controllable. */
-const MAX_FLING_VELOCITY = 3000;
+/**
+ * Shared with the tap gesture, exactly as before — see `BoardViewport`.
+ *
+ * Both this and the fling cap now live with the gestures that use them, and are
+ * re-exported here so the module's public surface is unchanged.
+ */
+export { PAN_SLOP } from './gestures/useBoardGestures';
 
 export interface SkiaBoardProps {
   board: Board;
@@ -235,294 +227,67 @@ export function SkiaBoard({
   );
 
   // ---- Camera --------------------------------------------------------------
-  const fit = useMemo(
-    () => fitScale(width, height, viewportWidth, viewportHeight),
-    [width, height, viewportWidth, viewportHeight],
-  );
-  const start = initialScale !== undefined ? clampScale(initialScale, fit, maxZoom) : fit;
-
-  const scale = useSharedValue(start);
-  const savedScale = useSharedValue(start);
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const savedX = useSharedValue(0);
-  const savedY = useSharedValue(0);
-  const isPinching = useSharedValue(false);
-
-  /**
-   * Which arrow is under a finger, or `EMPTY`.
-   *
-   * Written on the UI thread from the tap gesture and read by `PressOverlay`, so
-   * acknowledging a touch costs one extra draw and no React render of the board.
-   */
-  const pressedArrow = useSharedValue(EMPTY);
-
-  /**
-   * The camera, as a Skia transform.
-   *
-   * Scaling about the content's centre rather than its origin, so zoom feels like
-   * it happens to the board rather than dragging it out of the corner.
-   */
-  const transform = useDerivedValue(() => [
-    { translateX: viewportWidth / 2 + translateX.value },
-    { translateY: viewportHeight / 2 + translateY.value },
-    { scale: scale.value },
-    { translateX: -width / 2 },
-    { translateY: -height / 2 },
-  ]);
-
-  const notifyFocusDone = useCallback(() => onFocusComplete?.(), [onFocusComplete]);
-
-  /** Snap back to fit-to-screen. */
-  useEffect(() => {
-    if (fitNonce === 0) return;
-    const timing = { duration: 220 };
-    // eslint-disable-next-line react-hooks/immutability -- stable shared value
-    scale.value = withTiming(fit, timing);
-    // eslint-disable-next-line react-hooks/immutability -- stable shared value
-    translateX.value = withTiming(0, timing);
-    // eslint-disable-next-line react-hooks/immutability -- stable shared value
-    translateY.value = withTiming(0, timing);
-  }, [fitNonce, fit, scale, translateX, translateY]);
-
-  /**
-   * Bring a board point into view, for the hint camera.
-   *
-   * Preserves the current zoom: the player's chosen scale is information about what
-   * they were looking at, and yanking it away to frame a hint is disorienting.
-   */
-  useEffect(() => {
-    if (focusNonce === 0) return;
-    const current = scale.value;
-    const targetX = clampTranslation(
-      -(focusX - width / 2) * current,
-      width,
-      viewportWidth,
-      current,
-    );
-    const targetY = clampTranslation(
-      -(focusY - height / 2) * current,
-      height,
-      viewportHeight,
-      current,
-    );
-    const timing = { duration: 500, easing: Easing.out(Easing.cubic) };
-    // eslint-disable-next-line react-hooks/immutability -- stable shared value
-    translateX.value = withTiming(targetX, timing);
-    // eslint-disable-next-line react-hooks/immutability -- stable shared value
-    translateY.value = withTiming(targetY, timing, (done) => {
-      'worklet';
-      if (done) runOnJS(notifyFocusDone)();
-    });
-  }, [
-    focusNonce,
-    focusX,
-    focusY,
+  // Every shared value the camera owns, plus the transform it draws through.
+  // Created once by the hook and destructured here so the gesture definitions and
+  // the `<Group>` keep writing to and reading the exact same identities.
+  const {
+    fit,
+    scale,
+    savedScale,
+    translateX,
+    translateY,
+    savedX,
+    savedY,
+    isPinching,
+    isIntroAnimating,
+    transform,
+  } = useBoardCamera({
     width,
     height,
     viewportWidth,
     viewportHeight,
+    maxZoom,
+    initialScale,
+    board,
+    fitNonce,
+    focusX,
+    focusY,
+    focusNonce,
+    onFocusComplete,
+  });
+
+  /**
+   * The board's gestures, and the shared value press feedback reads.
+   *
+   * The camera values are passed in rather than created here, so the recognisers and
+   * the `<Group>` transform below write to and read the same identities.
+   */
+  const { gesture, pressedArrow } = useBoardGestures({
+    board,
+    state,
+    cellSize,
+    originX,
+    originY,
+    width,
+    height,
+    viewportWidth,
+    viewportHeight,
+    maxZoom,
+    departingSet,
+    disabled,
+    fit,
     scale,
+    savedScale,
     translateX,
     translateY,
-    notifyFocusDone,
-  ]);
-
-  const markPressed = useCallback(
-    (bx: number, by: number) => {
-      const index = arrowAtBoardPoint(state, board, bx, by, cellSize, originX, originY);
-      pressedArrow.value = index;
-      if (index !== EMPTY) onPressArrow?.(index);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- shared value is stable
-    [state, board, cellSize, originX, originY, onPressArrow],
-  );
-
-  const handleTap = useCallback(
-    (bx: number, by: number) => {
-      const index = arrowAtBoardPoint(state, board, bx, by, cellSize, originX, originY);
-      if (index !== EMPTY) {
-        if (departingSet.has(index)) return;
-        onTapArrow(index);
-      } else {
-        onTapEmpty?.();
-      }
-    },
-    [state, board, cellSize, originX, originY, onTapArrow, onTapEmpty, departingSet],
-  );
-
-  const pinch = useMemo(
-    () =>
-      Gesture.Pinch()
-        .onStart(() => {
-          'worklet';
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          isPinching.value = true;
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          savedScale.value = scale.value;
-        })
-        .onUpdate((event) => {
-          'worklet';
-          const next = clampScale(savedScale.value * event.scale, fit, maxZoom);
-          const focalX = event.focalX - viewportWidth / 2;
-          const focalY = event.focalY - viewportHeight / 2;
-          const old = scale.value;
-
-          // Keep the point between the fingers still.
-          const px = (focalX - translateX.value) / old;
-          const py = (focalY - translateY.value) / old;
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          scale.value = next;
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          translateX.value = clampTranslation(focalX - px * next, width, viewportWidth, next);
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          translateY.value = clampTranslation(focalY - py * next, height, viewportHeight, next);
-        })
-        .onFinalize(() => {
-          'worklet';
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          isPinching.value = false;
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          savedX.value = translateX.value;
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          savedY.value = translateY.value;
-        }),
-    [
-      fit,
-      maxZoom,
-      width,
-      height,
-      viewportWidth,
-      viewportHeight,
-      scale,
-      savedScale,
-      translateX,
-      translateY,
-      savedX,
-      savedY,
-      isPinching,
-    ],
-  );
-
-  const pan = useMemo(
-    () =>
-      Gesture.Pan()
-        .averageTouches(true)
-        .minDistance(PAN_SLOP)
-        .activeOffsetX([-PAN_SLOP, PAN_SLOP])
-        .activeOffsetY([-PAN_SLOP, PAN_SLOP])
-        .onStart(() => {
-          'worklet';
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          savedX.value = translateX.value;
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          savedY.value = translateY.value;
-        })
-        .onUpdate((event) => {
-          'worklet';
-          if (isPinching.value) return;
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          translateX.value = clampTranslation(
-            savedX.value + event.translationX,
-            width,
-            viewportWidth,
-            scale.value,
-          );
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          translateY.value = clampTranslation(
-            savedY.value + event.translationY,
-            height,
-            viewportHeight,
-            scale.value,
-          );
-        })
-        .onEnd((event) => {
-          'worklet';
-          if (isPinching.value) return;
-          const [minX, maxX] = translationBounds(width, viewportWidth, scale.value);
-          const [minY, maxY] = translationBounds(height, viewportHeight, scale.value);
-          const vx = Math.max(-MAX_FLING_VELOCITY, Math.min(MAX_FLING_VELOCITY, event.velocityX));
-          const vy = Math.max(-MAX_FLING_VELOCITY, Math.min(MAX_FLING_VELOCITY, event.velocityY));
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          translateX.value = withDecay({ velocity: vx, deceleration: 0.996, clamp: [minX, maxX] });
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          translateY.value = withDecay({ velocity: vy, deceleration: 0.996, clamp: [minY, maxY] });
-        }),
-    [
-      width,
-      height,
-      viewportWidth,
-      viewportHeight,
-      scale,
-      translateX,
-      translateY,
-      savedX,
-      savedY,
-      isPinching,
-    ],
-  );
-
-  const tap = useMemo(
-    () =>
-      Gesture.Tap()
-        .maxDistance(PAN_SLOP)
-        .maxDuration(900)
-        .onBegin((event) => {
-          'worklet';
-          const point = toBoardPoint(
-            event.x,
-            event.y,
-            viewportWidth,
-            viewportHeight,
-            width,
-            height,
-            translateX.value,
-            translateY.value,
-            scale.value,
-          );
-          runOnJS(markPressed)(point.x, point.y);
-        })
-        // Fires however the gesture ends — tapped, cancelled, or stolen by the pan.
-        // Anything less than "always" leaves an arrow stuck looking pressed.
-        .onFinalize(() => {
-          'worklet';
-          // eslint-disable-next-line react-hooks/immutability -- stable shared value
-          pressedArrow.value = EMPTY;
-        })
-        .onEnd((event, success) => {
-          'worklet';
-          if (!success) return;
-          const point = toBoardPoint(
-            event.x,
-            event.y,
-            viewportWidth,
-            viewportHeight,
-            width,
-            height,
-            translateX.value,
-            translateY.value,
-            scale.value,
-          );
-          runOnJS(handleTap)(point.x, point.y);
-        }),
-    [
-      viewportWidth,
-      viewportHeight,
-      width,
-      height,
-      translateX,
-      translateY,
-      scale,
-      handleTap,
-      markPressed,
-      pressedArrow,
-    ],
-  );
-
-  const gesture = useMemo(
-    () => (disabled ? Gesture.Simultaneous(pinch, pan) : Gesture.Race(tap, Gesture.Simultaneous(pinch, pan))),
-    [disabled, tap, pinch, pan],
-  );
+    savedX,
+    savedY,
+    isPinching,
+    isIntroAnimating,
+    onPressArrow,
+    onTapArrow,
+    onTapEmpty,
+  });
 
   return (
     <GestureDetector gesture={gesture}>
@@ -614,310 +379,6 @@ export function SkiaBoard({
   );
 }
 
-/**
- * One arrow that is doing something: leaving, recoiling, or being pointed at.
- *
- * Every animation is a shared value read inside a derived value, so all of it runs
- * on the UI thread and none of it re-renders React.
- */
-function ArrowNode({
-  paths,
-  color,
-  stroke,
-  forward,
-  cellSize,
-  departing,
-  hinted,
-  shakeNonce,
-  freeCells = 0,
-  onCollisionHit,
-  reducedMotion,
-  index,
-  onDepartComplete,
-  palette,
-}: {
-  paths: ArrowPaths;
-  color: string;
-  stroke: number;
-  forward: { x: number; y: number };
-  cellSize: number;
-  departing: boolean;
-  hinted: boolean;
-  shakeNonce: number;
-  freeCells?: number | undefined;
-  onCollisionHit?: ((arrowIndex: number) => void) | undefined;
-  reducedMotion: boolean;
-  index: number;
-  onDepartComplete?: ((arrowIndex: number) => void) | undefined;
-  palette: Palette;
-}) {
-  const progress = useSharedValue(0);
-  const shake = useSharedValue(0);
-  const glow = useSharedValue(0);
-  const pulse = useSharedValue(1);
-
-  const [isCollidedColor, setIsCollidedColor] = useState(false);
-  const lastHandledShakeNonce = useRef(0);
-  const exitStarted = useRef(false);
-
-  // ---- Release -------------------------------------------------------------
-  useEffect(() => {
-    if (!departing) {
-      // Re-arm: this component is keyed by arrow id and can be reused after a
-      // restart, so the latch must clear when the arrow is no longer leaving.
-      exitStarted.current = false;
-      return;
-    }
-    // Already threading out. A re-render must never restart it.
-    if (exitStarted.current) return;
-    exitStarted.current = true;
-
-    let reported = false;
-    const finish = (): void => {
-      if (reported) return;
-      reported = true;
-      onDepartComplete?.(index);
-    };
-
-    if (reducedMotion) {
-      progress.value = 1;
-      finish();
-      return;
-    }
-
-    progress.value = 0;
-    progress.value = withTiming(
-      1,
-      {
-        duration: releaseDurationMs(paths.travelCells),
-        // Must not decelerate: easing out reads as "arriving", and this arrow is
-        // leaving. A snake that slows to a halt as it vanishes looks stuck.
-        easing: Easing.bezier(0.3, 0.02, 0.55, 1),
-      },
-      (done) => {
-        'worklet';
-        if (done) runOnJS(finish)();
-      },
-    );
-  }, [departing, reducedMotion, paths.travelCells, progress, index, onDepartComplete]);
-
-  // ---- Blocked Collision Sequence ------------------------------------------
-  useEffect(() => {
-    if (shakeNonce === 0 || shakeNonce === lastHandledShakeNonce.current) return;
-    lastHandledShakeNonce.current = shakeNonce;
-
-    if (reducedMotion) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsCollidedColor(true);
-      if (onCollisionHit) onCollisionHit(index);
-      const timer = setTimeout(() => setIsCollidedColor(false), 250);
-      return () => clearTimeout(timer);
-    }
-
-    // Move forward up to the blocker cell (freeCells) or nudge into adjacent blocker (0.25)
-    const targetDisplacement = Math.max(freeCells, 0.25);
-    const animDuration = releaseDurationMs(targetDisplacement);
-
-    shake.value = 0;
-    setIsCollidedColor(false);
-
-    shake.value = withSequence(
-      // Step 1: Move forward smoothly using the exact same movement curve & timing physics as departure
-      withTiming(
-        targetDisplacement,
-        { duration: animDuration, easing: Easing.bezier(0.3, 0.02, 0.55, 1) },
-        (doneAtImpact) => {
-          'worklet';
-          if (doneAtImpact) {
-            if (onCollisionHit) {
-              runOnJS(onCollisionHit)(index);
-            }
-            runOnJS(setIsCollidedColor)(true);
-          }
-        },
-      ),
-      // Step 2: Stop at collision point, then return smoothly using the same movement curve & timing physics
-      withTiming(
-        0,
-        { duration: animDuration, easing: Easing.bezier(0.3, 0.02, 0.55, 1) },
-        (doneReturn) => {
-          'worklet';
-          if (doneReturn) {
-            shake.value = 0;
-            runOnJS(setIsCollidedColor)(false);
-          }
-        },
-      ),
-    );
-  }, [shakeNonce, freeCells, reducedMotion, shake, index, onCollisionHit]);
-
-  // ---- Hint minor vibration -------------------------------------------------
-  useEffect(() => {
-    if (!hinted) {
-      return;
-    }
-
-    glow.value = 0;
-    pulse.value = 1;
-
-    if (reducedMotion) return;
-
-    // eslint-disable-next-line react-hooks/immutability
-    shake.value = withRepeat(
-      withSequence(
-        withTiming(0.2, { duration: 50, easing: Easing.out(Easing.quad) }),
-        withTiming(-0.2, { duration: 50 }),
-        withTiming(0.15, { duration: 50 }),
-        withTiming(-0.15, { duration: 50 }),
-      ),
-      6,
-      false,
-    );
-  }, [hinted, reducedMotion, glow, pulse, shake]);
-
-  const activeColor = isCollidedColor ? palette.arrowBlocked : color;
-
-  // The trim window: a slice exactly one body long sliding from tail to off-board.
-  const startAt = useDerivedValue(() =>
-    Math.min(1, progress.value * (1 + paths.bodyFraction)),
-  );
-  const endAt = useDerivedValue(() =>
-    Math.min(1, progress.value * (1 + paths.bodyFraction) + paths.bodyFraction),
-  );
-
-  // Motion transform on the arrow's own group.
-  const nodeTransform = useDerivedValue(() => {
-    const nudge = shake.value * cellSize;
-    return [
-      { translateX: forward.x * nudge },
-      { translateY: forward.y * nudge },
-    ];
-  });
-
-  /**
-   * How far the head has advanced, in dp.
-   *
-   * The same distance the trim window has travelled: `progress` runs 0..1 over the
-   * body plus the exit ray, and `travelCells * cellSize` is that whole distance in
-   * dp. Multiplying by the arrow's forward unit vector turns it into a translation.
-   */
-  const headTransform = useDerivedValue(() => {
-    const advance = progress.value * paths.travelCells * cellSize;
-    return [
-      { translateX: forward.x * advance },
-      { translateY: forward.y * advance },
-    ];
-  });
-
-  return (
-    <Group transform={nodeTransform}>
-
-      <Path
-        path={paths.body}
-        start={startAt}
-        end={endAt}
-        style="stroke"
-        strokeWidth={stroke}
-        strokeCap="round"
-        strokeJoin="round"
-        color={activeColor}
-      />
-
-      {/*
-        The head travels with the body, and must have its own transform to do it.
-      */}
-      {paths.head ? (
-        <Group transform={headTransform}>
-          <Path path={paths.head} style="fill" color={activeColor} />
-        </Group>
-      ) : null}
-    </Group>
-  );
-}
-
-/**
- * Dims whichever arrow is under the finger.
- *
- * One node for the whole board rather than one per arrow: it reads a single shared
- * value and redraws only the path that value points at. When nothing is pressed it
- * draws nothing.
- */
-function PressOverlay({
-  paths,
-  pressed,
-  color,
-  scene,
-}: {
-  paths: Map<number, ArrowPaths>;
-  pressed: SharedValue<number>;
-  color: string;
-  scene: Scene;
-}) {
-  const [index, setIndex] = useState(EMPTY);
-
-  // The shared value is written on the UI thread; this pulls it across only when it
-  // actually changes, so a pan costs two updates rather than one per frame.
-  useAnimatedReaction(
-    () => pressed.value,
-    (next, previous) => {
-      if (next !== previous) runOnJS(setIndex)(next);
-    },
-    [pressed],
-  );
-
-  if (index === EMPTY) return null;
-  const arrowPaths = paths.get(index);
-  const draw = scene.arrows.find((a) => a.index === index);
-  if (!arrowPaths || !draw) return null;
-
-  return (
-    <Path
-      path={arrowPaths.body}
-      start={0}
-      end={arrowPaths.bodyFraction}
-      style="stroke"
-      strokeWidth={draw.stroke}
-      strokeCap="round"
-      strokeJoin="round"
-      color={color}
-      opacity={0.45}
-    />
-  );
-}
-
 const styles = StyleSheet.create({
   viewport: { overflow: 'hidden' },
 });
-
-/**
- * Animated grid dots that scale and fade in smoothly as an arrow escapes/departs.
- */
-function DepartingDotsNode({
-  points,
-  radius,
-  color,
-}: {
-  points: readonly { x: number; y: number }[];
-  radius: number;
-  color: string;
-}) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = 0;
-    progress.value = withTiming(1, {
-      duration: 380,
-      easing: Easing.out(Easing.quad),
-    });
-  }, [progress]);
-
-  const opacity = useDerivedValue(() => progress.value);
-
-  return (
-    <Group opacity={opacity}>
-      {points.map((pt, i) => (
-        <Circle key={i} cx={pt.x} cy={pt.y} r={radius} color={color} />
-      ))}
-    </Group>
-  );
-}

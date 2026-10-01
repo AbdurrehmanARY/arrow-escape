@@ -16,6 +16,7 @@
     "expo": "~57.0.9",
     "expo-asset": "~57.0.8",
     "expo-audio": "~57.0.3",
+    "expo-build-properties": "^57.0.15",
     "expo-constants": "~57.0.7",
     "expo-dev-client": "~57.0.10",
     "expo-font": "~57.0.1",
@@ -29,6 +30,7 @@
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-gesture-handler": "~2.32.0",
+    "react-native-google-mobile-ads": "16.3.4",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
@@ -75,6 +77,8 @@
     "levels:build": "tsx tools/build-levels.ts",
     "levels:preview": "tsx tools/preview-themes.ts",
     "levels:validate": "tsx tools/validate.ts",
+    "architecture:check": "tsx tools/check-architecture.ts",
+    "architecture": "tsx tools/check-architecture.ts",
     "levels:check": "tsx tools/check-curriculum.ts",
     "levels:probe": "tsx tools/probe-tiers.ts",
     "bench": "tsx tools/bench.ts",
@@ -85,6 +89,7 @@
     "format:check": "prettier --check .",
     "shapes:inspect": "tsx tools/inspect-shapes.ts",
     "icons:build": "tsx tools/make-icons.ts",
+    "icons:brand": "tsx tools/make-brand-assets.ts",
     "sounds:build": "tsx tools/make-sounds.ts"
   },
   "private": true

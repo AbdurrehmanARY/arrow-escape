@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useSettingsStore } from '@state/settingsStore';
+import { useSettingsStore } from '@state';
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, themeById, typography } from '@theme';
 
 import { Springy, useGlow } from './Pressable';

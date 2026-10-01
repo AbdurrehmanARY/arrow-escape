@@ -13,80 +13,36 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 import { SkiaBoard } from '@render/SkiaBoard';
-import { Celebration, computeBoardLayout, ConfirmDialog, DummyAdModal, FailOverlay, Hud, initialScaleForTier, PauseMenu, PillButton, Screen, StuckOverlay, useTheme, WinOverlay } from '@components';
+import { Celebration, ConfirmDialog, FailOverlay, Hud, PauseMenu, PillButton, Screen, StuckOverlay, useTheme, WinOverlay } from '@components';
 import { earnedCount, today } from '@challenge';
 import {
   buildLevel,
   emptyBoardState,
   findAllSafeMoves,
-  findSafeMove,
   isDoomed,
 } from '@game';
-import { LEVEL_COUNT, levelById, tierOf } from '@data/levels';
+import { LEVEL_COUNT, levelById, tierOf } from '@data';
 import { TIER_LABELS } from '@game/codec';
 import { WIN_OVERLAY_DELAY_MS } from '@config';
-import { availability, preload, recordLevelCompleteAndCheckInterstitial, showRewarded } from '@services/ads';
-import { playMusic, playSfx, playSting, type SfxName } from '@services/audio';
-import { triggerCollisionHaptic, triggerHintHaptic } from '@services/haptics';
-import { gameReducer, initGameState } from '@state/gameReducer';
-import { useHintStore } from '@state/hintStore';
+import { recordLevelCompleteAndCheckInterstitial, showRewarded } from '@services/ads';
+import { playMusic, playSfx, playSting, stopAllSfx, type SfxName } from '@services/audio';
+import { gameReducer, initGameState , statsOf, useChallengeStore , useLeagueStore , useProgressStore , useSettingsStore } from '@state';
 
-import { statsOf, useChallengeStore } from '@state/challengeStore';
-import { useLeagueStore } from '@state/leagueStore';
-import { useProgressStore } from '@state/progressStore';
-import { useSettingsStore } from '@state/settingsStore';
+
+
+
+
 import { radius, spacing, typography } from '@theme';
 import type { DifficultyTier } from '@game/codec';
 
-/** How long a hint highlight stays visible before auto-fading, in ms. */
-const HINT_DURATION_MS = 6000;
-/** How long the hint glow fade-out takes, in ms. */
-const HINT_FADE_MS = 500;
-
-/**
- * Chrome above and below the board that the board must not overlap.
- *
- * Raised from 210, and it was measurably too small: the pan-hint row under the
- * board was being covered by the Restart/Hint buttons, leaving a sliver of text
- * visible between them. The board is fitted into whatever is left after this, so
- * an under-estimate does not shrink the chrome — it pushes the board on top of it.
- *
- * The safe-area inset is added separately at the call site, because it is a
- * property of the device rather than of the layout.
- */
-const CHROME_HEIGHT = 64;
-
-/**
- * Smallest a cell may be drawn.
- *
- * Below roughly this an arrowhead stops being readable and a tap stops being
- * reliable, so an oversized board is drawn at this size and panned rather than
- * squeezed onto the screen. It is the number that turns "the board does not fit"
- * from a rendering problem into a gameplay feature.
- *
- * **Raised from 26 to make arrows bigger while panning**, and it is worth writing
- * down why this works, because at first glance it should not: making cells larger
- * also lowers `fitScale` by the same proportion, so a board that fits the screen
- * looks identical either way. A 10x10 level went from 27dp cells at 1.0x to 34dp
- * cells at 0.80x — the same 27dp on glass. Nothing changes for small boards.
- *
- * What breaks the symmetry is the **absolute floor** in `initialScaleForTier`:
- * exploration tiers start at `max(fitScale * 3, 0.9)`, and on a large board the
- * 0.9 wins. That floor is in scale units, not board units, so a bigger cell passes
- * straight through it. On a 50x54 board an arrow cell goes from 26 x 0.9 = 23dp to
- * 34 x 0.9 = 31dp — about a third larger, and the board needs about a third more
- * panning to cross, which is the intent.
- *
- * The cost is that fully zoomed out shows a smaller overview. That is the trade:
- * legibility while exploring, against the value of the bird's-eye view.
- */
-const MIN_CELL_SIZE = 34;
+import { useArrowTap } from '../../src/hooks/useArrowTap';
+import { useBoardViewport } from '../../src/hooks/useBoardViewport';
+import { useHintFlow } from '../../src/hooks/useHintFlow';
 
 /**
  * Gap between the sounds of a single win, in ms.
@@ -129,17 +85,11 @@ export default function PlayScreen() {
   const levelId = Math.max(1, Math.min(LEVEL_COUNT, Number(params.id) || 1));
 
   const { palette, arrow: arrowStyle, board: boardStyle } = useTheme();
-  const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
 
   const reducedMotion = useSettingsStore((state) => state.reducedMotion);
   const haptics = useSettingsStore((state) => state.haptics);
   const confirmRestart = useSettingsStore((state) => state.confirmRestart);
   const assist = useSettingsStore((state) => state.assist);
-
-  const hintsAvailable = useHintStore((state) => state.available);
-  const spendHint = useHintStore((state) => state.spendHint);
-  const grantHints = useHintStore((state) => state.grantHints);
 
   const completeLevel = useProgressStore((state) => state.completeLevel);
   const perfectStreak = useProgressStore((state) => state.perfectStreak);
@@ -155,6 +105,12 @@ export default function PlayScreen() {
   const tier: DifficultyTier = tierOf(levelId) ?? 'medium';
   const built = useMemo(() => (level ? buildLevel(level) : undefined), [level]);
 
+  const { viewportWidth, viewportHeight, layout, computedInitialScale } = useBoardViewport({
+    built,
+    padCells: boardStyle.padCells,
+    tier,
+  });
+
   const hearts = 3;
   const [state, dispatch] = useReducer(
     gameReducer,
@@ -162,38 +118,40 @@ export default function PlayScreen() {
     (initial) => initial ?? initGameState(emptyBoardState(), hearts),
   );
 
-  const [showDummyAdModal, setShowDummyAdModal] = useState(false);
-
-  const [hintedArrow, setHintedArrow] = useState<number | undefined>(undefined);
-  // Kept for the fade *sequencing* — the timers below use it to hold the hint
-  // visible, then clear `hintedArrow` once the glow has faded. The renderer no
-  // longer needs to be told: under Skia the hinted arrow fades its own glow when it
-  // stops being hinted, so nothing reads this value directly.
-  const [_hintFading, setHintFading] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
-  /**
-   * Why a hint could not be given, shown under the buttons.
-   *
-   * This was being *set* and never rendered, which meant tapping Hint with none
-   * left did nothing visible at all — indistinguishable from a dead button. It is
-   * on screen now, and `notify` is the only way it gets set, so a message can
-   * never appear silently.
-   */
-  const [_hintNotice, setHintNotice] = useState<string | undefined>(undefined);
-  const [earning] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(false);
   /** Bumped to send the board back to fit-to-screen. */
   const [fitNonce] = useState(0);
   const [paused, setPaused] = useState(false);
-  /** Camera focus for hint navigation. */
-  const [focusX, setFocusX] = useState(0);
-  const [focusY, setFocusY] = useState(0);
-  const [focusNonce, setFocusNonce] = useState(0);
-  /** Timer ref for the hint auto-expire. */
-  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hintFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const status = state.session.status;
+
+  const {
+    hintedArrow,
+    earning,
+    focusX,
+    focusY,
+    focusNonce,
+    hintsUsedRef,
+    onCameraFocusComplete,
+    onHint,
+    resetHint,
+  } = useHintFlow({
+    built,
+    status,
+    boardState: state.session.state,
+    padCells: boardStyle.padCells,
+    cellSize: layout.cellSize,
+    haptics,
+  });
+
+  const { onCollisionHit, onDepartComplete, onPressArrow, onTapArrow, onTapEmpty } = useArrowTap({
+    built,
+    state,
+    dispatch,
+    haptics,
+    resetHint,
+  });
 
   // Coach cards removed — gameplay starts immediately with no instructional popups.
   // The CoachCard component and onboardingStore remain in the codebase for
@@ -202,6 +160,9 @@ export default function PlayScreen() {
   useEffect(() => {
     setLastPlayed(levelId);
     playMusic('gameplay');
+    return () => {
+      stopAllSfx();
+    };
   }, [levelId, setLastPlayed]);
 
   /**
@@ -219,9 +180,6 @@ export default function PlayScreen() {
    * until the first tap, which is why the win handler guards on it.
    */
   const startedAtRef = useRef(0);
-  /** Hints spent this session. Counted here because the store is global. */
-  const hintsUsedRef = useRef(0);
-
   useEffect(() => {
     if (state.taps > 0 && startedAtRef.current === 0) startedAtRef.current = Date.now();
   }, [state.taps]);
@@ -328,6 +286,7 @@ export default function PlayScreen() {
     addClear,
     addChallengeWin,
     built,
+    hintsUsedRef,
   ]);
 
   useEffect(() => {
@@ -361,303 +320,21 @@ export default function PlayScreen() {
     return hintedArrow !== undefined ? [hintedArrow] : [];
   }, [assist, built, hintedArrow, state.session.state, status]);
 
-  const viewportWidth = Math.min(width, 600);
-  const availableVertical = Math.max(220, height - insets.top - insets.bottom);
-  const viewportHeight = Math.max(220, availableVertical - CHROME_HEIGHT);
-  const layout = useMemo(
-    () =>
-      built?.ok
-        ? computeBoardLayout(
-          built.value.board.rows,
-          built.value.board.cols,
-          boardStyle.padCells,
-          viewportWidth,
-          viewportHeight,
-          MIN_CELL_SIZE,
-        )
-        : computeBoardLayout(8, 8, boardStyle.padCells, viewportWidth, viewportHeight, MIN_CELL_SIZE),
-    [built, boardStyle.padCells, viewportWidth, viewportHeight],
-  );
-
-  const computedInitialScale = useMemo(
-    () => {
-      const fit = Math.min(
-        viewportWidth / layout.width,
-        viewportHeight / layout.height,
-        1,
-      );
-      return initialScaleForTier(tier, fit, layout.cellSize);
-    },
-    [tier, layout.width, layout.height, layout.cellSize, viewportWidth, viewportHeight],
-  );
-
-  /**
-   * Rejects a repeat of the *same* arrow within one animation frame or two.
-   *
-   * Narrower than it used to be, and deliberately so. The old guard rejected any
-   * tap within 120ms of any other, which stopped duplicate delivery and also
-   * stopped a player tapping two different arrows in quick succession — the exact
-   * complaint that "I have to tap more than once". Duplicate delivery is no longer
-   * possible now that the board uses a single gesture-handler tap rather than
-   * `Pressable`s nested inside a `GestureDetector`, so all this needs to catch is a
-   * genuine double-fire on one arrow.
-   */
-  const lastTap = useRef<{ index: number; at: number }>({ index: -1, at: 0 });
-
-
-  /**
-   * Stable across renders, deliberately.
-   *
-   * Every arrow on the board receives this, and `ArrowSnake` is memoised. An inline
-   * arrow function here would be a fresh identity on every render of this screen,
-   * which defeats that memo for every snake — ninety needless re-renders per tap on
-   * the largest boards, and nothing anywhere would report it.
-   */
-  const onDepartComplete = useCallback(
-    (arrowIndex: number) => dispatch({ type: 'departed', arrowIndex }),
-    [],
-  );
-
-  /**
-   * Tapping an arrow: dispatch, and nothing else.
-   *
-   * Stable across renders, and that matters more than it looks. This reaches the
-   * board's tap gesture, and a gesture object rebuilt on every tap has to be
-   * re-attached by gesture-handler mid-interaction — its own source of dropped
-   * touches. So it depends on the level, not on the board state.
-   *
-   * Sound and haptics are *not* fired here. They used to be, which forced this
-   * callback to read the live board so it could ask `resolveTap` what had
-   * happened. The reducer already records that as `lastOutcome`, so the feedback
-   * is driven from there instead — see the effect below.
-   */
-  /**
-   * A finger landing on an arrow, answered before the tap resolves.
-   *
-   * The pickup and the outcome are two different events and want two different
-   * sounds: this one confirms *which* arrow is under the thumb, and `arrowRelease`
-   * or `collision` says what happened to it. On a dense board that confirmation is
-   * the difference between a mis-tap the player can correct and one they cannot.
-   */
-  const onPressArrow = useCallback(() => playSfx('arrowPickup'), []);
-
-  /**
-   * A completed tap that hit nothing.
-   *
-   * Distinct from `collision`, and deliberately so — this costs no heart and did
-   * not touch the puzzle. It says "that was not on an arrow", which is a different
-   * thing from "that arrow cannot leave".
-   */
-  const onTapEmpty = useCallback(() => playSfx('wrongMove'), []);
-
-  const onTapArrow = useCallback(
-    (index: number) => {
-      if (!built?.ok) return;
-
-      const now = Date.now();
-      if (lastTap.current.index === index && now - lastTap.current.at < 120) return;
-      lastTap.current = { index, at: now };
-
-      setHintedArrow(undefined);
-      setHintFading(false);
-      setHintNotice(undefined);
-      dispatch({ type: 'tap', board: built.value.board, arrowIndex: index });
-    },
-    [built],
-  );
-
-  /**
-   * Sound and haptics for whatever the last tap did.
-   *
-   * Keyed on the tap counter rather than on the outcome, because two identical
-   * blocked taps in a row produce equal outcomes and must still both be felt.
-   * The `taps === 0` guard is what stops it firing on mount and on restart, which
-   * would read as phantom noise.
-   */
-  useEffect(() => {
-    if (state.taps === 0) return;
-    const outcome = state.lastOutcome;
-    if (outcome?.kind === 'blocked') {
-      playSfx('collision');
-      if (state.lastHeartDeducted) {
-        playSfx('heartLost');
-        if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      }
-      const clearTimer = setTimeout(() => {
-        dispatch({ type: 'clearHighlight' });
-      }, 260);
-      return () => clearTimeout(clearTimer);
-    } else if (outcome?.kind === 'escaped') {
-      playSfx('arrowRelease');
-      if (haptics) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    // `lastOutcome` is deliberately absent: the tap counter is the trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.taps, haptics]);
-
-  /**
-   * Show a message, and make a sound saying one arrived.
-   *
-   * The pairing is the point: a notice that appears silently while the player is
-   * looking at the board is a notice they will not see.
-   */
-  const notify = useCallback((message: string) => {
-    setHintNotice(message);
-    playSfx('notification');
-  }, []);
-
   const doRestart = useCallback(() => {
     if (!built?.ok) return;
+    stopAllSfx();
     playSfx('levelRestart');
     setShowRestartConfirm(false);
-    setHintedArrow(undefined);
-    setHintFading(false);
-    setHintNotice(undefined);
+    resetHint();
     setOverlayVisible(false);
     dispatch({ type: 'restart', initial: built.value.initial, hearts });
-  }, [built, hearts]);
+  }, [built, hearts, resetHint]);
 
   const onRestartPressed = useCallback(() => {
     const untouched = state.taps === 0;
     if (!confirmRestart || untouched || status !== 'playing') doRestart();
     else setShowRestartConfirm(true);
   }, [confirmRestart, doRestart, state.taps, status]);
-
-  /**
-   * Ref tracking which arrow is waiting for the camera to arrive before the
-   * hint highlight starts. `null` when no camera transit is in progress.
-   */
-  const pendingHintArrowRef = useRef<number | null>(null);
-
-  const onCollisionHit = useCallback(() => {
-    triggerCollisionHaptic(haptics);
-  }, [haptics]);
-
-  /**
-   * Start the hint highlight and its auto-expire timer.
-   *
-   * Extracted so it can be called either immediately (arrow already visible) or
-   * after the camera arrives at the target (arrow was off-screen).
-   */
-  const activateHintHighlight = useCallback((arrowIndex: number) => {
-    setHintedArrow(arrowIndex);
-    setHintFading(false);
-    playSfx('hintUsed');
-    triggerHintHaptic(haptics);
-
-    // Clear any existing hint timers.
-    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-    if (hintFadeTimerRef.current) clearTimeout(hintFadeTimerRef.current);
-
-    // Auto-expire the hint after HINT_DURATION_MS.
-    hintTimerRef.current = setTimeout(() => {
-      setHintFading(true);
-      hintFadeTimerRef.current = setTimeout(() => {
-        setHintedArrow(undefined);
-        setHintFading(false);
-      }, HINT_FADE_MS);
-    }, HINT_DURATION_MS);
-  }, [haptics]);
-
-  /**
-   * Called when the camera arrives at the hinted arrow's position.
-   * Now safe to start the highlight animation.
-   */
-  const onCameraFocusComplete = useCallback(() => {
-    const pending = pendingHintArrowRef.current;
-    if (pending !== null) {
-      pendingHintArrowRef.current = null;
-      activateHintHighlight(pending);
-    }
-  }, [activateHintHighlight]);
-
-  /**
-   * Spend a hint and point the camera at the answer.
-   *
-   * Split out from `onHint` so the *earning* path can end in the same place. It
-   * deliberately does not read `hintsAvailable` — that value is captured at render
-   * and would still be zero in the closure that runs after an ad. `spendHint`
-   * consults the live store and returns false if there is nothing to spend, which
-   * is the only check that can be trusted here.
-   */
-  const applyHint = useCallback(() => {
-    if (!built?.ok || status !== 'playing') return;
-
-    const hint = findSafeMove(built.value.board, state.session.state);
-    if (hint.kind !== 'move') {
-      notify(hint.kind === 'already-won' ? 'Already cleared.' : hint.reason);
-      return;
-    }
-
-    if (!spendHint()) return;
-    hintsUsedRef.current += 1;
-
-    // Pan camera smoothly to the hinted arrow's head position:
-    const arrow = built.value.board.arrows[hint.arrowIndex];
-    if (arrow && arrow.body[0] !== undefined) {
-      const headCell = arrow.body[0];
-      const col = headCell % built.value.board.cols;
-      const row = Math.floor(headCell / built.value.board.cols);
-      const fx = (col + 0.5 + boardStyle.padCells) * layout.cellSize;
-      const fy = (row + 0.5 + boardStyle.padCells) * layout.cellSize;
-      setFocusX(fx);
-      setFocusY(fy);
-      setFocusNonce((n) => n + 1);
-    }
-
-    pendingHintArrowRef.current = null;
-    activateHintHighlight(hint.arrowIndex);
-  }, [built, spendHint, state.session.state, status, activateHintHighlight, notify, boardStyle.padCells, layout.cellSize]);
-
-  const onEarnHint = useCallback(() => {
-    setShowDummyAdModal(true);
-  }, []);
-
-  const handleDummyAdClose = useCallback(
-    (earned: boolean) => {
-      setShowDummyAdModal(false);
-      if (earned) {
-        grantHints();
-        playSfx('rewardCollected');
-        applyHint();
-      } else {
-        notify('No hint earned — the ad was closed early.');
-      }
-    },
-    [grantHints, applyHint, notify],
-  );
-
-  const onHint = useCallback(() => {
-    if (!built?.ok || status !== 'playing') return;
-
-    if (useHintStore.getState().available > 0) {
-      applyHint();
-      return;
-    }
-
-    onEarnHint();
-  }, [built, status, applyHint, onEarnHint]);
-
-  useEffect(() => {
-    if (hintsAvailable === 0) preload();
-  }, [hintsAvailable]);
-
-  const adReady = availability() === 'ready';
-
-  /**
-   * One chime when there is suddenly a way to get a hint back.
-   *
-   * Fires on the *transition* into that state, so it says "this is available now"
-   * once rather than on every render that happens to find it true. It re-arms when
-   * the state goes away — spending the earned hint puts the offer back, and that is
-   * a genuinely new offer.
-   */
-  const offerRef = useRef(false);
-  useEffect(() => {
-    const offered = hintsAvailable === 0 && adReady;
-    if (offered && !offerRef.current) playSfx('rewardReady');
-    offerRef.current = offered;
-  }, [hintsAvailable, adReady]);
 
   if (!level || !built?.ok) {
     return (
@@ -728,13 +405,6 @@ export default function PlayScreen() {
             hintedArrow={hintedArrow}
           />
         </View>
-
-        {/* ---- Simulated Dummy Ad Modal ----------------------------------- */}
-        <DummyAdModal
-          visible={showDummyAdModal}
-          onClose={handleDummyAdClose}
-          palette={palette}
-        />
 
       {/*
         Fires from the win itself rather than from its own state flag.

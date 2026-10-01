@@ -13,6 +13,7 @@
 
 export * from './types';
 export * from './themes';
+export * from './themeAssets';
 
 /** 4pt spacing scale. Large tap targets are a GDD accessibility requirement. */
 export const spacing = {

@@ -21,8 +21,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { PillButton, Screen, ScreenHeader, useTheme } from '@components';
 import { challengeFor, isChallengeDay, parseChallengeId, today } from '@challenge';
 import { TIER_LABELS } from '@game/codec';
-import { summaryOf, tierOf } from '@data/levels';
-import { useChallengeStore } from '@state/challengeStore';
+import { summaryOf, tierOf } from '@data';
+import { useChallengeStore } from '@state';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 import { formatDuration } from './index';

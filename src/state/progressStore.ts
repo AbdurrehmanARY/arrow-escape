@@ -19,17 +19,13 @@
 import { create } from 'zustand';
 
 import { UNLOCK_ALL_LEVELS } from '@config';
-import { loadSlice, saveSlice, STORAGE_KEYS } from '@services/storage';
+import { loadSlice, saveSlice, STORAGE_KEYS, type LevelRecord } from '@services/storage';
 import { syncProgress } from '@services/sync';
 
-/** What the player achieved on a level, kept for the level-select badges. */
-export interface LevelRecord {
-  /** Fewest wrong taps across all clears. 0 means a perfect read. */
-  readonly bestMistakes: number;
-  /** Hearts left on the best run. */
-  readonly bestHeartsLeft: number;
-  readonly timesCleared: number;
-}
+// `LevelRecord` is owned by `services/storage` — it is the shape on disk, and
+// `sync.ts` needs it without the service layer importing a store. Re-exported
+// here so `@state` remains the one import path for everything state-related.
+export type { LevelRecord };
 
 interface PersistedProgress {
   readonly records: Record<number, LevelRecord>;

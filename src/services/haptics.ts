@@ -14,34 +14,69 @@
 
 import { Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import type { SfxName } from './audio/audioAssets';
 
 /** Minimum interval between haptic triggers in ms to prevent duplicates. */
-const DEBOUNCE_MS = 120;
-
-let lastCollisionHapticTime = 0;
-let lastHintHapticTime = 0;
+const DEBOUNCE_MS = 60;
+let lastHapticTime = 0;
 
 /**
- * Trigger a short, crisp physical vibration for an arrow collision.
+ * Whether haptics should fire.
  *
- * Called at the exact moment an arrow hits a blocker during forward movement.
- * Debounced per-collision event to prevent rapid-tap spamming.
+ * Purpose:      Callers that already know the player's setting pass it in. This
+ *               function exists only so an explicit `false` is honoured.
+ * Notes:        **This service must not read the settings store.** It used to,
+ *               which meant `services/` imported `state/` — a layer inversion
+ *               that made the dependency graph point upward, and a cycle the
+ *               moment anything in `state/` wanted a haptic. Every call site
+ *               already had the value in hand, so the fallback was dead weight
+ *               with a real architectural cost. Undefined now means "yes",
+ *               which is the behaviour the try/catch used to fall back to.
  */
-export function triggerCollisionHaptic(enabled = true): void {
-  if (!enabled) return;
+function isHapticsEnabled(enabled?: boolean): boolean {
+  return enabled ?? true;
+}
+
+/**
+ * Trigger physical haptic vibration for UI and game events.
+ */
+export function triggerHaptic(
+  type: 'light' | 'medium' | 'heavy' | 'selection' | 'success' | 'warning' | 'error',
+  enabled?: boolean,
+): void {
+  if (!isHapticsEnabled(enabled)) return;
 
   const now = Date.now();
-  if (now - lastCollisionHapticTime < DEBOUNCE_MS) return;
-  lastCollisionHapticTime = now;
+  if (now - lastHapticTime < DEBOUNCE_MS) return;
+  lastHapticTime = now;
 
   try {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
-      // Fallback to standard Vibration API if Haptics engine is unavailable
-      Vibration.vibrate(40);
-    });
+    switch (type) {
+      case 'selection':
+        void Haptics.selectionAsync().catch(() => Vibration.vibrate(15));
+        break;
+      case 'light':
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => Vibration.vibrate(20));
+        break;
+      case 'medium':
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => Vibration.vibrate(35));
+        break;
+      case 'heavy':
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => Vibration.vibrate(50));
+        break;
+      case 'success':
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => Vibration.vibrate([0, 30, 40, 50]));
+        break;
+      case 'warning':
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => Vibration.vibrate(60));
+        break;
+      case 'error':
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => Vibration.vibrate([0, 50, 50, 100]));
+        break;
+    }
   } catch {
     try {
-      Vibration.vibrate(40);
+      Vibration.vibrate(30);
     } catch {
       // Ignore vibration failures gracefully on unsupported hardware
     }
@@ -49,26 +84,66 @@ export function triggerCollisionHaptic(enabled = true): void {
 }
 
 /**
- * Trigger a short physical vibration when a hint is activated.
- *
- * Fires once when the player spends/activates a hint.
+ * Trigger appropriate haptic pattern corresponding to an SFX event.
  */
-export function triggerHintHaptic(enabled = true): void {
-  if (!enabled) return;
+export function triggerHapticForSfx(name: SfxName, enabled?: boolean): void {
+  if (!isHapticsEnabled(enabled)) return;
 
-  const now = Date.now();
-  if (now - lastHintHapticTime < DEBOUNCE_MS) return;
-  lastHintHapticTime = now;
-
-  try {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
-      Vibration.vibrate(60);
-    });
-  } catch {
-    try {
-      Vibration.vibrate(60);
-    } catch {
-      // Ignore failures
-    }
+  switch (name) {
+    case 'buttonClick':
+    case 'toggle':
+    case 'popupOpen':
+    case 'popupClose':
+      triggerHaptic('selection', enabled);
+      break;
+    case 'arrowPickup':
+    case 'undo':
+    case 'hintUsed':
+      triggerHaptic('light', enabled);
+      break;
+    case 'arrowRelease':
+    case 'correctMove':
+    case 'pause':
+    case 'resume':
+    case 'levelRestart':
+      triggerHaptic('medium', enabled);
+      break;
+    case 'collision':
+    case 'wrongMove':
+      triggerHaptic('heavy', enabled);
+      break;
+    case 'heartLost':
+    case 'lastHeartWarning':
+      triggerHaptic('warning', enabled);
+      break;
+    case 'levelComplete':
+    case 'starCollect':
+    case 'achievement':
+    case 'rewardCollected':
+    case 'difficultyUnlocked':
+      triggerHaptic('success', enabled);
+      break;
+    case 'outOfHearts':
+    case 'gameOver':
+      triggerHaptic('error', enabled);
+      break;
+    default:
+      triggerHaptic('light', enabled);
+      break;
   }
 }
+
+/**
+ * Trigger a physical vibration for an arrow collision.
+ */
+export function triggerCollisionHaptic(enabled = true): void {
+  triggerHaptic('heavy', enabled);
+}
+
+/**
+ * Trigger a physical vibration when a hint is activated.
+ */
+export function triggerHintHaptic(enabled = true): void {
+  triggerHaptic('light', enabled);
+}
+

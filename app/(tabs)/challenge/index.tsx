@@ -5,18 +5,20 @@
  *               navigation matching reference design.
  */
 
-import { useCallback, useMemo, useState } from 'react';
-import { Image, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 import {
+  MonthlyTrophyBadge,
   MonthlyTrophyModal,
   Screen,
   Springy,
   useTheme,
   withClick,
 } from '@components';
+import { playMusic } from '@services/audio';
 import {
   challengeFor,
   challengeId,
@@ -26,7 +28,7 @@ import {
   today,
   type ChallengeDate,
 } from '@challenge';
-import { useChallengeStore } from '@state/challengeStore';
+import { useChallengeStore } from '@state';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
@@ -34,9 +36,6 @@ const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ] as const;
-
-const TROPHY_GOLD = require('../../../assets/images/trophy_gold.png');
-const TROPHY_SILVER = require('../../../assets/images/trophy_silver.png');
 
 /** `2:05` from milliseconds. Challenges are minutes, never hours. */
 export function formatDuration(ms: number): string {
@@ -48,20 +47,52 @@ export function formatDuration(ms: number): string {
 
 export default function ChallengeScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ month?: string; year?: string }>();
   const { palette } = useTheme();
 
+  useEffect(() => {
+    playMusic('menu');
+  }, []);
+
   const now = useMemo(() => today(), []);
-  const [view, setView] = useState({ year: now.year, month: now.month });
-  const [selected, setSelected] = useState<ChallengeDate>(now);
+
+  const paramView = useMemo(() => {
+    if (params.month) {
+      const m = Number(params.month);
+      const y = Number(params.year) || now.year;
+      if (m >= 1 && m <= 12) {
+        return { year: y, month: m };
+      }
+    }
+    return undefined;
+  }, [params.month, params.year, now.year]);
+
+  const [overrideView, setOverrideView] = useState<{ year: number; month: number } | undefined>(undefined);
+  const view = useMemo(
+    () => paramView ?? overrideView ?? { year: now.year, month: now.month },
+    [paramView, overrideView, now.year, now.month],
+  );
+
+  const [overrideSelected, setOverrideSelected] = useState<ChallengeDate | undefined>(undefined);
+  const selected = useMemo(() => {
+    if (overrideSelected) return overrideSelected;
+    if (paramView) return { ...paramView, day: 1 };
+    return now;
+  }, [overrideSelected, paramView, now]);
+
+  const setSelected = useCallback((date: ChallengeDate) => {
+    setOverrideSelected(date);
+  }, []);
 
   const records = useChallengeStore((state) => state.records);
 
   const shiftMonth = useCallback((delta: number) => {
-    setView((current) => {
-      const d = new Date(current.year, current.month - 1 + delta, 1);
+    setOverrideView((current) => {
+      const base = current ?? paramView ?? { year: now.year, month: now.month };
+      const d = new Date(base.year, base.month - 1 + delta, 1);
       return { year: d.getFullYear(), month: d.getMonth() + 1 };
     });
-  }, []);
+  }, [paramView, now.year, now.month]);
 
   const isCurrentMonth = view.year === now.year && view.month === now.month;
   const monthDays = daysInMonth(view.year, view.month);
@@ -139,11 +170,7 @@ export default function ChallengeScreen() {
             onPress={withClick(() => setShowTrophyModal(true))}
             style={styles.trophyContainer}
           >
-            <Image
-              source={isMonthCompleted ? TROPHY_GOLD : TROPHY_SILVER}
-              style={styles.trophyImage}
-              resizeMode="contain"
-            />
+            <MonthlyTrophyBadge month={view.month} earned={isMonthCompleted} size={150} />
           </Pressable>
 
           <Pressable

@@ -20,8 +20,8 @@ import {
   solve,
   verifySolution,
 } from '@game';
-import { TIER_ORDER, type DifficultyTier } from '@game/codec';
-import { ENCODED_LEVELS, LEVEL_COUNT, levelById, summaryOf, tierOf } from '@data/levels';
+import { TIER_ORDER, type DifficultyTier } from '@game';
+import { ENCODED_LEVELS, LEVEL_COUNT, levelById, summaryOf, tierOf } from '@data';
 
 const ALL_IDS = Array.from({ length: LEVEL_COUNT }, (_, i) => i + 1);
 

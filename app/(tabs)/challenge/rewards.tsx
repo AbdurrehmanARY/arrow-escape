@@ -9,36 +9,36 @@
  *
  *               Locked rewards show their progress rather than hiding it. "2 of 3
  *               days" is an invitation; a grey box with a padlock is a wall.
+ *
+ *               Uses the 3-state `useCalculatedRewards` hook so that active,
+ *               inactive, and locked states all show distinct artwork everywhere.
  */
 
-import { useMemo } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 
-import { Screen, ScreenHeader, useTheme } from '@components';
-import { rewardProgress, today, type RewardProgress } from '@challenge';
-import { rewardArt } from '@challenge/rewardArt';
-import { statsOf, useChallengeStore } from '@state/challengeStore';
+import { Screen, ScreenHeader, useTheme, withClick } from '@components';
+import { useCalculatedRewards, type CalculatedRewardItem } from '@challenge';
 import { radius, spacing, typography, type Palette } from '@theme';
 
 export default function ChallengeRewardsScreen() {
   const router = useRouter();
   const { palette } = useTheme();
 
-  const records = useChallengeStore((state) => state.records);
-  const now = useMemo(() => today(), []);
-  const stats = useMemo(() => statsOf({ records }, now), [records, now]);
-  const rewards = useMemo(() => rewardProgress(stats), [stats]);
+  const rewards = useCalculatedRewards();
+  const list = Object.values(rewards);
 
-  const earned = rewards.filter((reward) => reward.earned);
-  const locked = rewards.filter((reward) => !reward.earned);
+  const earned = list.filter((r) => r.active);
+  const inProgress = list.filter((r) => r.state === 'inactive');
+  const locked = list.filter((r) => r.state === 'locked');
 
   return (
     <Screen scroll>
       <ScreenHeader
         palette={palette}
         title="Rewards"
-        subtitle={`${earned.length} of ${rewards.length} earned`}
+        subtitle={`${earned.length} of ${list.length} earned`}
         onBack={() => router.back()}
       />
 
@@ -46,16 +46,25 @@ export default function ChallengeRewardsScreen() {
         <>
           <Text style={[styles.sectionTitle, { color: palette.textFaint }]}>Earned</Text>
           {earned.map((reward) => (
-            <RewardCard key={reward.definition.id} palette={palette} reward={reward} />
+            <RewardCard key={reward.id} palette={palette} item={reward} onPress={() => router.push(reward.route as any)} />
+          ))}
+        </>
+      ) : null}
+
+      {inProgress.length > 0 ? (
+        <>
+          <Text style={[styles.sectionTitle, { color: palette.textFaint }]}>In progress</Text>
+          {inProgress.map((reward) => (
+            <RewardCard key={reward.id} palette={palette} item={reward} onPress={() => router.push(reward.route as any)} />
           ))}
         </>
       ) : null}
 
       {locked.length > 0 ? (
         <>
-          <Text style={[styles.sectionTitle, { color: palette.textFaint }]}>In progress</Text>
+          <Text style={[styles.sectionTitle, { color: palette.textFaint }]}>Locked</Text>
           {locked.map((reward) => (
-            <RewardCard key={reward.definition.id} palette={palette} reward={reward} />
+            <RewardCard key={reward.id} palette={palette} item={reward} onPress={() => router.push(reward.route as any)} />
           ))}
         </>
       ) : null}
@@ -67,54 +76,52 @@ export default function ChallengeRewardsScreen() {
   );
 }
 
-function RewardCard({ palette, reward }: { palette: Palette; reward: RewardProgress }) {
-  const { definition, earned, current, fraction } = reward;
-  const art = rewardArt(definition.id);
+function RewardCard({
+  palette,
+  item,
+  onPress,
+}: {
+  palette: Palette;
+  item: CalculatedRewardItem;
+  onPress: () => void;
+}) {
+  const { title, description, current, requirement, state, image, active, unit } = item;
+  const fraction = requirement > 0 ? Math.min(current / requirement, 1) : 1;
 
   return (
-    <View
+    <Pressable
+      onPress={withClick(onPress)}
       style={[
         styles.card,
         {
           backgroundColor: palette.surface,
-          borderColor: earned ? palette.success : palette.border,
+          borderColor: active ? palette.success : palette.border,
         },
       ]}
     >
-      <View
-        style={[
-          styles.glyphWrap,
-          // The art carries its own material and its own ring, so a coloured disc
-          // behind it would be a second badge drawn around the badge. Only the
-          // glyph fallback needs a ground to sit on.
-          art ? undefined : { backgroundColor: earned ? palette.success : palette.surfaceRaised },
-        ]}
-      >
-        {art ? (
-          <Image
-            source={earned ? art.earned : art.locked}
-            style={styles.art}
-            resizeMode="contain"
-            accessibilityIgnoresInvertColors
-          />
-        ) : (
-          <Text
-            style={[styles.glyph, { color: earned ? palette.textOnAccent : palette.textFaint }]}
-          >
-            {definition.glyph}
-          </Text>
-        )}
+      {/* Badge / artwork */}
+      <View style={styles.artWrap}>
+        <Image
+          source={image}
+          style={[styles.art, state === 'locked' && { opacity: 0.6 }]}
+          resizeMode="contain"
+          accessibilityIgnoresInvertColors
+        />
+        {state === 'locked' ? (
+          <View style={styles.lockOverlay}>
+            <FontAwesome name="lock" size={10} color="#FFFFFF" />
+          </View>
+        ) : null}
       </View>
 
+      {/* Text body */}
       <View style={styles.cardBody}>
-        <Text style={[styles.name, { color: palette.text }]}>{definition.name}</Text>
-        <Text style={[styles.description, { color: palette.textMuted }]}>
-          {definition.description}
-        </Text>
+        <Text style={[styles.name, { color: palette.text }]}>{title}</Text>
+        <Text style={[styles.description, { color: palette.textMuted }]}>{description}</Text>
 
-        {earned ? (
-          <Text style={[styles.earnedMark, { color: palette.success }]}>Earned</Text>
-        ) : (
+        {active ? (
+          <Text style={[styles.earnedMark, { color: palette.success }]}>✓ Unlocked</Text>
+        ) : state === 'inactive' ? (
           <>
             <View style={[styles.track, { backgroundColor: palette.surfaceRaised }]}>
               <View
@@ -125,12 +132,16 @@ function RewardCard({ palette, reward }: { palette: Palette; reward: RewardProgr
               />
             </View>
             <Text style={[styles.progressText, { color: palette.textFaint }]}>
-              {current} of {definition.threshold}
+              {current} of {requirement} {unit}
             </Text>
           </>
+        ) : (
+          <Text style={[styles.lockedText, { color: palette.textFaint }]}>
+            0 of {requirement} {unit}
+          </Text>
         )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -151,16 +162,32 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
-  glyphWrap: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  glyph: { fontSize: 22, fontWeight: '800' },
-  art: { width: 48, height: 48 },
+  artWrap: {
+    width: 52,
+    height: 52,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  art: { width: 52, height: 52 },
+  lockOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cardBody: { flex: 1, gap: 3 },
   name: { ...typography.body, fontWeight: '700' },
   description: { ...typography.small },
   earnedMark: { ...typography.small, fontWeight: '700', marginTop: 2 },
+  lockedText: { ...typography.small, marginTop: 2 },
   track: { height: 6, borderRadius: 3, overflow: 'hidden', marginTop: spacing.xs },
   fill: { height: 6, borderRadius: 3 },
   progressText: { ...typography.small },
-
   footnote: { ...typography.small, textAlign: 'center', marginTop: spacing.lg },
 });

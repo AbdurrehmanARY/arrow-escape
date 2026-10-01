@@ -26,7 +26,7 @@ import {
   type BoardState,
   type PlaySession,
 } from '@game';
-import { gameReducer, initGameState } from '@state/gameReducer';
+import { gameReducer, initGameState } from '@state';
 
 /** Three snakes queued in a row: only 'a' (index 0) can move. */
 const CHAIN = 'c C b B a A';

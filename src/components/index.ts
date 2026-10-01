@@ -3,15 +3,14 @@
  *
  * Screens import from `@components`; nothing reaches into a component file
  * directly, so components can be split or renamed without a wide refactor.
+ *
+ * The board itself is no longer here, and neither is the maths it draws with.
+ * `arrowGeometry`, `camera` and `cameraPresets` moved to `src/render/` in
+ * Phase 9: they are pure geometry with no React in them, `render/` is the layer
+ * that consumes them, and leaving them here meant `render/` had to import
+ * `components/` — a layer inversion the architecture rules forbid. Use
+ * `@render/*` for them.
  */
-
-// The board itself is no longer here. It moved to `src/render/` when rendering
-// went from SVG to Skia — see `@render/SkiaBoard`. `arrowGeometry` and `camera`
-// stayed, because both are pure maths shared with the new renderer and with the
-// off-device theme preview.
-export * from './arrowGeometry';
-export * from './camera';
-export * from './cameraPresets';
 export * from './Hud';
 export * from './Celebration';
 export * from './CoachCard';
@@ -24,4 +23,12 @@ export * from './ChallengeBadges';
 export * from './MonthlyTrophyModal';
 export * from './DummyAdModal';
 export * from './AwardInfoLayout';
+export * from './AwardInfoPage';
+export * from './levels/ChapterGrid';
+export * from './levels/ChapterList';
+export * from './levels/JumpToLevel';
+export * from './levels/LevelTile';
+export * from './LeagueIntro';
 export * from './StreakRewardModal';
+export * from './MonthlyTrophyBadge';
+

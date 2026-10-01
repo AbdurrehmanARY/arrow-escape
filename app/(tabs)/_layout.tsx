@@ -5,6 +5,7 @@
  *               each other, using FontAwesome icon set directly.
  */
 
+import { useEffect } from 'react';
 import { Tabs } from 'expo-router/js-tabs';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,8 +13,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 import { useTheme } from '@components';
 import { today } from '@challenge';
-import { playSfx } from '@services/audio';
-import { isDayWon, useChallengeStore } from '@state/challengeStore';
+import { playMusic, playSfx } from '@services/audio';
+import { isDayWon, useChallengeStore } from '@state';
 import { spacing, typography, type Palette } from '@theme';
 
 function TabIcon({
@@ -45,6 +46,10 @@ export default function TabsLayout() {
   const records = useChallengeStore((state) => state.records);
 
   const challengePending = !isDayWon({ records }, today());
+
+  useEffect(() => {
+    playMusic('menu');
+  }, []);
 
   return (
     <Tabs

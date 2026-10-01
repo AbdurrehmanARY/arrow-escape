@@ -28,6 +28,28 @@ export interface SaveEnvelope<T> {
   readonly data: T;
 }
 
+/**
+ * What the player achieved on one level, as persisted.
+ *
+ * Purpose:      This is the *shape on disk*, so it belongs to the layer that owns
+ *               disk — not to the store that happens to write it.
+ * Why here:     `sync.ts` needs this type to merge two devices' progress, and the
+ *               service layer must never import from `state/`. When the type lived
+ *               in `progressStore`, `sync.ts` -> `state/progressStore` and
+ *               `progressStore` -> `sync.ts` formed a cycle (type-only, so no
+ *               runtime bug, but an inverted dependency all the same). Owning it
+ *               here means `sync.ts` depends downward only, permanently.
+ * Note:        `progressStore` re-exports it, so every existing import of
+ *               `LevelRecord` from `@state` keeps working unchanged.
+ */
+export interface LevelRecord {
+  /** Fewest wrong taps across all clears. 0 means a perfect read. */
+  readonly bestMistakes: number;
+  /** Hearts left on the best run. */
+  readonly bestHeartsLeft: number;
+  readonly timesCleared: number;
+}
+
 /** Dev-only logging, so a storage hiccup is visible in development and silent in production. */
 function warn(message: string, error: unknown): void {
   if (__DEV__) {

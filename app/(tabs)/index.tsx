@@ -10,37 +10,26 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, Springy, useTheme, withClick } from '@components';
+import { MonthlyTrophyBadge, Screen, Springy, useTheme, withClick } from '@components';
+import { APP_NAME, brandWordmark, isDarkColor } from '@brand';
 import { playMusic } from '@services/audio';
-import { today } from '@challenge';
-import { LEVEL_COUNT, tierOf } from '@data/levels';
-import { TIER_LABELS } from '@game/codec';
-import { clearedCount, nextLevel, useProgressStore } from '@state/progressStore';
-import { isDayWon, statsOf, useChallengeStore } from '@state/challengeStore';
+import { challengeId, daysInMonth, today } from '@challenge';
+import { LEVEL_COUNT, tierOf } from '@data';
+import { TIER_LABELS } from '@game';
+import { clearedCount, nextLevel, useProgressStore , isDayWon, statsOf, useChallengeStore , arrowsThisWeek, useLeagueStore } from '@state';
 import { arrowsFor, formatRemaining, leagueForArrows, msRemaining, weekOf } from '@league';
-import { arrowsThisWeek, useLeagueStore } from '@state/leagueStore';
 import { fonts, MIN_TOUCH_TARGET, radius, spacing, typography, type Palette } from '@theme';
+import { useThemeAssets } from '../../src/hooks/useThemeAssets';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ] as const;
 
-const LEAGUE_IMAGES: Record<string, any> = {
-  bronze: require('../../assets/images/shield_bronze.jpg'),
-  silver: require('../../assets/images/shield_silver.jpg'),
-  gold: require('../../assets/images/shield_gold.jpg'),
-  ruby: require('../../assets/images/shield_ruby.jpg'),
-  obsidian: require('../../assets/images/shield_obsidian.jpg'),
-  diamond: require('../../assets/images/shield_diamond.jpg'),
-};
-
-const CUP_IMAGE = require('../../assets/images/cup.png');
-const ARROW_ICON = require('../../assets/images/arrow_icon.png');
-
 export default function HomeScreen() {
   const router = useRouter();
   const { palette } = useTheme();
+  const themeAssets = useThemeAssets();
 
   const records = useProgressStore((state) => state.records);
   const challengeRecords = useChallengeStore((state) => state.records);
@@ -50,6 +39,16 @@ export default function HomeScreen() {
   const [nowMs] = useState(() => Date.now());
   const stats = useMemo(() => statsOf({ records: challengeRecords }, now), [challengeRecords, now]);
   const challengeDone = isDayWon({ records: challengeRecords }, now);
+
+  const isCurrentMonthCompleted = useMemo(() => {
+    const days = daysInMonth(now.year, now.month);
+    for (let day = 1; day <= days; day += 1) {
+      if (challengeRecords[challengeId({ year: now.year, month: now.month, day })]?.outcome !== 'won') {
+        return false;
+      }
+    }
+    return true;
+  }, [challengeRecords, now]);
 
   const cleared = useMemo(() => clearedCount(records), [records]);
   const resume = useMemo(() => nextLevel(records, LEVEL_COUNT), [records]);
@@ -78,14 +77,14 @@ export default function HomeScreen() {
           >
             <View style={styles.emblemContainer}>
               <Image
-                source={LEAGUE_IMAGES[league.id] ?? LEAGUE_IMAGES.bronze}
+                source={themeAssets.shields[league.id] ?? themeAssets.shields.bronze}
                 style={styles.cardImage}
                 resizeMode="contain"
               />
             </View>
             <View style={[styles.pillRow, { backgroundColor: palette.surfaceRaised }]}>
               <Image
-                source={ARROW_ICON}
+                source={themeAssets.arrowIcon}
                 style={styles.pillIcon}
                 resizeMode="contain"
               />
@@ -95,15 +94,15 @@ export default function HomeScreen() {
 
           <Card
             palette={palette}
-            title="Challenge"
-            subtitle={`${MONTHS[now.month - 1]} ${now.day}`}
+            title={MONTHS[now.month - 1]!}
+            subtitle={`Day ${now.day}`}
             onPress={() => router.push('/challenge')}
           >
             <View style={styles.emblemContainer}>
-              <Image
-                source={CUP_IMAGE}
-                style={styles.cardImage}
-                resizeMode="contain"
+              <MonthlyTrophyBadge
+                month={now.month}
+                earned={isCurrentMonthCompleted}
+                size={110}
               />
             </View>
             <View
@@ -127,10 +126,12 @@ export default function HomeScreen() {
         {/* ---- Centered interactive block (Brand + Play button + Subtitle) -- */}
         <View style={styles.centerSection}>
           <View style={styles.brand}>
-            <View style={styles.wordmarkRow}>
-              <Text style={[styles.wordmarkIcon, { color: palette.accent }]}>▲</Text>
-              <Text style={[styles.wordmarkText, { color: palette.text }]}>rrows</Text>
-            </View>
+            <Image
+              source={brandWordmark(isDarkColor(palette.background))}
+              style={styles.wordmarkImage}
+              resizeMode="contain"
+              accessibilityLabel={APP_NAME}
+            />
             <Text style={[styles.levelLine, { color: palette.accent }]}>
               Level {resume}
             </Text>
@@ -215,7 +216,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  cardTitle: { ...typography.heading, fontSize: 20, fontFamily: fonts.displayExtra, fontWeight: '800', textAlign: 'center' },
+  cardTitle: { ...typography.heading, fontSize: 15, fontFamily: fonts.displayExtra, fontWeight: '800', textAlign: 'center' },
   cardSubtitle: { ...typography.small, fontSize: 12, fontWeight: '600', textAlign: 'center' },
   emblemContainer: {
     width: 134,
@@ -267,23 +268,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  wordmarkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  wordmarkIcon: {
-    fontFamily: fonts.displayExtra,
-    fontSize: 28,
-    lineHeight: 34,
-  },
-  wordmarkText: {
-    fontFamily: fonts.displayExtra,
-    fontSize: 32,
-    fontWeight: '800',
-    lineHeight: 38,
-    letterSpacing: -0.5,
+  wordmarkImage: {
+    width: 236,
+    // The lockup's own aspect ratio (1200x278), so `contain` has nothing to letterbox.
+    height: 55,
   },
   levelLine: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800', marginTop: 2, textAlign: 'center' },
   levelDifficulty: { ...typography.body, fontWeight: '700', marginTop: 1, textAlign: 'center' },

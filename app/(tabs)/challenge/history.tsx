@@ -17,8 +17,8 @@ import { useRouter } from 'expo-router';
 
 import { Screen, ScreenHeader, Springy, useTheme, withClick } from '@components';
 import { parseChallengeId, type ChallengeRecord } from '@challenge';
-import { TIER_LABELS } from '@game/codec';
-import { useChallengeStore } from '@state/challengeStore';
+import { TIER_LABELS } from '@game';
+import { useChallengeStore } from '@state';
 import { radius, spacing, typography, type Palette } from '@theme';
 
 import { formatDuration } from './index';

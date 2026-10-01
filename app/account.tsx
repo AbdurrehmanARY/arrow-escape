@@ -27,7 +27,7 @@ import { Screen, ScreenHeader, Springy, useSheetSound, useTheme, withClick } fro
 import { isGoogleConfigured } from '@services/auth';
 import { isBackendConfigured } from '@services/supabase';
 import { syncReachable } from '@services/sync';
-import { accountEmail, syncedAgo, useAuthStore } from '@state/authStore';
+import { accountEmail, syncedAgo, useAuthStore } from '@state';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
 /** Why the last attempt failed, in the player's terms rather than the API's. */

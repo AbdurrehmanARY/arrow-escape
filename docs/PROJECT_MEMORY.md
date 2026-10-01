@@ -1,7 +1,15 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** Master Growth & Design Brief completed and approved — see [docs/MASTER_BRIEF_GROWTH_DESIGN.md](MASTER_BRIEF_GROWTH_DESIGN.md). Includes codebase audit, 10 key decisions, 10-tier computable difficulty formula, 1,000-level sawtooth pacing, 2026 ad monetization architecture & eCPM benchmarks, micro-haptics specs, LiveOps/retention schedule, telemetry schema, and 6-month roadmap.
+> **Last updated:** Feature-based migration **Phase 1 (inventory) complete** — see
+> [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md). Read-only phase: no source file
+> changed. It maps all 199 `.ts`/`.tsx` files to a proposed feature home, records **9
+> documented deviations** (notably `src/game/`, `src/data/`, `src/render/` and `app/`
+> pinned, because moving them disarms the architecture checker or the level pipeline),
+> finds **2 real import cycles** through `src/challenge/rewards.ts`, and flags that
+> `src/components/index.ts` is imported by all 22 screens. Migration has **not started**;
+> it is blocked on five open decisions listed in that document.
+> Previous: Master Growth & Design Brief completed and approved — see [docs/MASTER_BRIEF_GROWTH_DESIGN.md](MASTER_BRIEF_GROWTH_DESIGN.md). Includes codebase audit, 10 key decisions, 10-tier computable difficulty formula, 1,000-level sawtooth pacing, 2026 ad monetization architecture & eCPM benchmarks, micro-haptics specs, LiveOps/retention schedule, telemetry schema, and 6-month roadmap.
 > Release state and the full remaining checklist live in [PROGRESS.md](PROGRESS.md).
 
 ---
@@ -234,6 +242,13 @@ monotone; they buy dependency _depth_, not risk.
 129. **7-Day Daily Streak rewards escalate progressively.** `streakStore` tracks consecutive daily claims with rewards escalating from 50 League Arrows on Day 1 to a Golden Chest (500 Arrows + 5 Hints) on Day 7.
 130. **Telemetry logs core growth events with zero server overhead.** `telemetry.ts` tracks `level_start`, `level_complete`, `level_fail`, `ad_impression`, `hint_requested`, and `streak_claimed` events safely offline and in dev environments.
 131. **Global energy system regenerates 1 heart every 20 minutes.** `energyStore` manages 5 max hearts with offline-safe timestamp-based regeneration and rewarded ad refill option.
+132. **Settings UI font hierarchy compacted for small and large screens.** `rowLabel` is 15px (fontWeight 600), `rowValue` is 14px (fontWeight 500), card row min-height is 48dp, and icon size is 16px to prevent awkward text wrapping or overflow across any Android screen size.
+133. **Exit ray length incorporates entire arrow body length.** `rayLength` in `buildScene` calculates `(exitPath.length + arrow.body.length + 2) * cellSize`, ensuring that every arrow (small and large) travels far enough that its entire rendered geometry (head to tail) exits the visible board boundary before unmounting.
+134. **Movement physics & easing curve unified for escape and collision.** Escape slide and collision recoil use the exact same cell velocity (ms per cell) and the same easing curve, held as one constant — `SHARED_ARROW_EASING` in `SkiaBoard.tsx`, referenced by all three call sites rather than repeated, so the two cannot drift apart. The curve is `Easing.bezier(0.25, 0.05, 0.5, 0.5)`, chosen by measuring its velocity profile: end-point 1.00x average, peak 1.19x, start 0.20x. The original `bezier(0.3, 0.02, 0.55, 1)` carried a comment saying it must not decelerate while measuring 0.00x at the end — it crawled to a stop in its last 10%, so arrows visibly hesitated before vanishing, differently on every refresh rate. The replacement keeps the launch ease-in, finishes at full speed, and cuts worst-case pixels-per-frame by 26%.
+135. **Hint color theme and animated pulse.** `arrowPalette.arrowHinted` updated to bright amber `#F59E0B` across themes, and hinted arrows render a smooth pulse (`pulse.value` 1.0 -> 1.12) to make the target arrow unmistakable.
+136. **Level start intro zoom-out -> slow zoom-in sequence.** On level initialization, camera scale starts fully zoomed OUT at `fitScale` (entire board visible), pauses briefly (200ms), then slowly zooms IN to target scale over 1100ms (`Easing.out(Easing.cubic)`). Touch interactions are blocked (`isIntroAnimating`) during intro transition to prevent accidental taps.
+137. **A debug APK that asks for a Metro server is not a testable APK, and the Gradle "debug" flag is not what makes test ads work.** React Native's Gradle plugin treats `debug` as a dev variant and therefore **skips** `createBundle…JsAndAssets` for it, so the APK opens on "fetch development server" unless a Metro server happens to be running — useless to hand to a tester, and the reason two builds were shipped that could not be played. `plugins/withStandaloneDebugBundling.js` now injects `debuggableVariants = []` (and pins the Kotlin Gradle plugin to `2.1.20`, matching RN 0.86's own `gradle/libs.versions.toml`) into every `expo prebuild`, so the debug variant embeds `assets/index.android.bundle` exactly as release does. The trap is the second half: once the variant is no longer debuggable, `TaskConfiguration.kt` bundles it with `--dev false`, so `__DEV__` is **false inside a "debug" APK** — which would have made `USE_TEST_ADS = __DEV__` serve *real* ads to testers, the precise mistake that flag exists to prevent. `USE_TEST_ADS` is now `__DEV__ || process.env.EXPO_PUBLIC_USE_TEST_ADS === 'true'`, with the override kept in gitignored `.env.local` so a cloud/EAS release build cannot inherit it. `build-test-apk.ps1` builds the APK (JDK 17, a real `sdk.dir` — `expo prebuild` rewrites `local.properties` with an empty one — and the env var) and `verify-apk.ps1` proves the bundle is embedded and the variable was inlined rather than left as a runtime lookup.
+
 
 ### Reversed along the way
 
@@ -285,6 +300,7 @@ monotone; they buy dependency _depth_, not risk.
 | `npm run levels:build`               | regenerate all 1,000 levels (deterministic, ~4 min)           |
 | `npm run levels:validate`            | re-verify the level JSON on disk                              |
 | `npm run levels:preview`             | render every theme to an HTML page                            |
+| `npm run icons:brand`                | regenerate every brand, launcher, splash and store asset      |
 
 ## Dev environment notes
 
@@ -301,7 +317,25 @@ open, level select carries a jump-to-number box, and both the menu and level
 select show a TESTING badge. Set it to `false` for production; nothing else needs
 changing.
 
-128. **Blocked arrow taps move forward to the collision point and trigger impact haptics at the exact collision moment.** A blocked tap moves the arrow forward along its exit vector by `freeCells * cellSize` (or 0.25 cells for an adjacent blocker). At the exact collision impact, `onCollisionHit` triggers physical device vibration (`triggerCollisionHaptic`) and switches the rendered color to `palette.arrowBlocked`, before returning smoothly to its original position and restoring normal color. Hint haptics (`triggerHintHaptic`) remain strictly isolated.
+309. **Blocked arrow taps move forward to the collision point and trigger impact haptics at the exact collision moment.** A blocked tap moves the arrow forward along its exit vector by `freeCells * cellSize` (or 0.25 cells for an adjacent blocker). At the exact collision impact, `onCollisionHit` triggers physical device vibration (`triggerCollisionHaptic`) and switches the rendered color to `palette.arrowBlocked`, before returning smoothly to its original position and restoring normal color. Hint haptics (`triggerHintHaptic`) remain strictly isolated.
+310. **All 12 monthly challenge trophies are displayed and accessible across both Arrow & Paper themes.** `CollectionScreen` iterates all 12 months (January to December), rendering 3D sculpted cup badges in Paper Theme and high-res trophy images in Arrow Theme without numbers on transparent backgrounds. Clicking any monthly trophy redirects directly to `/challenge?month=X&year=2026`.
+311. **All 3D Artwork Assets Aligned and Verified Across Arrow Theme.** Mapped all 3D award images (`level_legend_active.jpg`, `trophy_active.jpg`, `perfect_play_active.jpg`, `unstoppable_active.jpg`, `league_climber_active.jpg`, `league_fighter_active.jpg`), record images (`flame_active.jpg`, `crown_active.jpg`, `arrow_active.jpg`), monthly trophy assets (`trophy_01.png` through `trophy_12.png`), league shield assets (`shield_bronze.jpg` through `shield_diamond.jpg`), and custom UI image assets (`cup.png` and `arrow_icon.png`) across Home, Leagues, Collection, and Award Info pages.
+312. **All game image assets now have transparent backgrounds.** Records (largest streak, highest win streak, most wins), the Arrow Theme 3D arrow icon, and the league fighter award badges were flood-fill processed with edge feathering to remove solid white/grey backgrounds, producing transparent PNGs. References updated in `themeAssets.ts`, `rewards.ts`, and `rewardArt.ts`. Original source JPEGs retained. Tool: `tools/clean-image-backgrounds.ts`.
+313. **Audio assets migrated to MP3 and obsolete WAV files removed.** All music and SFX with existing MP3 counterparts (`menu`, `gameplay`, `victory`, `failure`, `wrongMove`, `hintUsed`, `rewardCollected`, `gameOver`, `awardEarned`) are wired to `.mp3` files in `src/services/audioAssets.ts`. The 8 redundant `.wav` versions were deleted from `assets/audio/`.
+314. **Active image registries repaired after read-only asset audit.** Audited 94 image `require(...)` occurrences across the reward, monthly-trophy, theme, and legacy reward-art registries: 70 unique paths and 47 unique missing paths. Active registries contained 74 occurrences, 59 unique paths, 50 missing occurrences, and 36 unique missing paths; dead `rewardArt.ts` contained 20 missing occurrences across 12 unique paths. Metro was confirmed to preserve the requested extension rather than substitute a same-stem WebP. Switched the missing monthly-trophy and theme PNG references to their existing same-stem WebP assets; `rewards.ts` already resolved and was left behaviorally unchanged. Per the approved scope, `rewardArt.ts` was not repaired or removed. `npm run verify` is green (29 suites, 353 tests, 1,000 levels validated). Expo Android export remains blocked by the pre-existing Hermes configuration mismatch (`app.json` enables Hermes; `android/gradle.properties` sets `hermesEnabled=false`).
+
+### Added in the brand-identity pass
+
+315. **The approved logo files have *fake* transparency: a grey checkerboard is painted into the pixels.** All five JPEGs are opaque, and each contains two dominant light bands plus a dark mark, so there is no alpha channel to recover and no "transparent" region to cut out — the checkerboard *is* the artwork's background, drawn as if a screenshot of an alpha canvas. A hard luminance threshold cuts it away but also chews off the mark's own anti-aliased edge, leaving a jagged rim on every diagonal (and the mark is almost entirely long diagonals). So the separation is a **ramp**: fully opaque at or below L96, fully transparent at or above L136, linear between. Measurement of the five files shows the lightest checkerboard band at L160 and the mark's interior below L64, so the ramp sits in a wide empty gap rather than straddling either population. The crop, the area-average resample and the recolour all follow from that mask.
+
+316. **The mark ships in two inks and the polarity is chosen from each theme's background, not from the theme's id.** A single flat mark cannot be visible on both Paper `#EEEBE4` and Kinetic Neon `#0A0E1A`, and the shipped set includes both plus four more. `themeAssets.ts` now keeps only the *non-brand* per-theme artwork and resolves `arrowIcon` from `isDarkColor(theme.palette.background)`, so a re-coloured or newly added theme gets the right mark without anyone editing a switch statement — the previous two-way branch on `themeId === 'arrow'` could not have expressed this. Two supporting choices: the test asserts polarity against the ink **measured from the shipped PNGs** rather than against a hex restated in the test, so re-inking the artwork feeds the test instead of invalidating it; and the required contrast is **4.5:1, the text standard**, where WCAG asks only 3:1 for a graphic — the shipped palettes all clear 7:1, so it is a floor with headroom, not a threshold tuned to pass.
+
+317. **The splash needs two polarities, and the display name was free where the install identity was not.** `expo-splash-screen` uses a light ground in light mode and a dark one in dark mode, so one splash file would have been invisible on half of all launches — it now ships `splash-icon.png` (charcoal) and `splash-icon-dark.png` (bone). Separately: `expo.name` became **Arrow Puzzle**, while `slug`, `scheme`, `android.package`, `extra.eas.projectId` and `updates.url` were deliberately left alone. Those five are install identity — changing any of them forks the EAS project and orphans every OTA update already on players' phones — whereas the display name is free to change and is now defined once in `src/brand/index.ts`, asserted equal to `app.json`'s `name` by a test so the app cannot introduce itself under two different names.
+
+318. **Every brand asset is derived from the same five files, and the Play listing set is no longer missing.** `npm run icons:brand` (was: `icons:build`, which generated icons from the game's *code* geometry) emits the in-app marks, the wordmark lockup, the launcher icon, both adaptive-icon layers, the Android 13 monochrome silhouette, both splash marks, the favicon and the store assets — including the **512×512 store icon, the 1024×1024 icon and the 1024×500 feature graphic** that [PROGRESS.md](PROGRESS.md) had recorded as missing and blocking submission. Generating them all from one source is the point: the icon, the splash mark and the in-app logo cannot drift apart, because they are the same drawing at different sizes. The old 3D webp is left on disk, unreferenced rather than deleted — it is still the approved art should this be reversed, and it is no longer reachable from any screen.
+
+
+
 
 ## Pending work
 
@@ -314,10 +348,14 @@ Full breakdown, with the release checklist, in [PROGRESS.md](PROGRESS.md).
 - **Assets:** all 31 audio files exist and all 31 are now played, but every one is
   **synthesised by `npm run sounds:build`, not recorded or composed** — clean and
   plain, in the register of early system sounds. Replacing any is dropping a file
-  in and changing one line of `audioAssets.ts`. Icons and splash are likewise
-  generated; rerun `npm run icons:build` after any brand change. The genuinely
-  missing artwork is the **Play Store listing set** — 512×512 icon, 1024×500
-  feature graphic, screenshots — which cannot be generated and blocks submission.
+  in and changing one line of `audioAssets.ts`. Icons, the in-app logo, the splash
+  marks and the Play listing set are likewise generated; rerun
+  `npm run icons:brand` after any brand change, and edit
+  `tools/make-brand-assets.ts` to change the mark. The five approved source files
+  live in `assets/brand/source/` and are the only hand-made artwork in the set —
+  regenerating without them fails loudly rather than silently. The remaining
+  genuinely missing listing item is **screenshots**, which have to be captured on
+  a device.
 - **Accounts:** AdMob ([ADS_SETUP.md](ADS_SETUP.md)), Play Console ([RELEASE.md](RELEASE.md)).
 - **Unproven on hardware:** the ads path has never run against a real SDK, and the
   1,000-level library has never been played end to end by a person.

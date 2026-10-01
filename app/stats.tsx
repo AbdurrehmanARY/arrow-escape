@@ -21,17 +21,15 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { Screen, ScreenHeader, useTheme } from '@components';
-import { TIER_LABELS, TIER_ORDER, type DifficultyTier } from '@game/codec';
-import { ENCODED_LEVELS, LEVEL_COUNT } from '@data/levels';
-import { CHAPTERS, chapterProgress } from '@data/chapters';
+import { TIER_LABELS, TIER_ORDER, type DifficultyTier } from '@game';
+import { ENCODED_LEVELS, LEVEL_COUNT , CHAPTERS, chapterProgress } from '@data';
 import {
   clearedByQuality,
   clearedCount,
   isCleared,
   totalMistakes,
   useProgressStore,
-} from '@state/progressStore';
-import { useHintStore } from '@state/hintStore';
+ useHintStore } from '@state';
 import { radius, spacing, typography, type Palette } from '@theme';
 
 export default function StatsScreen() {

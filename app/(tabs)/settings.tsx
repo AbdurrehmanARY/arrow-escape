@@ -6,15 +6,16 @@
  */
 
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 import { Screen, Springy, useTheme, withClick } from '@components';
+import { APP_NAME, brandWordmark, isDarkColor } from '@brand';
+import { APP_VERSION } from '@config';
 import { playSfx } from '@services/audio';
-import { accountEmail, useAuthStore } from '@state/authStore';
-import { useSettingsStore } from '@state/settingsStore';
-import { fonts, radius, spacing, THEMES, typography } from '@theme';
+import { accountEmail, useAuthStore , useSettingsStore } from '@state';
+import { fonts, radius, spacing, THEMES } from '@theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -31,9 +32,13 @@ export default function SettingsScreen() {
 
   const currentTheme = THEMES.find((t) => t.id === settings.themeId) ?? THEMES[0]!;
 
-  const toggleSound = (enabled: boolean) => {
-    settings.set('sfx', enabled);
+  const toggleMusic = (enabled: boolean) => {
     settings.set('music', enabled);
+    playSfx('toggle');
+  };
+
+  const toggleSfx = (enabled: boolean) => {
+    settings.set('sfx', enabled);
     playSfx('toggle');
   };
 
@@ -45,7 +50,7 @@ export default function SettingsScreen() {
   return (
     <Screen scroll>
       <View style={styles.container}>
-        {/* ---- Group 1: Preferences (Language, Vibrations, Sounds, Themes) - */}
+        {/* ---- Group 1: Preferences (Language, Vibrations, Music, Sounds, Themes) - */}
         <View style={[styles.cardGroup, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           {/* Language */}
           <Springy
@@ -55,12 +60,12 @@ export default function SettingsScreen() {
             style={styles.row}
           >
             <View style={styles.rowLeft}>
-              <FontAwesome name="globe" size={20} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="globe" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Language</Text>
             </View>
             <View style={styles.rowRight}>
               <Text style={[styles.rowValue, { color: palette.textFaint }]}>{language}</Text>
-              <FontAwesome name="chevron-right" size={14} color={palette.textFaint} />
+              <FontAwesome name="chevron-right" size={12} color={palette.textFaint} />
             </View>
           </Springy>
 
@@ -69,7 +74,7 @@ export default function SettingsScreen() {
           {/* Vibrations */}
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <FontAwesome name="rss" size={18} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="rss" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Vibrations</Text>
             </View>
             <Switch
@@ -82,15 +87,31 @@ export default function SettingsScreen() {
 
           <View style={[styles.divider, { backgroundColor: palette.border }]} />
 
+          {/* Music */}
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <FontAwesome name="music" size={16} color={palette.textMuted} style={styles.icon} />
+              <Text style={[styles.rowLabel, { color: palette.text }]}>Music</Text>
+            </View>
+            <Switch
+              value={settings.music}
+              onValueChange={toggleMusic}
+              trackColor={{ false: palette.border, true: palette.accent }}
+              thumbColor={palette.surfaceRaised}
+            />
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+
           {/* Sounds */}
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <FontAwesome name="volume-up" size={19} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="volume-up" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Sounds</Text>
             </View>
             <Switch
-              value={settings.sfx || settings.music}
-              onValueChange={toggleSound}
+              value={settings.sfx}
+              onValueChange={toggleSfx}
               trackColor={{ false: palette.border, true: palette.accent }}
               thumbColor={palette.surfaceRaised}
             />
@@ -106,12 +127,12 @@ export default function SettingsScreen() {
             style={styles.row}
           >
             <View style={styles.rowLeft}>
-              <FontAwesome name="paint-brush" size={18} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="paint-brush" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Themes</Text>
             </View>
             <View style={styles.rowRight}>
               <Text style={[styles.rowValue, { color: palette.textFaint }]}>{currentTheme.name}</Text>
-              <FontAwesome name="chevron-right" size={14} color={palette.textFaint} />
+              <FontAwesome name="chevron-right" size={12} color={palette.textFaint} />
             </View>
           </Springy>
         </View>
@@ -120,7 +141,7 @@ export default function SettingsScreen() {
         <View style={[styles.cardGroup, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <FontAwesome name="user" size={20} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="user" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Account Connection</Text>
             </View>
             <Switch
@@ -139,7 +160,7 @@ export default function SettingsScreen() {
         <View style={[styles.cardGroup, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <FontAwesome name="ban" size={19} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="ban" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Remove Ads</Text>
             </View>
             <Switch
@@ -161,7 +182,7 @@ export default function SettingsScreen() {
             style={styles.row}
           >
             <View style={styles.rowLeft}>
-              <FontAwesome name="refresh" size={19} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="refresh" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Restore purchases</Text>
             </View>
           </Springy>
@@ -175,7 +196,7 @@ export default function SettingsScreen() {
             style={styles.row}
           >
             <View style={styles.rowLeft}>
-              <FontAwesome name="star" size={19} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="star" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Rate us</Text>
             </View>
           </Springy>
@@ -188,7 +209,7 @@ export default function SettingsScreen() {
             style={styles.row}
           >
             <View style={styles.rowLeft}>
-              <FontAwesome name="pencil" size={19} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="pencil" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Write us</Text>
             </View>
           </Springy>
@@ -202,7 +223,7 @@ export default function SettingsScreen() {
             style={styles.row}
           >
             <View style={styles.rowLeft}>
-              <FontAwesome name="file-text-o" size={19} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="file-text-o" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Privacy</Text>
             </View>
           </Springy>
@@ -215,10 +236,26 @@ export default function SettingsScreen() {
             style={styles.row}
           >
             <View style={styles.rowLeft}>
-              <FontAwesome name="info-circle" size={20} color={palette.textMuted} style={styles.icon} />
+              <FontAwesome name="info-circle" size={16} color={palette.textMuted} style={styles.icon} />
               <Text style={[styles.rowLabel, { color: palette.text }]}>Terms of Service</Text>
             </View>
           </Springy>
+        </View>
+
+        {/* ---- Brand footer ------------------------------------------------ */}
+        {/* The version sits beside the logo because it is the one detail support
+            ever asks a player for, and a version tucked inside a numbered list
+            reads as another setting rather than as an identifier. */}
+        <View style={styles.footer}>
+          <Image
+            source={brandWordmark(isDarkColor(palette.background))}
+            style={styles.footerWordmark}
+            resizeMode="contain"
+            accessibilityLabel={APP_NAME}
+          />
+          <Text style={[styles.footerVersion, { color: palette.textFaint }]}>
+            {`${APP_NAME} v${APP_VERSION}`}
+          </Text>
         </View>
 
         {/* ---- Language Selector Modal ------------------------------------ */}
@@ -276,39 +313,40 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xxl,
-    gap: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
   },
   cardGroup: {
-    borderRadius: radius.xl,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
     borderWidth: 1,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 56,
-    paddingVertical: spacing.sm,
+    minHeight: 48,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
   rowLeft: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     marginRight: spacing.xs,
   },
   icon: {
-    width: 26,
+    width: 22,
     textAlign: 'center',
   },
   rowLabel: {
     flexShrink: 1,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
   },
   rowRight: {
     flexDirection: 'row',
@@ -316,12 +354,32 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   rowValue: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
   },
   divider: {
     height: 1,
     marginHorizontal: spacing.xs,
+  },
+
+  /* Brand footer */
+  footer: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  footerWordmark: {
+    width: 176,
+    // The lockup's own aspect ratio (1200x278), so `contain` has nothing to letterbox.
+    height: 41,
+    // Just under full strength, so it signs the screen without competing with the
+    // cards above it.
+    opacity: 0.85,
+  },
+  footerVersion: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 
   /* Modals */
@@ -330,30 +388,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
+    padding: spacing.lg,
   },
   modalSheet: {
     width: '100%',
-    maxWidth: 400,
-    borderRadius: radius.xl,
-    padding: spacing.xl,
-    gap: spacing.md,
+    maxWidth: 380,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
   },
   modalTitle: {
-    ...typography.title,
     fontFamily: fonts.displayExtra,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     marginBottom: spacing.xs,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     borderBottomWidth: 1,
   },
   optionText: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

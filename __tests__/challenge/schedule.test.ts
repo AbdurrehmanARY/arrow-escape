@@ -12,8 +12,8 @@
  * ships.
  */
 
-import { TIER_ORDER } from '@game/codec';
-import { levelById, tierOf } from '@data/levels';
+import { TIER_ORDER } from '@game';
+import { levelById, tierOf } from '@data';
 
 import {
   CHALLENGE_START,

@@ -11,15 +11,29 @@
  */
 
 /** Semantic version shown in Settings → About. Keep in step with `app.json`. */
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.0.1';
 
 /**
  * Use Google's test ad units.
  *
  * Tied to `__DEV__` so a release build cannot accidentally ship test ads, and a
  * development build cannot accidentally serve real ones.
+ *
+ * `EXPO_PUBLIC_USE_TEST_ADS=true` is an explicit, opt-in override for the one
+ * case `__DEV__` cannot cover: a **standalone test APK**. Our config plugin
+ * `plugins/withStandaloneDebugBundling.js` sets `debuggableVariants = []` so the
+ * `debug` variant embeds its JS bundle instead of waiting on a Metro server — but
+ * React Native's Gradle plugin then bundles that variant with `--dev false`
+ * (`TaskConfiguration.kt`), so `__DEV__` is `false` even in a debug APK. Without
+ * this override a tester APK would serve *real* ads, which is exactly the mistake
+ * `USE_TEST_ADS` exists to prevent.
+ *
+ * The override is deliberately asymmetrical: it can only ever turn test ads ON.
+ * A production or EAS release build that does not set the variable keeps the
+ * `__DEV__` behaviour, so a stray env var can never leak test ads to players.
  */
-export const USE_TEST_ADS = __DEV__;
+export const USE_TEST_ADS =
+  __DEV__ || process.env.EXPO_PUBLIC_USE_TEST_ADS === 'true';
 
 /**
  * Real AdMob unit ids, used only in release builds.
@@ -30,8 +44,8 @@ export const USE_TEST_ADS = __DEV__;
  * is rejected.
  */
 export const AD_UNIT_IDS = {
-  rewarded: 'ca-app-pub-0000000000000000/0000000000',
-  interstitial: 'ca-app-pub-0000000000000000/0000000000',
+  rewarded: 'ca-app-pub-1159231009656865/8148752594',
+  interstitial: 'ca-app-pub-1159231009656865/8024252217',
 } as const;
 
 /** Board sizes above this get a smaller minimum cell, so 12x12 still fits a phone. */
@@ -48,7 +62,7 @@ export const LARGE_BOARD_THRESHOLD = 10;
  * A build flag that looks identical to production is how one ships by accident,
  * and this one would hand every player the whole game.
  */
-export const UNLOCK_ALL_LEVELS = true;
+export const UNLOCK_ALL_LEVELS = false;
 
 /**
  * How long the win overlay waits before covering the board.

@@ -16,22 +16,39 @@ import { statsOf, useChallengeStore } from '../state/challengeStore';
 import { arrowsThisWeek, useLeagueStore } from '../state/leagueStore';
 import { useProgressStore } from '../state/progressStore';
 
-const LEVEL_LEGEND_ACTIVE: ImageSourcePropType = require('../../assets/challenge/level_legend_active.jpg');
-const LEVEL_LEGEND_INACTIVE: ImageSourcePropType = require('../../assets/challenge/level_legend_inactive.jpg');
-const PERFECT_PLAY_ACTIVE: ImageSourcePropType = require('../../assets/challenge/perfect_play_active.jpg');
-const PERFECT_PLAY_INACTIVE: ImageSourcePropType = require('../../assets/challenge/perfect_play_inactive.jpg');
-const UNSTOPPABLE_ACTIVE: ImageSourcePropType = require('../../assets/challenge/unstoppable_active.jpg');
-const UNSTOPPABLE_INACTIVE: ImageSourcePropType = require('../../assets/challenge/unstoppable_inactive.jpg');
-const LEAGUE_CLIMBER_ACTIVE: ImageSourcePropType = require('../../assets/challenge/league_climber_active.jpg');
-const LEAGUE_CLIMBER_INACTIVE: ImageSourcePropType = require('../../assets/challenge/league_climber_inactive.jpg');
-const LEAGUE_FIGHTER_ACTIVE: ImageSourcePropType = require('../../assets/challenge/league_fighter_active.jpg');
-const LEAGUE_FIGHTER_INACTIVE: ImageSourcePropType = require('../../assets/challenge/league_fighter_inactive.jpg');
-const FLAME_ACTIVE: ImageSourcePropType = require('../../assets/challenge/flame_active.jpg');
-const FLAME_INACTIVE: ImageSourcePropType = require('../../assets/challenge/flame_inactive.jpg');
-const CROWN_ACTIVE: ImageSourcePropType = require('../../assets/challenge/crown_active.jpg');
-const CROWN_INACTIVE: ImageSourcePropType = require('../../assets/challenge/crown_inactive.jpg');
-const ARROW_ACTIVE: ImageSourcePropType = require('../../assets/challenge/arrow_active.jpg');
-const ARROW_INACTIVE: ImageSourcePropType = require('../../assets/challenge/arrow_inactive.jpg');
+const LEVEL_LEGEND_ACTIVE: ImageSourcePropType = require('../../assets/awards/level_legend_active.webp');
+const LEVEL_LEGEND_INACTIVE: ImageSourcePropType = require('../../assets/awards/level_legend_unactive.webp');
+const LEVEL_LEGEND_LOCKED: ImageSourcePropType = require('../../assets/awards/level_legend_locked.webp');
+
+const PERFECT_PLAY_ACTIVE: ImageSourcePropType = require('../../assets/awards/perfect_play_active.webp');
+const PERFECT_PLAY_INACTIVE: ImageSourcePropType = require('../../assets/awards/perfect play unactive.webp');
+const PERFECT_PLAY_LOCKED: ImageSourcePropType = require('../../assets/awards/perfect_play_locked.webp');
+
+const UNSTOPPABLE_ACTIVE: ImageSourcePropType = require('../../assets/awards/unstoppable_active.webp');
+const UNSTOPPABLE_INACTIVE: ImageSourcePropType = require('../../assets/awards/unstoppable_locked.webp');
+const UNSTOPPABLE_LOCKED: ImageSourcePropType = require('../../assets/awards/unstoppable_locked.webp');
+
+const LEAGUE_CLIMBER_ACTIVE: ImageSourcePropType = require('../../assets/awards/league_climber_active.webp');
+const LEAGUE_CLIMBER_INACTIVE: ImageSourcePropType = require('../../assets/awards/league_climber_inactive.webp');
+const LEAGUE_CLIMBER_LOCKED: ImageSourcePropType = require('../../assets/awards/league_climber_locked.webp');
+
+const LEAGUE_FIGHTER_ACTIVE: ImageSourcePropType = require('../../assets/awards/league_fighter_active.webp');
+const LEAGUE_FIGHTER_INACTIVE: ImageSourcePropType = require('../../assets/awards/league_fighter_inactive.webp');
+const LEAGUE_FIGHTER_LOCKED: ImageSourcePropType = require('../../assets/awards/league_fighter_locked.webp');
+
+const FLAME_ACTIVE: ImageSourcePropType = require('../../assets/records/largest streak.webp');
+const FLAME_INACTIVE: ImageSourcePropType = require('../../assets/records/largest streak_inactive.webp');
+const FLAME_LOCKED: ImageSourcePropType = require('../../assets/records/largest streak_locked.webp');
+
+const CROWN_ACTIVE: ImageSourcePropType = require('../../assets/records/highest_win_streak.webp');
+const CROWN_INACTIVE: ImageSourcePropType = require('../../assets/records/highest_win_streak-inactive.webp');
+const CROWN_LOCKED: ImageSourcePropType = require('../../assets/records/highest_win_streak_locked.webp');
+
+const ARROW_ACTIVE: ImageSourcePropType = require('../../assets/records/most_win.webp');
+const ARROW_INACTIVE: ImageSourcePropType = require('../../assets/records/most_win_inative.webp');
+const ARROW_LOCKED: ImageSourcePropType = require('../../assets/records/most_win_locked.webp');
+
+export type AwardState = 'active' | 'inactive' | 'locked';
 
 export interface CalculatedRewardItem {
   readonly id: string;
@@ -40,8 +57,10 @@ export interface CalculatedRewardItem {
   readonly current: number;
   readonly requirement: number;
   readonly active: boolean;
+  readonly state: AwardState;
   readonly activeImage: ImageSourcePropType;
   readonly inactiveImage: ImageSourcePropType;
+  readonly lockedImage: ImageSourcePropType;
   readonly image: ImageSourcePropType;
   readonly route: string;
   readonly displayValue: string;
@@ -76,6 +95,44 @@ export interface RewardProgress {
   readonly fraction: number;
 }
 
+function resolveRewardItem(args: {
+  id: string;
+  title: string;
+  description: string;
+  current: number;
+  requirement: number;
+  activeImage: ImageSourcePropType;
+  inactiveImage: ImageSourcePropType;
+  lockedImage: ImageSourcePropType;
+  route: string;
+  unit: string;
+}): CalculatedRewardItem {
+  const { id, title, description, current, requirement, activeImage, inactiveImage, lockedImage, route, unit } = args;
+  const active = current >= requirement;
+  const state: AwardState = active ? 'active' : current > 0 ? 'inactive' : 'locked';
+  const image = state === 'active' ? activeImage : state === 'inactive' ? inactiveImage : lockedImage;
+  const displayValue = active ? 'Unlocked' : `${current}/${requirement} ${unit}`;
+  const statusText = active ? 'Unlocked' : state === 'inactive' ? 'In Progress' : 'Locked';
+
+  return {
+    id,
+    title,
+    description,
+    current,
+    requirement,
+    active,
+    state,
+    activeImage,
+    inactiveImage,
+    lockedImage,
+    image,
+    route,
+    displayValue,
+    statusText,
+    unit,
+  };
+}
+
 export function calculateAllRewards(inputs: {
   progressRecords: Record<string, { timesCleared: number }>;
   challengeRecords: Record<string, any>;
@@ -91,126 +148,102 @@ export function calculateAllRewards(inputs: {
   const thisWeekArrows = arrowsThisWeek({ weeks: leagueWeeks }, nowMs);
 
   const list: CalculatedRewardItem[] = [
-    {
+    resolveRewardItem({
       id: 'level-legend',
       title: 'Level Legend',
       description: 'Clear 100 campaign levels to earn Level Legend.',
       current: clearedLevels,
       requirement: 100,
-      active: clearedLevels >= 100,
       activeImage: LEVEL_LEGEND_ACTIVE,
       inactiveImage: LEVEL_LEGEND_INACTIVE,
-      image: clearedLevels >= 100 ? LEVEL_LEGEND_ACTIVE : LEVEL_LEGEND_INACTIVE,
+      lockedImage: LEVEL_LEGEND_LOCKED,
       route: '/challenge/info/level-legend',
       unit: 'Cleared',
-      displayValue: clearedLevels >= 100 ? 'Unlocked' : `${clearedLevels}/100 Cleared`,
-      statusText: clearedLevels >= 100 ? 'Unlocked' : 'In Progress',
-    },
-    {
+    }),
+    resolveRewardItem({
       id: 'perfect-play',
       title: 'Perfect Play',
       description: 'Achieve a flawless victory without mistakes.',
       current: stats.perfect,
       requirement: 1,
-      active: stats.perfect >= 1,
       activeImage: PERFECT_PLAY_ACTIVE,
       inactiveImage: PERFECT_PLAY_INACTIVE,
-      image: stats.perfect >= 1 ? PERFECT_PLAY_ACTIVE : PERFECT_PLAY_INACTIVE,
+      lockedImage: PERFECT_PLAY_LOCKED,
       route: '/challenge/info/perfect-play',
       unit: 'Flawless',
-      displayValue: stats.perfect >= 1 ? 'Unlocked' : `${stats.perfect}/1 Flawless`,
-      statusText: stats.perfect >= 1 ? 'Unlocked' : 'In Progress',
-    },
-    {
+    }),
+    resolveRewardItem({
       id: 'unstoppable',
       title: 'Unstoppable',
       description: 'Achieve a 5-win streak.',
       current: stats.highestWinStreak,
       requirement: 5,
-      active: stats.highestWinStreak >= 5,
       activeImage: UNSTOPPABLE_ACTIVE,
       inactiveImage: UNSTOPPABLE_INACTIVE,
-      image: stats.highestWinStreak >= 5 ? UNSTOPPABLE_ACTIVE : UNSTOPPABLE_INACTIVE,
+      lockedImage: UNSTOPPABLE_LOCKED,
       route: '/challenge/info/unstoppable',
       unit: 'Streak',
-      displayValue: stats.highestWinStreak >= 5 ? 'Unlocked' : `${stats.highestWinStreak}/5 Streak`,
-      statusText: stats.highestWinStreak >= 5 ? 'Unlocked' : 'In Progress',
-    },
-    {
+    }),
+    resolveRewardItem({
       id: 'league-climber',
       title: 'League Climber',
       description: 'Earn 500 league points in a single week.',
       current: thisWeekArrows,
       requirement: 500,
-      active: thisWeekArrows >= 500,
       activeImage: LEAGUE_CLIMBER_ACTIVE,
       inactiveImage: LEAGUE_CLIMBER_INACTIVE,
-      image: thisWeekArrows >= 500 ? LEAGUE_CLIMBER_ACTIVE : LEAGUE_CLIMBER_INACTIVE,
+      lockedImage: LEAGUE_CLIMBER_LOCKED,
       route: '/challenge/info/league-climber',
       unit: 'Pts',
-      displayValue: thisWeekArrows >= 500 ? 'Unlocked' : `${thisWeekArrows}/500 Pts`,
-      statusText: thisWeekArrows >= 500 ? 'Unlocked' : 'In Progress',
-    },
-    {
+    }),
+    resolveRewardItem({
       id: 'league-fighter',
       title: 'League Fighter',
       description: 'Participate in 10 league battles.',
       current: leagueCounted.length,
       requirement: 10,
-      active: leagueCounted.length >= 10,
       activeImage: LEAGUE_FIGHTER_ACTIVE,
       inactiveImage: LEAGUE_FIGHTER_INACTIVE,
-      image: leagueCounted.length >= 10 ? LEAGUE_FIGHTER_ACTIVE : LEAGUE_FIGHTER_INACTIVE,
+      lockedImage: LEAGUE_FIGHTER_LOCKED,
       route: '/challenge/info/league-fighter',
       unit: 'Battles',
-      displayValue: leagueCounted.length >= 10 ? 'Unlocked' : `${leagueCounted.length}/10 Battles`,
-      statusText: leagueCounted.length >= 10 ? 'Unlocked' : 'In Progress',
-    },
-    {
+    }),
+    resolveRewardItem({
       id: 'longest-streak',
       title: 'Longest Streak',
       description: 'Maintain a 7-day challenge streak.',
       current: stats.longestStreak,
       requirement: 7,
-      active: stats.longestStreak >= 7,
       activeImage: FLAME_ACTIVE,
       inactiveImage: FLAME_INACTIVE,
-      image: stats.longestStreak >= 7 ? FLAME_ACTIVE : FLAME_INACTIVE,
+      lockedImage: FLAME_LOCKED,
       route: '/challenge/info/longest-streak',
       unit: 'Days',
-      displayValue: stats.longestStreak >= 7 ? 'Unlocked' : `${stats.longestStreak}/7 Days`,
-      statusText: stats.longestStreak >= 7 ? 'Unlocked' : 'In Progress',
-    },
-    {
+    }),
+    resolveRewardItem({
       id: 'highest-win-streak',
       title: 'Highest Win Streak',
       description: 'Achieve a 10-win streak.',
       current: stats.highestWinStreak,
       requirement: 10,
-      active: stats.highestWinStreak >= 10,
       activeImage: CROWN_ACTIVE,
       inactiveImage: CROWN_INACTIVE,
-      image: stats.highestWinStreak >= 10 ? CROWN_ACTIVE : CROWN_INACTIVE,
+      lockedImage: CROWN_LOCKED,
       route: '/challenge/info/highest-win-streak',
       unit: 'Wins',
-      displayValue: stats.highestWinStreak >= 10 ? 'Unlocked' : `${stats.highestWinStreak}/10 Wins`,
-      statusText: stats.highestWinStreak >= 10 ? 'Unlocked' : 'In Progress',
-    },
-    {
+    }),
+    resolveRewardItem({
       id: 'most-wins',
       title: 'Most Wins',
       description: 'Win 30 total daily challenges.',
       current: stats.won,
       requirement: 30,
-      active: stats.won >= 30,
       activeImage: ARROW_ACTIVE,
       inactiveImage: ARROW_INACTIVE,
-      image: stats.won >= 30 ? ARROW_ACTIVE : ARROW_INACTIVE,
+      lockedImage: ARROW_LOCKED,
       route: '/challenge/info/most-wins',
       unit: 'Total',
-      displayValue: stats.won >= 30 ? 'Unlocked' : `${stats.won}/30 Total`,
-      statusText: stats.won >= 30 ? 'Unlocked' : 'In Progress',
-    },
+    }),
   ];
 
   const map: Record<string, CalculatedRewardItem> = {};

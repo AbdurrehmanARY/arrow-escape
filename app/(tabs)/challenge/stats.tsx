@@ -17,7 +17,7 @@ import { useRouter } from 'expo-router';
 
 import { ChallengeBadges, Screen, ScreenHeader, useTheme } from '@components';
 import { today } from '@challenge';
-import { statsOf, useChallengeStore } from '@state/challengeStore';
+import { statsOf, useChallengeStore } from '@state';
 import { radius, spacing, typography, type Palette } from '@theme';
 
 import { formatDuration } from './index';

@@ -35,7 +35,7 @@
 
 import { supabase } from './supabase';
 import type { ChallengeRecord } from '@challenge';
-import type { LevelRecord } from '@state/progressStore';
+import type { LevelRecord } from './storage';
 
 /** A row of the weekly table, already ranked. */
 export interface LeaderboardRow {

@@ -14,6 +14,7 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
   moduleNameMapper: {
     '^@game$': '<rootDir>/src/game',
+    '^@render$': '<rootDir>/src/render',
     '^@render/(.*)$': '<rootDir>/src/render/$1',
     '^@challenge$': '<rootDir>/src/challenge',
     '^@league$': '<rootDir>/src/league',
@@ -30,7 +31,8 @@ module.exports = {
     '^@services/(.*)$': '<rootDir>/src/services/$1',
     '^@config$': '<rootDir>/src/config',
     '^@config/(.*)$': '<rootDir>/src/config/$1',
-    '^@screens/(.*)$': '<rootDir>/src/screens/$1',
+    '^@brand$': '<rootDir>/src/brand',
+    '^@data$': '<rootDir>/src/data',
     '^@data/(.*)$': '<rootDir>/src/data/$1',
   },
   // `index.ts` is a pure re-export barrel with no logic of its own; counting it

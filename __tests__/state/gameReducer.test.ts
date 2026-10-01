@@ -8,7 +8,7 @@
  */
 
 import { buildLevel, DEFAULT_HEARTS, parseAscii, type Board, type BoardState } from '@game';
-import { gameReducer, initGameState, type GameState } from '@state/gameReducer';
+import { gameReducer, initGameState, type GameState } from '@state';
 
 /** Three snakes queued in a row: only the front one ('a', index 0) can move. */
 const CHAIN = 'c C b B a A';

@@ -19,7 +19,7 @@
  *                 mean migrating every stored record; leaving it null costs nothing.
  */
 
-import type { DifficultyTier } from '@game/codec';
+import type { DifficultyTier } from '@game';
 
 import type { ChallengeId } from './schedule';
 

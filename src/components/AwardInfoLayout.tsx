@@ -30,9 +30,9 @@ export interface AwardInfoLayoutProps {
 
 export function AwardInfoLayout({
   image,
-  badgeNumber,
+  badgeNumber: _badgeNumber,
   dateText,
-  title: _title,
+  title,
   description,
   nextTargetText,
   progressCurrent,
@@ -49,7 +49,7 @@ export function AwardInfoLayout({
     if (onClose) {
       onClose();
     } else {
-      router.back();
+      router.replace('/(tabs)/collection');
     }
   };
 
@@ -61,20 +61,20 @@ export function AwardInfoLayout({
   return (
     <Screen>
       <View style={styles.centerWrapper}>
-        {/* ---- 3D Image Graphic with Badge Number -------------------------- */}
-        <View style={hideCardFrame ? styles.cardOuterClean : styles.cardOuter}>
+        {/* ---- 3D Image Graphic / Icon ------------------------------------- */}
+        <View style={hideCardFrame ? styles.cardOuterClean : [styles.cardOuter, { backgroundColor: 'transparent' }]}>
           <Image source={image} style={styles.cardImage} resizeMode="contain" />
-          {badgeNumber !== undefined ? (
-            <View style={styles.badgeOverlay}>
-              <Text style={styles.badgeText}>{badgeNumber}</Text>
-            </View>
-          ) : null}
         </View>
 
         {/* ---- Date Pill Badge -------------------------------------------- */}
         <View style={[styles.datePill, { backgroundColor: palette.surfaceRaised }]}>
           <Text style={[styles.dateText, { color: palette.textMuted }]}>{dateText}</Text>
         </View>
+
+        {/* ---- Award Title ------------------------------------------------ */}
+        {title ? (
+          <Text style={[styles.awardTitle, { color: palette.accent }]}>{title}</Text>
+        ) : null}
 
         {/* ---- Description Message ---------------------------------------- */}
         <Text style={[styles.descriptionText, { color: palette.text }]}>{description}</Text>
@@ -138,7 +138,6 @@ const styles = StyleSheet.create({
     width: 210,
     height: 210,
     borderRadius: 105,
-    backgroundColor: '#F0F4FA',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -151,33 +150,36 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardImage: {
-    width: 175,
-    height: 175,
+    width: '110%',
+    height: '110%',
     borderRadius: 87.5,
   },
   badgeOverlay: {
     position: 'absolute',
-    bottom: -18,
+    bottom: 12,
     alignSelf: 'center',
     zIndex: 10,
   },
   badgeText: {
-    fontSize: 42,
+    fontSize: 52,
+    lineHeight: 56,
     fontFamily: fonts.displayExtra,
     fontWeight: '900',
-    color: '#434965',
-    textShadowColor: '#FFFFFF',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    color: '#FFFFFF',
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 18,
+    letterSpacing: -1,
+    includeFontPadding: false,
   },
 
   cardOuterClean: {
-    width: 210,
-    height: 210,
+    width: 220,
+    height: 220,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
 
   datePill: {
@@ -191,6 +193,14 @@ const styles = StyleSheet.create({
     ...typography.small,
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  awardTitle: {
+    fontFamily: fonts.displayExtra,
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: spacing.xs,
   },
 
   descriptionText: {

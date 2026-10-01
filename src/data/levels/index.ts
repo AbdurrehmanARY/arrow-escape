@@ -9,7 +9,7 @@
  * on demand and is cached, so only the levels actually played are ever expanded.
  */
 
-import { decodeLevel, type EncodedLevel, type LevelPack, type DifficultyTier } from '@game/codec';
+import { decodeLevel, type EncodedLevel, type LevelPack, type DifficultyTier } from '@game';
 import type { LevelDefinition } from '@game';
 
 import pack01 from './pack-01.json';

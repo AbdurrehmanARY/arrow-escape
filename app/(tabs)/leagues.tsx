@@ -9,98 +9,23 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
-import { Screen, Springy, useSheetSound, useTheme, withClick } from '@components';
-import { today } from '@challenge';
-import {
-  arrowsFor,
-  formatRemaining,
-  leagueForArrows,
-  msRemaining,
-  weekOf,
-} from '@league';
+import { LeagueIntro, Screen, Springy, useTheme, withClick } from '@components';
+import { playMusic } from '@services/audio';
 import { syncProfile } from '@services/sync';
-import { useAuthStore } from '@state/authStore';
-import { statsOf, useChallengeStore } from '@state/challengeStore';
-import { arrowsThisWeek, useLeagueStore } from '@state/leagueStore';
-import { fonts, radius, spacing, typography, type Palette } from '@theme';
+import { useAuthStore } from '@state';
+import { fonts, radius, spacing, typography } from '@theme';
 
-const ARROW_ICON = require('../../assets/images/arrow_icon.png');
-
-export const LEAGUE_IMAGES: Record<string, any> = {
-  bronze: require('../../assets/images/shield_bronze.jpg'),
-  silver: require('../../assets/images/shield_silver.jpg'),
-  gold: require('../../assets/images/shield_gold.jpg'),
-  ruby: require('../../assets/images/shield_ruby.jpg'),
-  obsidian: require('../../assets/images/shield_obsidian.jpg'),
-  diamond: require('../../assets/images/shield_diamond.jpg'),
-};
-
-interface LeaderboardEntry {
-  id: string;
-  rank: number;
-  flag: string;
-  name: string;
-  arrows: number;
-  isUser?: boolean;
-}
-
-const LEADERBOARD_ROSTER: Omit<LeaderboardEntry, 'rank' | 'isUser' | 'arrows'>[] = [
-  { id: '1', flag: '🇨🇦', name: 'Player02997' },
-  { id: '2', flag: '🇺🇸', name: 'AdrianLee' },
-  { id: '3', flag: '🇬🇧', name: 'OliviaRoss' },
-  { id: '4', flag: '🇪🇬', name: 'UnicornCape' },
-  { id: '5', flag: '🌐', name: 'CobaltFern5' },
-  { id: '6', flag: '🇮🇪', name: 'LateToGame' },
-  { id: '7', flag: '🌐', name: 'OopsIWon' },
-  { id: '8', flag: '🇨🇾', name: 'Crispy5' },
-  { id: '9', flag: '🇫🇷', name: 'Player07688' },
-  { id: '10', flag: '🌐', name: 'X3na' },
-  { id: '11', flag: '🇪🇸', name: 'ArrowPro99' },
-  { id: '12', flag: '🇩🇪', name: 'MasterNinja' },
-  { id: '13', flag: '🇯🇵', name: 'KageRider' },
-  { id: '14', flag: '🇧🇷', name: 'SilvaSpeed' },
-  { id: '15', flag: '🇦🇺', name: 'OzzyEscape' },
-  { id: '16', flag: '🇨🇳', name: 'ChenZen' },
-  { id: '17', flag: '🇲🇽', name: 'MateoV' },
-  { id: '18', flag: '🇸🇪', name: 'SvenBold' },
-  { id: '19', flag: '🇮🇳', name: 'MayaP' },
-  { id: '20', flag: '🇷🇺', name: 'ViktorK' },
-  { id: '21', flag: '🇰🇷', name: 'ChloeSun' },
-  { id: '22', flag: '🇨🇦', name: 'LiamW' },
-  { id: '23', flag: '🇺🇸', name: 'SophiaStar' },
-  { id: '24', flag: '🇳🇴', name: 'LucasNord' },
-  { id: '25', flag: '🇮🇹', name: 'IsabellaB' },
-  { id: '26', flag: '🇬🇧', name: 'EthanHunt' },
-  { id: '27', flag: '🇦🇪', name: 'AmiraL' },
-  { id: '28', flag: '🇿🇦', name: 'NoahZ' },
-  { id: '29', flag: '🇳🇱', name: 'EmmaV' },
-  { id: '30', flag: '🇳🇿', name: 'OliverQ' },
-  { id: '31', flag: '🇸🇬', name: 'ZoeSwift' },
-  { id: '32', flag: '🇦🇷', name: 'LeoFire' },
-  { id: '33', flag: '🇵🇹', name: 'AriaSky' },
-  { id: '34', flag: '🇦🇹', name: 'MaxPower' },
-  { id: '35', flag: '🇮🇪', name: 'LilyBloom' },
-  { id: '36', flag: '🇭🇰', name: 'KaiStorm' },
-  { id: '37', flag: '🇩🇰', name: 'NoraGold' },
-  { id: '38', flag: '🇨🇱', name: 'GabrielS' },
-  { id: '39', flag: '🇬🇷', name: 'ElenaR' },
-  { id: '40', flag: '🇧🇪', name: 'HugoBoss' },
-  { id: '41', flag: '🇵🇱', name: 'MilaZen' },
-  { id: '42', flag: '🇸🇦', name: 'TariqK' },
-  { id: '43', flag: '🇫🇮', name: 'SaraMoon' },
-  { id: '44', flag: '🇵🇪', name: 'DiegoR' },
-  { id: '45', flag: '🇯🇵', name: 'YukiT' },
-  { id: '46', flag: '🇩🇪', name: 'LarsB' },
-  { id: '47', flag: '🇹🇷', name: 'FatimaH' },
-  { id: '48', flag: '🇪🇸', name: 'CarlosM' },
-  { id: '49', flag: '🇺🇦', name: 'AnnaBell' },
-];
+import { useLeagueBoard } from '../../src/hooks/useLeagueBoard';
+import { useThemeAssets } from '../../src/hooks/useThemeAssets';
 
 export default function LeaguesScreen() {
   const { palette } = useTheme();
+  const themeAssets = useThemeAssets();
 
-  const weeks = useLeagueStore((state) => state.weeks);
-  const challengeRecords = useChallengeStore((state) => state.records);
+  useEffect(() => {
+    playMusic('menu');
+  }, []);
+
   const session = useAuthStore((state) => state.session);
 
   const defaultName: string = useMemo(() => {
@@ -132,61 +57,10 @@ export default function LeaguesScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const week = useMemo(() => weekOf(now), [now]);
-  const stats = useMemo(
-    () => statsOf({ records: challengeRecords }, today()),
-    [challengeRecords],
-  );
-
-  const userArrows = arrowsFor(arrowsThisWeek({ weeks }, now), stats.won);
-  const userLeague = leagueForArrows(userArrows);
-  const remainingText = formatRemaining(msRemaining(week, now));
-
-  // Construct dynamic 50-player leaderboard starting from Bronze
-  const leaderboardData = useMemo(() => {
-    const maxScore =
-      userLeague.id === 'bronze'
-        ? 380
-        : userLeague.id === 'silver'
-          ? 1150
-          : userLeague.id === 'gold'
-            ? 2450
-            : userLeague.id === 'ruby'
-              ? 4950
-              : userLeague.id === 'obsidian'
-                ? 8950
-                : 15000;
-
-    const minScore = userLeague.entryArrows + 5;
-
-    // Generate 49 opponent scores realistically scaled across league range
-    const opponents: LeaderboardEntry[] = LEADERBOARD_ROSTER.map((opp, index) => {
-      const ratio = 1 - index / 48;
-      const arrows = Math.max(1, Math.round(minScore + ratio * (maxScore - minScore)));
-      return {
-        ...opp,
-        rank: 0,
-        arrows,
-      };
-    });
-
-    const userEntry: LeaderboardEntry = {
-      id: 'you',
-      rank: 0,
-      flag: '🇵🇰',
-      name: userName,
-      arrows: userArrows,
-      isUser: true,
-    };
-
-    const combined = [...opponents, userEntry];
-    combined.sort((a, b) => b.arrows - a.arrows);
-
-    return combined.map((entry, idx) => ({
-      ...entry,
-      rank: idx + 1,
-    }));
-  }, [userArrows, userLeague, userName]);
+  const { userLeague, remainingText, leaderboardData } = useLeagueBoard({
+    now,
+    userName,
+  });
 
   const saveName = () => {
     const trimmed = nameInput.trim();
@@ -224,7 +98,7 @@ export default function LeaguesScreen() {
         {/* ---- 3D Shield Emblem ------------------------------------------- */}
         <View style={styles.shieldContainer}>
           <Image
-            source={LEAGUE_IMAGES[userLeague.id] ?? LEAGUE_IMAGES.bronze}
+            source={themeAssets.shields[userLeague.id] ?? themeAssets.shields.bronze}
             style={styles.shieldImage}
             resizeMode="contain"
           />
@@ -258,16 +132,26 @@ export default function LeaguesScreen() {
                   row.rank <= 10 && !row.isUser && { borderColor: 'rgba(16, 185, 129, 0.3)' },
                 ]}
               >
-                {/* Rank */}
-                <Text
-                  style={[
-                    styles.rankText,
-                    { color: row.rank <= 10 ? '#10B981' : palette.textMuted },
-                    row.isUser && { color: palette.accent, fontWeight: '800' },
-                  ]}
-                >
-                  {row.rank}
-                </Text>
+                {/* Rank (Podium Medal for 1, 2, 3) */}
+                <View style={styles.rankCol}>
+                  {row.rank === 1 ? (
+                    <Image source={themeAssets.podium.first} style={styles.podiumMedal} resizeMode="contain" />
+                  ) : row.rank === 2 ? (
+                    <Image source={themeAssets.podium.second} style={styles.podiumMedal} resizeMode="contain" />
+                  ) : row.rank === 3 ? (
+                    <Image source={themeAssets.podium.third} style={styles.podiumMedal} resizeMode="contain" />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.rankText,
+                        { color: row.rank <= 10 ? '#10B981' : palette.textMuted },
+                        row.isUser && { color: palette.accent, fontWeight: '800' },
+                      ]}
+                    >
+                      {row.rank}
+                    </Text>
+                  )}
+                </View>
 
                 {/* Flag / Avatar */}
                 <View style={styles.flagContainer}>
@@ -302,7 +186,7 @@ export default function LeaguesScreen() {
 
                 {/* Score */}
                 <View style={styles.scoreContainer}>
-                  <Image source={ARROW_ICON} style={styles.scoreIcon} resizeMode="contain" />
+                  <Image source={themeAssets.arrowIcon} style={styles.scoreIcon} resizeMode="contain" />
                   <Text
                     style={[
                       styles.scoreText,
@@ -351,95 +235,11 @@ export default function LeaguesScreen() {
         <LeagueIntro
           visible={showIntro}
           palette={palette}
+          themeAssets={themeAssets}
           onClose={() => setShowIntro(false)}
         />
       </View>
     </Screen>
-  );
-}
-
-function LeagueIntro({
-  visible,
-  palette,
-  onClose,
-}: {
-  visible: boolean;
-  palette: Palette;
-  onClose: () => void;
-}) {
-  const [page, setPage] = useState(0);
-  useSheetSound(visible);
-
-  const pages = [
-    { glyph: '➤', text: 'Collect arrows in levels to build up your weekly score.' },
-    { glyph: '◆', text: 'Compete with 50 players in your league table.' },
-    { glyph: '▲', text: 'Finish in the top zone at the end of the week to promote to a higher league!' },
-  ];
-
-  const last = page === pages.length - 1;
-  const current = pages[page]!;
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.scrim} onPress={onClose}>
-        <Pressable style={[styles.sheet, { backgroundColor: palette.surface }]} onPress={(e) => e.stopPropagation()}>
-          <Text style={[styles.sheetTitle, { color: palette.text }]}>Leagues</Text>
-
-          {page === 2 ? (
-            <View style={styles.shieldsRow}>
-              {['bronze', 'silver', 'gold', 'ruby', 'obsidian', 'diamond'].map((id, index) => (
-                <Image
-                  key={id}
-                  source={LEAGUE_IMAGES[id]}
-                  style={[styles.shieldRowImg, { marginLeft: index > 0 ? -16 : 0, zIndex: 10 - index }]}
-                  resizeMode="contain"
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={[styles.sheetEmblem, { backgroundColor: palette.accentMuted }]}>
-              <Text style={[styles.sheetGlyph, { color: palette.accent }]}>{current.glyph}</Text>
-            </View>
-          )}
-
-          <Text style={[styles.sheetBody, { color: palette.textMuted }]}>{current.text}</Text>
-
-          <View style={styles.dots}>
-            {pages.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: index === page ? palette.accent : palette.border,
-                    width: index === page ? 10 : 8,
-                    height: index === page ? 10 : 8,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-
-          <Springy
-            accessibilityRole="button"
-            accessibilityLabel={last ? 'Close' : 'Continue'}
-            onPress={withClick(() => {
-              if (last) {
-                setPage(0);
-                onClose();
-              } else {
-                setPage((value) => value + 1);
-              }
-            })}
-            style={[styles.continue, { backgroundColor: palette.accent }]}
-          >
-            <Text style={[styles.continueLabel, { color: palette.textOnAccent }]}>
-              {last ? 'Got it' : 'Continue'}
-            </Text>
-          </Springy>
-        </Pressable>
-      </Pressable>
-    </Modal>
   );
 }
 
@@ -458,7 +258,9 @@ const styles = StyleSheet.create({
   leagueTitle: {
     fontFamily: fonts.displayExtra,
     fontWeight: '800',
-    fontSize: 28,
+    fontSize: 22,
+    lineHeight: 28,
+    includeFontPadding: false,
     color: '#5B67F7',
   },
   countdownRow: {
@@ -468,8 +270,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   countdownText: {
-    fontSize: 16,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '700',
+    includeFontPadding: false,
     color: '#64748B',
   },
   infoButton: {
@@ -504,14 +308,16 @@ const styles = StyleSheet.create({
   },
   zoneLabel: {
     fontFamily: fonts.displayExtra,
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: '800',
     letterSpacing: 1,
+    includeFontPadding: false,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -520,24 +326,27 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   rankText: {
-    width: 36,
-    fontSize: 18,
+    width: 32,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '800',
+    includeFontPadding: false,
     color: '#475569',
   },
   userRankText: {
     color: '#5B67F7',
   },
   flagContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
   },
   flagText: {
-    fontSize: 20,
+    fontSize: 18,
+    lineHeight: 22,
   },
   nameContainer: {
     flex: 1,
@@ -546,8 +355,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   nameText: {
-    fontSize: 17,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '700',
+    includeFontPadding: false,
     color: '#334155',
   },
   userNameText: {
@@ -564,12 +375,14 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   scoreIcon: {
-    width: 18,
-    height: 18,
+    width: 16,
+    height: 16,
   },
   scoreText: {
-    fontSize: 17,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '800',
+    includeFontPadding: false,
     color: '#334155',
   },
   userScoreText: {
@@ -628,22 +441,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  scrim: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+  rankCol: {
+    width: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
   },
-  sheet: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: radius.xl,
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.md,
+  podiumMedal: {
+    width: 28,
+    height: 28,
   },
-  sheetTitle: { ...typography.title, fontFamily: fonts.displayExtra, fontWeight: '800' },
   sheetEmblem: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
   shieldsRow: {
     flexDirection: 'row',
@@ -657,14 +463,4 @@ const styles = StyleSheet.create({
     height: 64,
   },
   sheetGlyph: { fontSize: 40, fontWeight: '800' },
-  sheetBody: { ...typography.body, textAlign: 'center' },
-  dots: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
-  dot: { borderRadius: 5 },
-  continue: {
-    alignSelf: 'stretch',
-    borderRadius: radius.pill,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  continueLabel: { ...typography.body, fontWeight: '800' },
 });
