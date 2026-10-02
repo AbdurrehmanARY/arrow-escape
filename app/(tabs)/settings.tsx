@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 import { Screen, Springy, useTheme, withClick } from '@components';
-import { APP_NAME, brandWordmark, isDarkColor } from '@shared/branding';
+import { APP_NAME, brandWordmarkFor } from '@shared/branding';
 import { APP_VERSION } from '@config';
 import { playSfx } from '@services/audio';
 import { accountEmail, useAuthStore , useSettingsStore } from '@state';
@@ -248,7 +248,7 @@ export default function SettingsScreen() {
             reads as another setting rather than as an identifier. */}
         <View style={styles.footer}>
           <Image
-            source={brandWordmark(isDarkColor(palette.background))}
+            source={brandWordmarkFor(palette.background)}
             style={styles.footerWordmark}
             resizeMode="contain"
             accessibilityLabel={APP_NAME}

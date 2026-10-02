@@ -26,9 +26,16 @@
  *               `assets/brand/source/`. Nothing in `assets/brand/` should be
  *               edited by hand: it would be overwritten and the launcher icon
  *               would silently disagree with the in-app mark. This file is *not*
- *               generated — it is the hand-maintained table of what exists, and the
- *               `require()` depths below are relative to this file, so moving it
- *               has to move them with it.
+ *               generated — it is the hand-maintained table of what exists.
+ *
+ *               **The bitmaps themselves now live in the image registry.**
+ *               This module used to `require()` the four PNGs with its own
+ *               depth-relative paths, which meant the logo was declared twice —
+ *               once here and once in any screen that wanted it — and
+ *               `require()` is invisible to `tools/check-architecture.ts`. It
+ *               reads from `@shared/assets/images` now, so there is one place
+ *               that knows where the logo file is, and this one keeps only what
+ *               it is actually good at: its *name* and which ink to choose.
  *
  *               The name is deliberately independent of `app.json`'s `slug`,
  *               `scheme` and package id. Those are install identity: changing them
@@ -39,24 +46,29 @@
 
 import type { ImageSourcePropType } from 'react-native';
 
+import { BRAND_IMAGES } from '@shared/assets/images';
+
 /** The product name, as it appears to a player. */
 export const APP_NAME = 'Arrow Puzzle';
 
 /**
- * The approved logo files.
+ * The approved logo files, as plain image sources.
  *
  * `arrowMark` is the glyph alone, for badges and inline marks; `wordmark` is the
- * glyph locked up with the name, for anywhere the game is introduced.
+ * glyph locked up with the name, for anywhere the game is introduced. The keys
+ * are a public contract — `__tests__/shared/branding.test.ts` asserts the
+ * polarity helpers return these exact objects, so they must stay identical to
+ * the registry's sources, not copies of them.
  */
 export const BRAND = {
   /** Glyph alone, charcoal ink, for light grounds. */
-  arrowMark: require('../../../assets/brand/arrow-mark.png'),
+  arrowMark: BRAND_IMAGES.markDark.source,
   /** Glyph alone, bone ink, for dark grounds. */
-  arrowMarkLight: require('../../../assets/brand/arrow-mark-light.png'),
+  arrowMarkLight: BRAND_IMAGES.markLight.source,
   /** Mark plus name, charcoal ink, for light grounds. */
-  wordmark: require('../../../assets/brand/wordmark.png'),
+  wordmark: BRAND_IMAGES.wordmarkDark.source,
   /** Mark plus name, bone ink, for dark grounds. */
-  wordmarkLight: require('../../../assets/brand/wordmark-light.png'),
+  wordmarkLight: BRAND_IMAGES.wordmarkLight.source,
 } as const;
 
 /**
@@ -103,4 +115,30 @@ export function brandMark(onDarkGround: boolean): ImageSourcePropType {
  */
 export function brandWordmark(onDarkGround: boolean): ImageSourcePropType {
   return onDarkGround ? BRAND.wordmarkLight : BRAND.wordmark;
+}
+
+/**
+ * The glyph for a *colour*, so a screen never has to repeat the polarity test.
+ *
+ * `themeAssets` used to call `brandMark(isDarkColor(background))` inline, and
+ * Home and Settings each called `brandWordmark(isDarkColor(palette.background))`.
+ * Three copies of the same two-step dance is three places to get wrong if the
+ * polarity rule ever changes — and the rule is the kind that changes quietly,
+ * because a new theme can slip under it. Taking the ground colour rather than a
+ * boolean also means a caller cannot answer the question without knowing the
+ * answer.
+ *
+ * @param ground The background colour the artwork sits on.
+ */
+export function brandMarkFor(ground: string): ImageSourcePropType {
+  return brandMark(isDarkColor(ground));
+}
+
+/**
+ * The lockup for a *colour*. See `brandMarkFor` for why this exists.
+ *
+ * @param ground The background colour the artwork sits on.
+ */
+export function brandWordmarkFor(ground: string): ImageSourcePropType {
+  return brandWordmark(isDarkColor(ground));
 }

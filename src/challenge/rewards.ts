@@ -10,43 +10,51 @@
 import { useMemo } from 'react';
 import type { ImageSourcePropType } from 'react-native';
 
+import { AWARD_IMAGES, RECORD_IMAGES } from '@shared/assets/images';
+
 import { today } from './schedule';
 import type { ChallengeStats } from './types';
 import { statsOf, useChallengeStore } from '../state/challengeStore';
 import { arrowsThisWeek, useLeagueStore } from '../state/leagueStore';
 import { useProgressStore } from '../state/progressStore';
 
-const LEVEL_LEGEND_ACTIVE: ImageSourcePropType = require('../../assets/awards/level_legend_active.webp');
-const LEVEL_LEGEND_INACTIVE: ImageSourcePropType = require('../../assets/awards/level_legend_unactive.webp');
-const LEVEL_LEGEND_LOCKED: ImageSourcePropType = require('../../assets/awards/level_legend_locked.webp');
+// The art comes from the shared image registry rather than from `require()`s
+// spread through this file. `require()` is invisible to `tools/check-architecture.ts`
+// and returns `any`, so twenty-four of them was twenty-four paths `tsc` could
+// not check and the layer rules could not see. The registry is also what makes
+// the locked/inactive/active triple legible: three named entries instead of
+// three string literals a reader has to diff to tell apart.
+const LEVEL_LEGEND_ACTIVE: ImageSourcePropType = AWARD_IMAGES.levelLegendActive.source;
+const LEVEL_LEGEND_INACTIVE: ImageSourcePropType = AWARD_IMAGES.levelLegendInactive.source;
+const LEVEL_LEGEND_LOCKED: ImageSourcePropType = AWARD_IMAGES.levelLegendLocked.source;
 
-const PERFECT_PLAY_ACTIVE: ImageSourcePropType = require('../../assets/awards/perfect_play_active.webp');
-const PERFECT_PLAY_INACTIVE: ImageSourcePropType = require('../../assets/awards/perfect play unactive.webp');
-const PERFECT_PLAY_LOCKED: ImageSourcePropType = require('../../assets/awards/perfect_play_locked.webp');
+const PERFECT_PLAY_ACTIVE: ImageSourcePropType = AWARD_IMAGES.perfectPlayActive.source;
+const PERFECT_PLAY_INACTIVE: ImageSourcePropType = AWARD_IMAGES.perfectPlayInactive.source;
+const PERFECT_PLAY_LOCKED: ImageSourcePropType = AWARD_IMAGES.perfectPlayLocked.source;
 
-const UNSTOPPABLE_ACTIVE: ImageSourcePropType = require('../../assets/awards/unstoppable_active.webp');
-const UNSTOPPABLE_INACTIVE: ImageSourcePropType = require('../../assets/awards/unstoppable_locked.webp');
-const UNSTOPPABLE_LOCKED: ImageSourcePropType = require('../../assets/awards/unstoppable_locked.webp');
+const UNSTOPPABLE_ACTIVE: ImageSourcePropType = AWARD_IMAGES.unstoppableActive.source;
+const UNSTOPPABLE_INACTIVE: ImageSourcePropType = AWARD_IMAGES.unstoppableInactive.source;
+const UNSTOPPABLE_LOCKED: ImageSourcePropType = AWARD_IMAGES.unstoppableLocked.source;
 
-const LEAGUE_CLIMBER_ACTIVE: ImageSourcePropType = require('../../assets/awards/league_climber_active.webp');
-const LEAGUE_CLIMBER_INACTIVE: ImageSourcePropType = require('../../assets/awards/league_climber_inactive.webp');
-const LEAGUE_CLIMBER_LOCKED: ImageSourcePropType = require('../../assets/awards/league_climber_locked.webp');
+const LEAGUE_CLIMBER_ACTIVE: ImageSourcePropType = AWARD_IMAGES.leagueClimberActive.source;
+const LEAGUE_CLIMBER_INACTIVE: ImageSourcePropType = AWARD_IMAGES.leagueClimberInactive.source;
+const LEAGUE_CLIMBER_LOCKED: ImageSourcePropType = AWARD_IMAGES.leagueClimberLocked.source;
 
-const LEAGUE_FIGHTER_ACTIVE: ImageSourcePropType = require('../../assets/awards/league_fighter_active.webp');
-const LEAGUE_FIGHTER_INACTIVE: ImageSourcePropType = require('../../assets/awards/league_fighter_inactive.webp');
-const LEAGUE_FIGHTER_LOCKED: ImageSourcePropType = require('../../assets/awards/league_fighter_locked.webp');
+const LEAGUE_FIGHTER_ACTIVE: ImageSourcePropType = AWARD_IMAGES.leagueFighterActive.source;
+const LEAGUE_FIGHTER_INACTIVE: ImageSourcePropType = AWARD_IMAGES.leagueFighterInactive.source;
+const LEAGUE_FIGHTER_LOCKED: ImageSourcePropType = AWARD_IMAGES.leagueFighterLocked.source;
 
-const FLAME_ACTIVE: ImageSourcePropType = require('../../assets/records/largest streak.webp');
-const FLAME_INACTIVE: ImageSourcePropType = require('../../assets/records/largest streak_inactive.webp');
-const FLAME_LOCKED: ImageSourcePropType = require('../../assets/records/largest streak_locked.webp');
+const FLAME_ACTIVE: ImageSourcePropType = RECORD_IMAGES.largestStreak.source;
+const FLAME_INACTIVE: ImageSourcePropType = RECORD_IMAGES.largestStreakInactive.source;
+const FLAME_LOCKED: ImageSourcePropType = RECORD_IMAGES.largestStreakLocked.source;
 
-const CROWN_ACTIVE: ImageSourcePropType = require('../../assets/records/highest_win_streak.webp');
-const CROWN_INACTIVE: ImageSourcePropType = require('../../assets/records/highest_win_streak-inactive.webp');
-const CROWN_LOCKED: ImageSourcePropType = require('../../assets/records/highest_win_streak_locked.webp');
+const CROWN_ACTIVE: ImageSourcePropType = RECORD_IMAGES.highestWinStreak.source;
+const CROWN_INACTIVE: ImageSourcePropType = RECORD_IMAGES.highestWinStreakInactive.source;
+const CROWN_LOCKED: ImageSourcePropType = RECORD_IMAGES.highestWinStreakLocked.source;
 
-const ARROW_ACTIVE: ImageSourcePropType = require('../../assets/records/most_win.webp');
-const ARROW_INACTIVE: ImageSourcePropType = require('../../assets/records/most_win_inative.webp');
-const ARROW_LOCKED: ImageSourcePropType = require('../../assets/records/most_win_locked.webp');
+const ARROW_ACTIVE: ImageSourcePropType = RECORD_IMAGES.mostWins.source;
+const ARROW_INACTIVE: ImageSourcePropType = RECORD_IMAGES.mostWinsInactive.source;
+const ARROW_LOCKED: ImageSourcePropType = RECORD_IMAGES.mostWinsLocked.source;
 
 export type AwardState = 'active' | 'inactive' | 'locked';
 

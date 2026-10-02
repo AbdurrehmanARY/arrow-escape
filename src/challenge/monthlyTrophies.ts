@@ -3,7 +3,17 @@
  *
  * Purpose:      Provide distinct visual identities, gemstone accents, and badge
  *               metadata for each month of the year (January through December).
+ * Notes:        The bitmaps come from `@shared/assets/images` rather than from
+ *               twenty-four `require()`s of their own. They used to be written
+ *               out here with depth-relative paths and typed `any`, which meant
+ *               the same asset was declared twice and neither declaration was
+ *               checked. See that registry for why `require()` cannot be
+ *               audited by the architecture rules.
  */
+
+import type { ImageSourcePropType } from 'react-native';
+
+import { TROPHY_IMAGES } from '@shared/assets/images';
 
 export interface MonthlyTrophyTheme {
   readonly month: number;
@@ -139,19 +149,19 @@ export const MONTHLY_TROPHY_THEMES: readonly MonthlyTrophyTheme[] = [
   },
 ];
 
-export const MONTHLY_TROPHY_ASSETS: Record<number, { active: any; inactive: any }> = {
-  1: { active: require('../../assets/monthly trophies/jan.webp'), inactive: require('../../assets/monthly trophies/jan lock.webp') },
-  2: { active: require('../../assets/monthly trophies/fab.webp'), inactive: require('../../assets/monthly trophies/fab lock.webp') },
-  3: { active: require('../../assets/monthly trophies/march.webp'), inactive: require('../../assets/monthly trophies/march lock.webp') },
-  4: { active: require('../../assets/monthly trophies/aprail.webp'), inactive: require('../../assets/monthly trophies/Locked_championship_cup_on_base_202609042146.webp') },
-  5: { active: require('../../assets/monthly trophies/may.webp'), inactive: require('../../assets/monthly trophies/may lock.webp') },
-  6: { active: require('../../assets/monthly trophies/june.webp'), inactive: require('../../assets/monthly trophies/june lock.webp') },
-  7: { active: require('../../assets/monthly trophies/july.webp'), inactive: require('../../assets/monthly trophies/july lock.webp') },
-  8: { active: require('../../assets/monthly trophies/august.webp'), inactive: require('../../assets/monthly trophies/august lock.webp') },
-  9: { active: require('../../assets/monthly trophies/sep.webp'), inactive: require('../../assets/monthly trophies/sep lock.webp') },
-  10: { active: require('../../assets/monthly trophies/oct.webp'), inactive: require('../../assets/monthly trophies/oct lock.webp') },
-  11: { active: require('../../assets/monthly trophies/nov.webp'), inactive: require('../../assets/monthly trophies/nov lock.webp') },
-  12: { active: require('../../assets/monthly trophies/dec.webp'), inactive: require('../../assets/monthly trophies/dec lock.webp') },
+export const MONTHLY_TROPHY_ASSETS: Record<number, { active: ImageSourcePropType; inactive: ImageSourcePropType }> = {
+  1: { active: TROPHY_IMAGES.janEarned.source, inactive: TROPHY_IMAGES.janLocked.source },
+  2: { active: TROPHY_IMAGES.febEarned.source, inactive: TROPHY_IMAGES.febLocked.source },
+  3: { active: TROPHY_IMAGES.marEarned.source, inactive: TROPHY_IMAGES.marLocked.source },
+  4: { active: TROPHY_IMAGES.aprEarned.source, inactive: TROPHY_IMAGES.aprLocked.source },
+  5: { active: TROPHY_IMAGES.mayEarned.source, inactive: TROPHY_IMAGES.mayLocked.source },
+  6: { active: TROPHY_IMAGES.junEarned.source, inactive: TROPHY_IMAGES.junLocked.source },
+  7: { active: TROPHY_IMAGES.julEarned.source, inactive: TROPHY_IMAGES.julLocked.source },
+  8: { active: TROPHY_IMAGES.augEarned.source, inactive: TROPHY_IMAGES.augLocked.source },
+  9: { active: TROPHY_IMAGES.sepEarned.source, inactive: TROPHY_IMAGES.sepLocked.source },
+  10: { active: TROPHY_IMAGES.octEarned.source, inactive: TROPHY_IMAGES.octLocked.source },
+  11: { active: TROPHY_IMAGES.novEarned.source, inactive: TROPHY_IMAGES.novLocked.source },
+  12: { active: TROPHY_IMAGES.decEarned.source, inactive: TROPHY_IMAGES.decLocked.source },
 };
 
 export function getMonthlyTrophyTheme(month: number): MonthlyTrophyTheme {

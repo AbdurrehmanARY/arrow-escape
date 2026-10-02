@@ -7,14 +7,33 @@
  * Rules:
  * - Never hardcode Arrow Theme assets into generic components.
  * - Never hardcode Paper Theme assets into generic components.
- * - Arrow Theme uses its cohesive illustrated family (5-shields banner, 3D medals).
- * - Paper Theme uses theme-appropriate paper assets, never reusing Arrow Theme assets.
+ * - Never reach into `assets/` from here. Every bitmap comes from
+ *   `@shared/assets/images`, which is the single place that knows where a file
+ *   lives — this module only decides *which* of them a theme gets.
  * - `arrowIcon` is the exception: it is the game's own logo mark, shared by every
  *   theme, and only its *ink* changes with the ground so it stays visible.
+ *
+ * Notes:        Both theme families used to be declared separately, with twelve
+ *               `require()`s each — twenty-four in total. They pointed at the
+ *               same files, byte for byte, so the "Paper uses paper assets, never
+ *               Arrow assets" note above them was not true of this file. They
+ *               are one shared table now. **If Paper ever gets its own art, give
+ *               it its own table here**; until then, a second table would be a
+ *               comment lying about the code. The real difference between
+ *               families remains `arrowIcon`, which is chosen from the theme's
+ *               ground colour and so needs no family at all.
+ *
+ * Notes:        `getThemeAssets` stays pure and stays here. The reactive
+ *               `useThemeAssets` hook lives in `src/features/settings/hooks/useThemeAssets.ts`,
+ *               because reading `themeId` means reading the settings store, and
+ *               the theme layer must not depend on `state/` (ARCHITECTURE.md §3).
  */
 
 import type { ImageSourcePropType } from 'react-native';
-import { brandMark, isDarkColor } from '@shared/branding';
+
+import { SHIELD_IMAGES, THEME_IMAGES } from '@shared/assets/images';
+import { brandMarkFor } from '@shared/branding';
+
 import { themeById } from './themes';
 
 export interface ThemeVisualAssets {
@@ -36,54 +55,30 @@ export interface ThemeVisualAssets {
   readonly shields: Record<string, ImageSourcePropType>;
 }
 
-// ---------------------------------------------------------------------------
-// 1. Arrow Theme Asset Family
-// ---------------------------------------------------------------------------
-// `arrowIcon` is omitted here on purpose: it is the shared brand mark, resolved
-// from the theme's ground colour by `getThemeAssets` below.
+// `arrowIcon` is omitted from the shared table on purpose: it is the brand mark,
+// resolved from the theme's ground colour by `getThemeAssets` below.
 type ThemeAssetsWithoutMark = Omit<ThemeVisualAssets, 'arrowIcon'>;
 
-const ARROW_THEME_ASSETS: ThemeAssetsWithoutMark = {
-  challengeImage: require('../../assets/records/largest streak.webp'),
-  finishingImage: require('../../assets/league/Five_metallic_shields_displayed_202609071447.webp'),
-  leagueInfoImage: require('../../assets/league/league info.webp'),
-  podium: {
-    first: require('../../assets/league/first place.webp'),
-    second: require('../../assets/league/second place.webp'),
-    third: require('../../assets/league/third place.webp'),
-  },
-  shields: {
-    bronze: require('../../assets/shields/Bronze_mobile_game_rank_shield_202609042103.webp'),
-    silver: require('../../assets/shields/Rank_shield_badge_icon_202609042103.webp'),
-    gold: require('../../assets/shields/Gold_rank_shield_mobile_icon_202609042103.webp'),
-    ruby: require('../../assets/shields/Change_shield_material_color_202609042103.webp'),
-    obsidian: require('../../assets/shields/Game_rank_shield_badge_icon_202609042103.webp'),
-    diamond: require('../../assets/shields/Game_rank_shield_badge_icon_202609042103.webp'),
-  },
+/** The rank shield every theme resolves through the same six league ids. */
+const SHIELDS: Record<string, ImageSourcePropType> = {
+  bronze: SHIELD_IMAGES.bronze.source,
+  silver: SHIELD_IMAGES.silver.source,
+  gold: SHIELD_IMAGES.gold.source,
+  ruby: SHIELD_IMAGES.ruby.source,
+  obsidian: SHIELD_IMAGES.obsidian.source,
+  diamond: SHIELD_IMAGES.diamond.source,
 };
 
-// ---------------------------------------------------------------------------
-// 2. Paper Theme Visual Assets (Minimalist Warm Paper Aesthetic)
-// ---------------------------------------------------------------------------
-// Note: Paper theme uses clean, craft-paper styled graphics that harmonize
-// with warm paper ground (#EEEBE4) and charcoal strokes (#3B3630).
-const PAPER_THEME_ASSETS: ThemeAssetsWithoutMark = {
-  challengeImage: require('../../assets/records/largest streak.webp'),
-  finishingImage: require('../../assets/league/Five_metallic_shields_displayed_202609071447.webp'),
-  leagueInfoImage: require('../../assets/league/league info.webp'),
+const SHARED_THEME_ASSETS: ThemeAssetsWithoutMark = {
+  challengeImage: THEME_IMAGES.challengeBanner.source,
+  finishingImage: THEME_IMAGES.leagueBanner.source,
+  leagueInfoImage: THEME_IMAGES.leagueIntro.source,
   podium: {
-    first: require('../../assets/league/first place.webp'),
-    second: require('../../assets/league/second place.webp'),
-    third: require('../../assets/league/third place.webp'),
+    first: THEME_IMAGES.podiumFirst.source,
+    second: THEME_IMAGES.podiumSecond.source,
+    third: THEME_IMAGES.podiumThird.source,
   },
-  shields: {
-    bronze: require('../../assets/shields/Bronze_mobile_game_rank_shield_202609042103.webp'),
-    silver: require('../../assets/shields/Rank_shield_badge_icon_202609042103.webp'),
-    gold: require('../../assets/shields/Gold_rank_shield_mobile_icon_202609042103.webp'),
-    ruby: require('../../assets/shields/Change_shield_material_color_202609042103.webp'),
-    obsidian: require('../../assets/shields/Game_rank_shield_badge_icon_202609042103.webp'),
-    diamond: require('../../assets/shields/Game_rank_shield_badge_icon_202609042103.webp'),
-  },
+  shields: SHIELDS,
 };
 
 /**
@@ -103,18 +98,9 @@ export function getThemeAssets(themeId: string): ThemeVisualAssets {
   const cached = RESOLVED_ASSETS.get(themeId);
   if (cached) return cached;
 
-  const base = themeId === 'arrow' ? ARROW_THEME_ASSETS : PAPER_THEME_ASSETS;
   const { background } = themeById(themeId).palette;
-  const assets: ThemeVisualAssets = { ...base, arrowIcon: brandMark(isDarkColor(background)) };
+  const assets: ThemeVisualAssets = { ...SHARED_THEME_ASSETS, arrowIcon: brandMarkFor(background) };
 
   RESOLVED_ASSETS.set(themeId, assets);
   return assets;
 }
-
-/**
- * `getThemeAssets` stays pure and stays here. The reactive `useThemeAssets` hook
- * that used to live in this file moved to `src/features/settings/hooks/useThemeAssets.ts`, because
- * reading `themeId` means reading the settings store, and the theme layer must
- * not depend on `state/` (ARCHITECTURE.md §3). The registry itself is a pure
- * function of a theme id and belongs to the layer that owns themes.
- */

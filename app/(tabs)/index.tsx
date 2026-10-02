@@ -11,7 +11,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { MonthlyTrophyBadge, Screen, Springy, useTheme, withClick } from '@components';
-import { APP_NAME, brandWordmark, isDarkColor } from '@shared/branding';
+import { APP_NAME, brandWordmarkFor } from '@shared/branding';
 import { playMusic } from '@services/audio';
 import { challengeId, daysInMonth, today } from '@challenge';
 import { LEVEL_COUNT, tierOf } from '@data';
@@ -127,7 +127,7 @@ export default function HomeScreen() {
         <View style={styles.centerSection}>
           <View style={styles.brand}>
             <Image
-              source={brandWordmark(isDarkColor(palette.background))}
+              source={brandWordmarkFor(palette.background)}
               style={styles.wordmarkImage}
               resizeMode="contain"
               accessibilityLabel={APP_NAME}
