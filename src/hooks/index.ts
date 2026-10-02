@@ -19,4 +19,4 @@ export * from './useArrowTap';
 export * from './useBoardViewport';
 export * from './useHintFlow';
 export * from './useLeagueBoard';
-export * from './useThemeAssets';
+export * from '@features/settings';

@@ -19,7 +19,7 @@ import { TIER_LABELS } from '@game';
 import { clearedCount, nextLevel, useProgressStore , isDayWon, statsOf, useChallengeStore , arrowsThisWeek, useLeagueStore } from '@state';
 import { arrowsFor, formatRemaining, leagueForArrows, msRemaining, weekOf } from '@league';
 import { fonts, MIN_TOUCH_TARGET, radius, spacing, typography, type Palette } from '@theme';
-import { useThemeAssets } from '../../src/hooks/useThemeAssets';
+import { useThemeAssets } from '@features/settings';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',

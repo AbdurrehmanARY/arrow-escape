@@ -1,8 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** Feature-based migration **Phases 0–2b complete** — see
-> [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
+> **Last updated:** Feature-based migration **Phase 2c-1 complete** (`useThemeAssets` → `features/settings/hooks`); 2c-2 planned — see [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
 > Phase 1 mapped all 178 `.ts`/`.tsx` files to a proposed feature home, recorded **9
 > documented deviations** (notably `src/game/`, `src/data/`, `src/render/` and `app/`
 > pinned, because moving them disarms the architecture checker or the level pipeline),
@@ -22,6 +21,15 @@
 > component files were re-pointed to `@shared/primitives/Pressable`; the six `app/`
 > routes that take `Springy` via `@components` are untouched, served by a documented
 > barrel shim. Gate: tsc/lint/396 tests/levels:validate/arch all green.
+> **Phase 2c-1 (current commit) moved `useThemeAssets`** from `src/hooks/` to
+> `src/features/settings/hooks/`, behind a feature-local barrel `@features/settings`;
+> §5's `shared/hooks/` destination was wrong — `useThemeAssets` only subscribes to
+> `themeId`, a *settings* value, and `shared/` is banned from importing `@state`. Both
+> consumers now import `@features/settings`; the dead `src/hooks/index.ts` stays tsc-green
+> via a re-export shim. Gate: tsc/lint/396 tests/levels:validate/arch (630 imports, 0 violations).
+> **2c-2 remains blocked** on the two seams still on `Screen.tsx`: `useTheme` → `@state`
+> (the palette seam §9.3 imagined as one) and `sound.ts` → `@services/audio` (green only
+> until §5 lands `features/audio/services/`).
 > **Two findings that outrank the move itself.** (1) The §9 phase order is wrong:
 > Home and level-selection are `app/` routes, `app/` is pinned, and Home owns zero
 > files — "migrating Home" is re-pointing eleven imports *into other features*, so it
@@ -30,9 +38,13 @@
 > depth-relative `require()` of a PNG: the home screen was importing a module that no
 > longer existed with typecheck silent, and only jest failed (7 suites). The same
 > hazard sits in `audioAssets.ts` 34 times over.
-> **Next step is blocked on a decision, not on effort** — `Screen.tsx` and
-> `useThemeAssets` are mapped to `shared/` but both read the settings store, which
-> `shared/` may not import. Options are in §9.3.
+> **Next step (2c-2) is blocked on the `Screen.tsx` seam decision, not on effort.**
+> `useThemeAssets` is already resolved (moved to `features/settings/hooks/`, 2c-1): it
+> reads a *settings* store, so `shared/` was never its home. `Screen.tsx` remains, with
+> **two** upward edges — `useTheme` → `@state` (the palette seam §5 imagined as one) and
+> `sound.ts` → `@services/audio` (green only because `services` is not yet in
+> `FORBIDDEN_SHARED`; it breaks the moment §5 lands `features/audio/services/`). Options
+> and the chosen 2c-2 scope are in §9.3.
 > Previous: Master Growth & Design Brief completed and approved — see [docs/MASTER_BRIEF_GROWTH_DESIGN.md](MASTER_BRIEF_GROWTH_DESIGN.md). Includes codebase audit, 10 key decisions, 10-tier computable difficulty formula, 1,000-level sawtooth pacing, 2026 ad monetization architecture & eCPM benchmarks, micro-haptics specs, LiveOps/retention schedule, telemetry schema, and 6-month roadmap.
 > Release state and the full remaining checklist live in [PROGRESS.md](PROGRESS.md).
 

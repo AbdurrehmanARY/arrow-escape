@@ -219,7 +219,7 @@ Moving it breaks all three. `GP/GPE` may re-export it; it must not absorb it.
 | `useArrowTap.ts` | 156 | `play/[id].tsx` | GPH |
 | `useBoardViewport.ts` | 121 | `play/[id].tsx` | GPH |
 | `useResponsive.ts` | 42 | **0 — dead** | delete (deferred) |
-| `useThemeAssets.ts` | 23 | Home, leagues | SH |
+| `useThemeAssets.ts` | 23 | Home, leagues | features/settings ✅ 2c-1 |
 | `index.ts` | 21 | **0 — barrel unused** | delete (deferred) |
 
 ⚠ All 6 real imports of these hooks are **relative** (`../../src/hooks/…`) from `app/`.
@@ -354,7 +354,7 @@ MOVE:
   src/hooks/{useArrowTap,useBoardViewport}.ts               → features/gameplay/hooks/
   src/hooks/useHintFlow.ts                                 → features/hints/hooks/
   src/hooks/useLeagueBoard.ts                              → features/league/hooks/
-  src/hooks/useThemeAssets.ts                              → shared/hooks/
+    src/features/settings/hooks/useThemeAssets.ts            → features/settings/hooks/ ✅ 2c-1
   src/state/{progress,streak,energy}Store.ts               → features/progression/store/
   src/state/hintStore.ts                                   → features/hints/store/
   src/state/challengeStore.ts                              → features/achievements/store/
@@ -539,7 +539,8 @@ diff to `index.ts`, and conclude the file was safe to move without looking.
 | 2 | Create folders only where a real file lands | — |
 | 2a | **`shared/branding`** — the first real move. See §9.2 | ✅ **done** |
 | 2b ⬅ | **`src/components/Pressable.tsx`** → `shared/primitives/` — **unblocked** leaf; only `@theme`, no store read, no call-site change | ✅ **done** — see §9.2.1 |
-| 2c | `shared/{components, hooks}` (Screen, useThemeAssets…, theme seam) — **blocked on a decision**, §9.3 | — |
+| 2c-1 | **`useThemeAssets`** split from `shared/` to `features/settings` — reads `themeId`, a settings concern; §5's `shared/hooks/` destination was wrong | ✅ **done** — see §9.2.2 |
+| 2c-2 | `shared/components` (`Screen` frame) + palette-as-prop (`useTheme` → `@state`); `sound.ts`/`ScreenHeader`/`IconButton` deferred on the audio seam, §9.3 | — |
 | 3 | `app/` — audit only, no move (deviation §6) | — |
 | 4 | Home — **cannot move**; `app/` is pinned and Home owns no files, §9.3 | — |
 | 5 | Level-selection (+ Levels decision gate) — as Home, §9.3 | — |
@@ -644,6 +645,36 @@ per §9.1. Typecheck exit 0, lint exit 0, 31 suites / **396** tests pass, 1,000 
 verify, and `architecture:check` reports 629 imports / 0 violations — including the 13 re-pointed
 `@components → @shared` edges.
 
+### 9.2.2 Phase 2c-1, as delivered — `useThemeAssets` out of `shared/`
+
+`src/hooks/useThemeAssets.ts` → `src/features/settings/hooks/useThemeAssets.ts`, with a
+feature-local barrel at `src/features/settings/index.ts`.
+
+This is the move §9.3 *thought would need a decision* — and it turned out not to:
+`useThemeAssets`'s only job is to subscribe to `themeId`, so `themeId`'s owner
+(`features/settings`) owns it. §5's `shared/hooks/` destination was wrong up front,
+because nothing that reads a store can live in `shared/` (`FORBIDDEN_SHARED` bans
+`state`), and `themeId` is a settings value, not a theme value — so the pure
+`getThemeAssets` registry stays in `theme/` while the subscription goes where its
+dependency belongs.
+
+Two call-site facts made this near-frictionless:
+
+- both consumers (`app/(tabs)/index.tsx`, `app/(tabs)/leagues.tsx`) imported it **relative**
+  (`../../src/hooks/useThemeAssets`); they now import `@features/settings` (the new barrel).
+- a feature-local barrel is **required** here, not a style choice: `features` is deliberately
+  *not* in `DEEP_IMPORT_ALLOWED` (only `shared`/`infrastructure` are, since they are sub-rooted
+  and barrel-less), so a deep `@features/settings/hooks/*` import from outside the feature is a
+  violation and the bare `@features/settings` path is the legal API.
+
+The dead `src/hooks/index.ts` barrel is not deleted (§8/§17); its `useThemeAssets` re-export
+is re-pointed to `@features/settings` to keep `tsc` green, preserving the barrel surface until
+§8's deferred deletion.
+
+**Gate:** `tsc --noEmit` (exit 0), `lint` (exit 0), 31 suites / **396** tests, 1,000 levels/20 packs
+unchanged, `architecture:check` **630 imports / 0 violations** (the +1 vs. Phase 2b's 629 is the
+new `features/settings/index.ts` re-export).
+
 ### 9.3 The phase order is wrong, and cannot be followed as written
 
 The table in §9 lists **Home** as phase 4. Home is `app/(tabs)/index.tsx`, and
@@ -674,19 +705,38 @@ shared/branding  ✅ done
   → app/  re-pointed last, feature by feature
 ```
 
-**A blocker inside `shared/`, found while planning the next step.** §5 assigns
-`src/components/Screen.tsx` and `src/hooks/useThemeAssets.ts` to `shared/`. Both
-import `useSettingsStore` from `@state`. `FORBIDDEN_SHARED` bans `state`, and it
-is right to: a shared component that reads a feature's zustand store is a feature
-wearing a disguise, and the store it wants belongs to `features/settings`.
+**The remaining blockers are the two upward edges on `Screen.tsx`, and `useThemeAssets`
+is no longer one of them.** §5 assigns `src/components/Screen.tsx` to `shared/components/`.
+That one file carries **two** dependencies that point up out of `shared/`, not one:
 
-So the next move needs a decision, not a keystroke. The options are: (a) inject
-the palette into `Screen` as a prop and let each route read the store — honest,
-but it changes all 22 screens' call sites; (b) keep a `shared` theme *seam* fed by
-a React context that `features/settings` writes, so `shared` depends on nothing
-and behaviour is unchanged; (c) leave `Screen` and `useThemeAssets` in a feature
-and accept that they are not shared. **Not chosen here** — this is the kind of
-call that should be made deliberately, not by whichever file happened to be open.
+- `useTheme()` reads `themeId` from `@state` (`FORBIDDEN_SHARED` bans `state` — correctly:
+  a shared component reaching into a feature's zustand store is a feature wearing a disguise).
+- `IconButton` calls `withClick` from `./sound.ts`, which reads `playSfx` from `@services/audio`.
+  This edge is **not** banned today only because `services` is not in `FORBIDDEN_SHARED`; it
+  becomes a `shared → features/audio` violation the moment §5 lands (`features/audio/services/`),
+  since the shared row of the §3 matrix bans `features`. A rule that is green now and red only in
+  Phase 9 is the migration's favorite silent break — see the `require()` note in §9 / item 12.
+
+**`useThemeAssets` was the same shape once — `theme/` importing `@state` — and is already
+resolved.** It is not a theme concern; it is a *settings* concern (it exists only to subscribe
+to `themeId`, while the pure registry `getThemeAssets` stays in `theme/`), so its true home is
+`features/settings` — the owner of `themeId`. 2c-1 moved it there. The §5 destination
+`shared/hooks/` was wrong on its face: nothing that reads a store can live in `shared/`, and
+`useThemeAssets`'s consumers include routes that will sit in other features (achievements),
+which cannot import `features/settings` (features-may-not-import-features) — so the hook cannot
+hide in any consuming feature either. `features/settings` is the only layer both allowed to
+read the store **and** reachable from everywhere it is needed.
+
+**So the remaining decision is for `Screen`, not for `useThemeAssets`.** The options on
+`useTheme` are: (a) inject `palette` as a prop to `Screen` — honest, and (because the consumer
+set was measured) far cheaper than §5 feared: the 16 `<Screen>` sites in 14 files all already
+call `useTheme()` and already have `palette` in scope, so it is 16 one-line insertions and
+**zero** new hook calls, with `tsc`'s required-prop rule making the site list compiler-enforced;
+(b) keep a `shared` theme *seam* fed by a React context that `features/settings` writes, so
+`shared` depends on nothing and behaviour is unchanged; (c) leave `Screen` and `useTheme` in a
+feature and accept they are not shared. **2c-2 adopts (a) on `useTheme` and defers the audio
+seam (the `sound.ts`/`IconButton`/`ScreenHeader` half of the file) until §5 lands `features/audio`** —
+this is the call that should be made deliberately, not by whichever file happened to be open.
 
 ---
 

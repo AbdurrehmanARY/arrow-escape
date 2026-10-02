@@ -16,7 +16,7 @@ import { useAuthStore } from '@state';
 import { fonts, radius, spacing, typography } from '@theme';
 
 import { useLeagueBoard } from '../../src/hooks/useLeagueBoard';
-import { useThemeAssets } from '../../src/hooks/useThemeAssets';
+import { useThemeAssets } from '@features/settings';
 
 export default function LeaguesScreen() {
   const { palette } = useTheme();

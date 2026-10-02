@@ -113,7 +113,7 @@ export function getThemeAssets(themeId: string): ThemeVisualAssets {
 
 /**
  * `getThemeAssets` stays pure and stays here. The reactive `useThemeAssets` hook
- * that used to live in this file moved to `src/hooks/useThemeAssets.ts`, because
+ * that used to live in this file moved to `src/features/settings/hooks/useThemeAssets.ts`, because
  * reading `themeId` means reading the settings store, and the theme layer must
  * not depend on `state/` (ARCHITECTURE.md §3). The registry itself is a pure
  * function of a theme id and belongs to the layer that owns themes.
