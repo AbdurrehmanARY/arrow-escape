@@ -10,13 +10,21 @@
  * that consumes them, and leaving them here meant `render/` had to import
  * `components/` — a layer inversion the architecture rules forbid. Use
  * `@render/*` for them.
+ *
+ * `Pressable.tsx` left for `shared/primitives/` in Phase 2b (see its own header
+ * for why it could move without changing a call site: colour is already handed
+ * to its helpers, not read from a store). Its exports are re-exported from their
+ * new home below so the rest of `components/` and the `app/` routes can keep
+ * pulling `Springy` from `@components` — a documented compatibility shim, not a
+ * layer mistake. The 14 call sites that imported it directly were re-pointed to
+ * `@shared/primitives/Pressable`; this barrel keeps the public surface stable.
  */
 export * from './Hud';
 export * from './Celebration';
 export * from './CoachCard';
 export * from './Overlays';
 export * from './PauseMenu';
-export * from './Pressable';
+export * from '@shared/primitives/Pressable';
 export * from './Screen';
 export * from './sound';
 export * from './ChallengeBadges';

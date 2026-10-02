@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
-import { Springy } from './Pressable';
+import { Springy } from '@shared/primitives/Pressable';
 import { withClick } from './sound';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 

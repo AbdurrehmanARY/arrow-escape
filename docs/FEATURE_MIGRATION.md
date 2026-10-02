@@ -537,8 +537,9 @@ diff to `index.ts`, and conclude the file was safe to move without looking.
 | **1** | **This inventory.** Read-only. | ✅ done |
 | **0** ⬅ inserted | Extend `check-architecture.ts` + its seeded tests to know `features`/`shared`/`infrastructure`. **Before creating them** — otherwise the enforcer goes blind (§2.1) | ✅ **done** — see below |
 | 2 | Create folders only where a real file lands | — |
-| 2a ⬅ | **`shared/branding`** — the first real move. See §9.2 | ✅ **done** |
-| 2b | `shared/{components,hooks,primitives}` — **blocked on a decision**, §9.3 | — |
+| 2a | **`shared/branding`** — the first real move. See §9.2 | ✅ **done** |
+| 2b ⬅ | **`src/components/Pressable.tsx`** → `shared/primitives/` — **unblocked** leaf; only `@theme`, no store read, no call-site change | ✅ **done** — see §9.2.1 |
+| 2c | `shared/{components, hooks}` (Screen, useThemeAssets…, theme seam) — **blocked on a decision**, §9.3 | — |
 | 3 | `app/` — audit only, no move (deviation §6) | — |
 | 4 | Home — **cannot move**; `app/` is pinned and Home owns no files, §9.3 | — |
 | 5 | Level-selection (+ Levels decision gate) — as Home, §9.3 | — |
@@ -619,6 +620,30 @@ wordmark still renders on Home and Settings. `shared/branding` is reached throug
 `@theme`, so it is on the critical path of every screen in the app — the highest
 fan-out of any file moved so far.
 
+### 9.2.1 Phase 2b, as delivered — one primitive moved
+
+On top of the `a7ff7bf` checkpoint from Phase 2a, this step moves
+`src/components/Pressable.tsx` → `src/shared/primitives/Pressable.tsx`. Its
+dependency list is exactly one layer, `@theme`, and it imports no zustand store:
+`useGlow` takes its colour as an argument and `Springy` takes none. That is why it
+could move **before** the §9.3 palette-seam decision — and why doing so changes zero
+call sites.
+
+The 13 files in `src/components/` that consumed it were re-pointed to
+`@shared/primitives/Pressable` (three of them — `levels/ChapterList`,
+`levels/JumpToLevel`, `levels/LevelTile` — sat under `levels/`), while the six `app/`
+routes that take `Springy` through `@components` are untouched: that barrel now
+re-exports `@shared/primitives/Pressable` as a documented compatibility shim, so
+`app/` re-pointing stays deferred to phase 9 exactly as §9.3 promises.
+
+The architecture suite's residue check (`__tests__/architecture/architecture.test.ts`)
+already snapshots `src/shared/`, so seeding the new path leaves no residue.
+
+**Gate:** `tsc --noEmit` → `lint` → `test` → `levels:validate` → `architecture:check`,
+per §9.1. Typecheck exit 0, lint exit 0, 31 suites / **396** tests pass, 1,000 levels
+verify, and `architecture:check` reports 629 imports / 0 violations — including the 13 re-pointed
+`@components → @shared` edges.
+
 ### 9.3 The phase order is wrong, and cannot be followed as written
 
 The table in §9 lists **Home** as phase 4. Home is `app/(tabs)/index.tsx`, and
@@ -642,7 +667,8 @@ The real order is bottom-up and is driven by what each feature imports:
 
 ```
 shared/branding  ✅ done
-  → shared/{components,hooks,primitives}   (blocked — see below)
+    → shared/primitives   ✅ done — `Pressable.tsx` (§9.2.1)
+  → shared/{components, hooks}   (blocked on the palette seam, §9.3)
   → infrastructure/{storage,sync,database,analytics}
   → features/{audio,league,achievements,progression,settings,account,hints,ads,gameplay}
   → app/  re-pointed last, feature by feature

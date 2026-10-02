@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** Feature-based migration **Phases 0–2a complete** — see
+> **Last updated:** Feature-based migration **Phases 0–2b complete** — see
 > [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
 > Phase 1 mapped all 178 `.ts`/`.tsx` files to a proposed feature home, recorded **9
 > documented deviations** (notably `src/game/`, `src/data/`, `src/render/` and `app/`
@@ -15,6 +15,13 @@
 > `game/` purity guarantee would have stopped being verified silently.
 > **Phase 2a (commit `a7ff7bf`) moved the first production file**,
 > `src/brand/index.ts` → `src/shared/branding/index.ts`; `@brand` is gone.
+> **Phase 2b (on top of `a7ff7bf`) moved `src/components/Pressable.tsx` →
+> `src/shared/primitives/Pressable.tsx`** — the first `components/` file to leave. It
+> is a leaf whose only dependency is `@theme` and which reads no store, so it could
+> move ahead of the §9.3 palette-seam decision: zero call sites changed. 13 in-layer
+> component files were re-pointed to `@shared/primitives/Pressable`; the six `app/`
+> routes that take `Springy` via `@components` are untouched, served by a documented
+> barrel shim. Gate: tsc/lint/396 tests/levels:validate/arch all green.
 > **Two findings that outrank the move itself.** (1) The §9 phase order is wrong:
 > Home and level-selection are `app/` routes, `app/` is pinned, and Home owns zero
 > files — "migrating Home" is re-pointing eleven imports *into other features*, so it

@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettingsStore } from '@state';
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, themeById, typography } from '@theme';
 
-import { Springy, useGlow } from './Pressable';
+import { Springy, useGlow } from '@shared/primitives/Pressable';
 import { withClick } from './sound';
 
 /** The active theme, resolved from the player's saved preference. */

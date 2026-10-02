@@ -9,7 +9,7 @@ import { Image, type ImageSourcePropType, StyleSheet, Text, View } from 'react-n
 import { useRouter } from 'expo-router';
 
 import { Screen, useTheme } from './Screen';
-import { Springy } from './Pressable';
+import { Springy } from '@shared/primitives/Pressable';
 import { withClick } from './sound';
 import { fonts, radius, spacing, typography } from '@theme';
 

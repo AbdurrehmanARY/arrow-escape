@@ -10,7 +10,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { STREAK_REWARDS, useStreakStore, type StreakReward } from '@state';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
-import { Springy } from './Pressable';
+import { Springy } from '@shared/primitives/Pressable';
 import { withClick } from './sound';
 
 export interface StreakRewardModalProps {

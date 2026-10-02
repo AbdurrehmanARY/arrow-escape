@@ -20,6 +20,23 @@
  *               `hitSlop` defaults to expanding the target to `MIN_TOUCH_TARGET`
  *               rather than the visible box, because the honest fix for a small
  *               control is a bigger *touch* area, not a bigger drawing.
+ *
+ *               It lives in `shared/primitives/` because it is one: a wrapper
+ *               around a platform control that knows nothing about this game. No
+ *               feature owns it — every feature's buttons want the same press — so
+ *               a feature that owned it would have to be imported by all the
+ *               others, which is the coupling this migration exists to remove.
+ *               Its only layer dependency is `@theme`, for the parts of the press
+ *               that are a shape rather than a colour (`glow`), so it depends on
+ *               nothing above it. See ARCHITECTURE.md section 10.
+ *
+ *               This file needed no inversion to get here, which is worth
+ *               recording: `useGlow` already takes its colour as an argument and
+ *               `Springy` takes no colour at all. The palette was never read from
+ *               a store here, so moving it did not have to change a single call
+ *               site. That is the same shape as the decision taken for `Screen` in
+ *               FEATURE_MIGRATION.md section 9.3 — the difference is that this
+ *               file had already been written that way.
  */
 
 import { type ReactNode } from 'react';

@@ -19,7 +19,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { LEVEL_COUNT } from '@data';
 import { radius, spacing, typography, type Palette } from '@theme';
 
-import { Springy } from '../Pressable';
+import { Springy } from '@shared/primitives/Pressable';
 import { withClick } from '../sound';
 
 /** Straight to a level by number. */

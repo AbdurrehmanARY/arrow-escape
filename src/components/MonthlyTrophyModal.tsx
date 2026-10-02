@@ -7,7 +7,7 @@
 
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Springy } from './Pressable';
+import { Springy } from '@shared/primitives/Pressable';
 import { MonthlyTrophyBadge } from './MonthlyTrophyBadge';
 import { withClick } from './sound';
 import { fonts, radius, spacing, type Palette } from '@theme';

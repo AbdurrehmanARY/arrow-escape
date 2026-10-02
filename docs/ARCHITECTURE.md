@@ -245,8 +245,8 @@ root** and nothing else.
 ### 10.4 Barrels
 
 `shared/` and `infrastructure/` are exempt from §2, like `game/` and `services/`:
-they are sub-rooted by design (`shared/components`, `shared/hooks`,
-`infrastructure/storage`) and have no barrel. Requiring one would mean inventing an
+they are sub-rooted by design (`shared/branding`, `shared/components`, `shared/hooks`,
+`shared/primitives`, `infrastructure/storage`) and have no barrel. Requiring one would mean inventing an
 `index.ts` whose only purpose is to satisfy a rule.
 
 A feature's **own** sub-folders need no exemption. An intra-feature import resolves

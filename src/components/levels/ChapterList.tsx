@@ -18,7 +18,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CHAPTERS, chapterOf, chapterProgress, isChapterOpen, type Chapter } from '@data';
 import { radius, spacing, typography, type Palette } from '@theme';
 
-import { Springy } from '../Pressable';
+import { Springy } from '@shared/primitives/Pressable';
 import { withClick } from '../sound';
 
 /** The twenty chapters, each opening onto its own level grid. */

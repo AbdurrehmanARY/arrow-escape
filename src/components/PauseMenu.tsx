@@ -28,7 +28,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
-import { Springy, useGlow } from './Pressable';
+import { Springy, useGlow } from '@shared/primitives/Pressable';
 import { withClick } from './sound';
 
 export interface PauseMenuProps {

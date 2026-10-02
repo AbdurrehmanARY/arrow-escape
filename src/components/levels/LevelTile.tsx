@@ -21,7 +21,7 @@ import { ENCODED_LEVELS } from '@data';
 import type { LevelRecord } from '@state';
 import { radius, typography, type Palette } from '@theme';
 
-import { Springy } from '../Pressable';
+import { Springy } from '@shared/primitives/Pressable';
 import { withClick } from '../sound';
 
 /**

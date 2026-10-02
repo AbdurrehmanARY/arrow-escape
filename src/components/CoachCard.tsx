@@ -17,7 +17,7 @@ import { StyleSheet, Text, View } from 'react-native';
 // Direct path, not the '@components' barrel: a component importing the barrel
 // that exports it is a cycle, and Metro resolves those to `undefined` at import
 // time rather than erroring — which shows up as a blank screen, not a stack.
-import { Springy } from './Pressable';
+import { Springy } from '@shared/primitives/Pressable';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 

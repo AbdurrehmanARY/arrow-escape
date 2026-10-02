@@ -23,7 +23,7 @@ import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
-import { Springy } from './Pressable';
+import { Springy } from '@shared/primitives/Pressable';
 import { useSheetSound, withClick } from './sound';
 
 export function LeagueIntro({
