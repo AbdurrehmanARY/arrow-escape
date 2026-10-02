@@ -43,7 +43,7 @@ export default function ChallengeDayScreen() {
 
   if (!date) {
     return (
-      <Screen>
+      <Screen palette={palette}>
         <ScreenHeader palette={palette} title="Challenge" onBack={() => router.back()} />
         <Text style={[styles.body, { color: palette.textMuted }]}>
           That is not a challenge date.
@@ -61,7 +61,7 @@ export default function ChallengeDayScreen() {
   const perfect = won && record.heartsLeft === 5 && record.hintsUsed === 0;
 
   return (
-    <Screen scroll>
+    <Screen palette={palette} scroll>
       <ScreenHeader
         palette={palette}
         title={`${MONTHS[date.month - 1]} ${date.day}`}

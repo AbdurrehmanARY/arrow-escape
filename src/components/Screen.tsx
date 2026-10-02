@@ -1,18 +1,24 @@
 /**
- * Screen.tsx — shared screen chrome.
+ * Screen.tsx — the theme seam and screen chrome that still reach out of this layer.
  *
- * Purpose:      Give every screen the same ground colour, safe-area insets, and
- *               status-bar treatment, so adding a screen is not an opportunity to
- *               get those three things subtly wrong.
+ * Purpose:      Hold the three exports that cannot move to `shared/` yet, because each
+ *               reaches up: `useTheme` reads `themeId` from `@state`, and
+ *               `ScreenHeader`/`IconButton` reach `./sound` → `@services/audio`. Both
+ *               seams close when audio becomes a feature in Phase 9.
  * Responsibilities:
- *               - `Screen`     — the page frame.
- *               - `useTheme`   — the active theme, from settings.
- *               - `IconButton` — the small square button used in headers.
+ *               - `useTheme`     — the active theme, from settings.
+ *               - `ScreenHeader` — the header every non-game screen wears.
+ *               - `IconButton`   — the small square button used in headers.
+ * Notes:        `Screen` (the page frame) moved to `src/shared/components/Screen.tsx`
+ *               in Phase 2c-2. It only ever needed the palette, so it now takes that as
+ *               a required prop instead of calling `useTheme()` — which is exactly what
+ *               lets a `shared/` file stop importing `@state`. The `@components` barrel
+ *               re-exports it from its new home, so consumers keep importing `Screen`
+ *               from `@components` unchanged (the same shim `Pressable` uses).
  */
 
 import type { ReactNode } from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useSettingsStore } from '@state';
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, themeById, typography } from '@theme';
@@ -24,44 +30,6 @@ import { withClick } from './sound';
 export function useTheme() {
   const themeId = useSettingsStore((state) => state.themeId);
   return themeById(themeId);
-}
-
-export interface ScreenProps {
-  children: ReactNode;
-  /** Wrap the content in a ScrollView. Off for the game screen, which must not scroll. */
-  scroll?: boolean;
-  /** Extra horizontal padding. Defaults to the standard gutter. */
-  padded?: boolean;
-}
-
-export function Screen({ children, scroll = false, padded = true }: ScreenProps) {
-  const { palette } = useTheme();
-  const insets = useSafeAreaInsets();
-
-  const padding = {
-    paddingTop: insets.top + spacing.md,
-    paddingBottom: insets.bottom + spacing.lg,
-    paddingHorizontal: padded ? spacing.lg : 0,
-  };
-
-  return (
-    <View style={[styles.root, { backgroundColor: palette.background }]}>
-      <StatusBar
-        barStyle={palette.scheme === 'dark' ? 'light-content' : 'dark-content'}
-        backgroundColor={palette.background}
-      />
-      {scroll ? (
-        <ScrollView
-          contentContainerStyle={[styles.containerMax, padding]}
-          showsVerticalScrollIndicator={false}
-        >
-          {children}
-        </ScrollView>
-      ) : (
-        <View style={[styles.body, styles.containerMax, padding]}>{children}</View>
-      )}
-    </View>
-  );
 }
 
 export interface ScreenHeaderProps {
@@ -158,15 +126,6 @@ export function IconButton({ palette, glyph, label, onPress, active = false }: I
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  body: { flex: 1 },
-  containerMax: {
-    width: '100%',
-    maxWidth: 600,
-    alignSelf: 'center',
-  },
-
-
   header: {
     flexDirection: 'row',
     alignItems: 'center',

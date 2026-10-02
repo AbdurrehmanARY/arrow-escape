@@ -8,7 +8,8 @@
 import { Image, type ImageSourcePropType, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Screen, useTheme } from './Screen';
+import { useTheme } from './Screen';
+import { Screen } from '@shared/components/Screen';
 import { Springy } from '@shared/primitives/Pressable';
 import { withClick } from './sound';
 import { fonts, radius, spacing, typography } from '@theme';
@@ -59,7 +60,7 @@ export function AwardInfoLayout({
     : 0;
 
   return (
-    <Screen>
+    <Screen palette={palette}>
       <View style={styles.centerWrapper}>
         {/* ---- 3D Image Graphic / Icon ------------------------------------- */}
         <View style={hideCardFrame ? styles.cardOuterClean : [styles.cardOuter, { backgroundColor: 'transparent' }]}>

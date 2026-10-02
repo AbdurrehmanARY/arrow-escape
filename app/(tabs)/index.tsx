@@ -65,7 +65,7 @@ export default function HomeScreen() {
   }, []);
 
   return (
-    <Screen scroll={false}>
+    <Screen palette={palette} scroll={false}>
       <View style={styles.container}>
         {/* ---- The two cards at top ---------------------------------------- */}
         <View style={styles.cards}>

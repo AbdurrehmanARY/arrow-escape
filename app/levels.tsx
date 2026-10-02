@@ -55,7 +55,7 @@ export default function LevelSelectScreen() {
   const [openChapter, setOpenChapter] = useState<Chapter | null>(null);
 
   return (
-    <Screen>
+    <Screen palette={palette}>
       <ScreenHeader
         palette={palette}
         title={openChapter ? openChapter.name : 'Levels'}

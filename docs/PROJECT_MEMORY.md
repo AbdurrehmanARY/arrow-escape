@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** Feature-based migration **Phase 2c-1 complete** (`useThemeAssets` → `features/settings/hooks`); 2c-2 planned — see [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
+> **Last updated:** Feature-based migration **Phase 2c-2 complete** (`Screen` frame → `shared/components/`, `palette`-as-prop, 16 sites); phase 3 (`app/` audit) next — see [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
 > Phase 1 mapped all 178 `.ts`/`.tsx` files to a proposed feature home, recorded **9
 > documented deviations** (notably `src/game/`, `src/data/`, `src/render/` and `app/`
 > pinned, because moving them disarms the architecture checker or the level pipeline),
@@ -21,15 +21,19 @@
 > component files were re-pointed to `@shared/primitives/Pressable`; the six `app/`
 > routes that take `Springy` via `@components` are untouched, served by a documented
 > barrel shim. Gate: tsc/lint/396 tests/levels:validate/arch all green.
-> **Phase 2c-1 (current commit) moved `useThemeAssets`** from `src/hooks/` to
+> **Phase 2c-1 (commit `5db7d04`) moved `useThemeAssets`** from `src/hooks/` to
 > `src/features/settings/hooks/`, behind a feature-local barrel `@features/settings`;
 > §5's `shared/hooks/` destination was wrong — `useThemeAssets` only subscribes to
 > `themeId`, a *settings* value, and `shared/` is banned from importing `@state`. Both
 > consumers now import `@features/settings`; the dead `src/hooks/index.ts` stays tsc-green
 > via a re-export shim. Gate: tsc/lint/396 tests/levels:validate/arch (630 imports, 0 violations).
-> **2c-2 remains blocked** on the two seams still on `Screen.tsx`: `useTheme` → `@state`
-> (the palette seam §9.3 imagined as one) and `sound.ts` → `@services/audio` (green only
-> until §5 lands `features/audio/services/`).
+> **Phase 2c-2 (current commit) split `Screen.tsx`** — the page frame moved to
+> `src/shared/components/Screen.tsx` behind a required `palette` prop (palette-as-prop,
+> §9.3 option (a)), closing the `useTheme` → `@state` edge. All 16 render sites in 14 files
+> already had `palette` in scope, so it is zero new hook calls, and `tsc` enforces the list.
+> `useTheme`/`ScreenHeader`/`IconButton` stay in `components/` on the audio seam, deferred to
+> Phase 9 — the `@components` barrel re-exports `Screen` from its new home (the Pressable shim).
+> Gate: tsc/lint/396 tests/levels:validate/arch (634 imports, 0 violations).
 > **Two findings that outrank the move itself.** (1) The §9 phase order is wrong:
 > Home and level-selection are `app/` routes, `app/` is pinned, and Home owns zero
 > files — "migrating Home" is re-pointing eleven imports *into other features*, so it
@@ -38,13 +42,11 @@
 > depth-relative `require()` of a PNG: the home screen was importing a module that no
 > longer existed with typecheck silent, and only jest failed (7 suites). The same
 > hazard sits in `audioAssets.ts` 34 times over.
-> **Next step (2c-2) is blocked on the `Screen.tsx` seam decision, not on effort.**
-> `useThemeAssets` is already resolved (moved to `features/settings/hooks/`, 2c-1): it
-> reads a *settings* store, so `shared/` was never its home. `Screen.tsx` remains, with
-> **two** upward edges — `useTheme` → `@state` (the palette seam §5 imagined as one) and
-> `sound.ts` → `@services/audio` (green only because `services` is not yet in
-> `FORBIDDEN_SHARED`; it breaks the moment §5 lands `features/audio/services/`). Options
-> and the chosen 2c-2 scope are in §9.3.
+> **Next step: phase 3 (`app/` audit only — no move, deviation §6).** The two `Screen.tsx`
+> upward edges are resolved for 2c-2: `useTheme` → `@state` is closed (the frame takes
+> `palette` as a prop), and `sound.ts` → `@services/audio` is deliberately deferred to Phase 9
+> (it is green only because `services` is not yet in `FORBIDDEN_SHARED`; it must move with
+> `features/audio`). The bottom-up phase order and this seam rationale are in §9.3.
 > Previous: Master Growth & Design Brief completed and approved — see [docs/MASTER_BRIEF_GROWTH_DESIGN.md](MASTER_BRIEF_GROWTH_DESIGN.md). Includes codebase audit, 10 key decisions, 10-tier computable difficulty formula, 1,000-level sawtooth pacing, 2026 ad monetization architecture & eCPM benchmarks, micro-haptics specs, LiveOps/retention schedule, telemetry schema, and 6-month roadmap.
 > Release state and the full remaining checklist live in [PROGRESS.md](PROGRESS.md).
 

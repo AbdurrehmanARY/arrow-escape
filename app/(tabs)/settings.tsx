@@ -48,7 +48,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <Screen scroll>
+    <Screen palette={palette} scroll>
       <View style={styles.container}>
         {/* ---- Group 1: Preferences (Language, Vibrations, Music, Sounds, Themes) - */}
         <View style={[styles.cardGroup, { backgroundColor: palette.surface, borderColor: palette.border }]}>

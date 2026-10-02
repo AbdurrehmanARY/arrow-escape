@@ -338,7 +338,7 @@ export default function PlayScreen() {
 
   if (!level || !built?.ok) {
     return (
-      <Screen>
+      <Screen palette={palette}>
         <Text style={[styles.error, { color: palette.text }]}>
           Level {levelId} could not be loaded.
         </Text>
@@ -352,7 +352,7 @@ export default function PlayScreen() {
   }
 
     return (
-      <Screen>
+      <Screen palette={palette}>
         {/* ---- Top Header Bar (5% of whole screen) ------------------------- */}
         <View style={styles.headerWrap}>
           <Hud

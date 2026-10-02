@@ -71,7 +71,7 @@ export default function StatsScreen() {
   const started = cleared > 0;
 
   return (
-    <Screen>
+    <Screen palette={palette}>
       <ScreenHeader
         palette={palette}
         title="Record"

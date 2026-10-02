@@ -117,7 +117,7 @@ export default function CollectionScreen() {
   );
 
   return (
-    <Screen scroll>
+    <Screen palette={palette} scroll>
       <Text style={[styles.pageTitle, { color: palette.text }]}>Collection</Text>
 
       {/* ---- Records --------------------------------------------------- */}

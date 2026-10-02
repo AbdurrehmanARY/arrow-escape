@@ -103,7 +103,7 @@ export default function AccountScreen() {
   }, [session]);
 
   return (
-    <Screen scroll>
+    <Screen palette={palette} scroll>
       <ScreenHeader
         palette={palette}
         title="Account"

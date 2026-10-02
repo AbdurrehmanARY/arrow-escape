@@ -66,7 +66,7 @@ export default function ChallengeHistoryScreen() {
   }, [records]);
 
   return (
-    <Screen>
+    <Screen palette={palette}>
       <ScreenHeader
         palette={palette}
         title="History"

@@ -150,7 +150,7 @@ export default function ChallengeScreen() {
   );
 
   return (
-    <Screen scroll={false}>
+    <Screen palette={palette} scroll={false}>
       <View style={styles.container} {...panResponder.panHandlers}>
         {/* ---- Trophy header with month navigation arrows ------------------ */}
         <View style={styles.trophyHeader}>

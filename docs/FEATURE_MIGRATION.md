@@ -540,7 +540,7 @@ diff to `index.ts`, and conclude the file was safe to move without looking.
 | 2a | **`shared/branding`** — the first real move. See §9.2 | ✅ **done** |
 | 2b ⬅ | **`src/components/Pressable.tsx`** → `shared/primitives/` — **unblocked** leaf; only `@theme`, no store read, no call-site change | ✅ **done** — see §9.2.1 |
 | 2c-1 | **`useThemeAssets`** split from `shared/` to `features/settings` — reads `themeId`, a settings concern; §5's `shared/hooks/` destination was wrong | ✅ **done** — see §9.2.2 |
-| 2c-2 | `shared/components` (`Screen` frame) + palette-as-prop (`useTheme` → `@state`); `sound.ts`/`ScreenHeader`/`IconButton` deferred on the audio seam, §9.3 | — |
+| 2c-2 | `shared/components` (`Screen` frame) + palette-as-prop (`useTheme` → `@state`); `sound.ts`/`ScreenHeader`/`IconButton` deferred on the audio seam, §9.3 | ✅ **done** — see §9.2.3 |
 | 3 | `app/` — audit only, no move (deviation §6) | — |
 | 4 | Home — **cannot move**; `app/` is pinned and Home owns no files, §9.3 | — |
 | 5 | Level-selection (+ Levels decision gate) — as Home, §9.3 | — |
@@ -675,6 +675,40 @@ is re-pointed to `@features/settings` to keep `tsc` green, preserving the barrel
 unchanged, `architecture:check` **630 imports / 0 violations** (the +1 vs. Phase 2b's 629 is the
 new `features/settings/index.ts` re-export).
 
+### 9.2.3 Phase 2c-2, as delivered — the `Screen` frame to `shared/components/` + palette-as-prop
+
+`src/components/Screen.tsx` was split: the `Screen` **frame** moved to
+`src/shared/components/Screen.tsx`, while `useTheme`, `ScreenHeader` and `IconButton`
+stayed behind in `src/components/Screen.tsx`.
+
+The frame is the half that only ever needed the palette. It used to call `useTheme()`
+(which reads `themeId` from `@state` — banned for `shared/` by `FORBIDDEN_SHARED`), so
+per §9.3 option (a) it now takes `palette` as a **required prop**. That single change is
+what makes the file legal under `shared/`: with no `@state` edge left, its only imports
+are React Native, `react-native-safe-area-context` and `@theme` — all already allowed
+downward from `shared/`.
+
+- The `@components` barrel re-exports `Screen` from `@shared/components/Screen` (the same
+  documented shim `Pressable` uses), so the **16 render sites in 14 files** keep importing
+  `Screen` from `@components` unchanged.
+- `AwardInfoLayout.tsx` was the one file importing `Screen` by a **relative** path
+  (`./Screen`); it is re-pointed to `@shared/components/Screen`.
+- `palette` being required means `tsc` itself lists the render sites: a missed `<Screen>`
+  is a compile error, not a blank screen. All 16 sites already had `palette` in scope
+  (every one calls `useTheme()`), so the move added **zero** new hook calls.
+- `shared/` has no barrel by design (`ARCHITECTURE.md` §10), so `@shared/components/Screen`
+  is a legal deep import — the exact path the architecture seeds already encode as status 0.
+
+`sound.ts`, `ScreenHeader` and `IconButton` deliberately **stayed** in `components/`:
+`IconButton` reaches `./sound` → `@services/audio`, an edge that is green today only
+because `services` is not yet in `FORBIDDEN_SHARED`. It becomes a `shared → features`
+violation the moment Phase 9 lands `features/audio`, so the whole audio seam moves
+together then — not now, half-way.
+
+**Gate:** `tsc --noEmit` (exit 0), `lint` (exit 0), 31 suites / **396** tests, 1,000 levels/20 packs
+unchanged, `architecture:check` **634 imports / 0 violations** (+4 over 2c-1: the shared frame's
+imports and the two re-pointed edges).
+
 ### 9.3 The phase order is wrong, and cannot be followed as written
 
 The table in §9 lists **Home** as phase 4. Home is `app/(tabs)/index.tsx`, and
@@ -699,23 +733,27 @@ The real order is bottom-up and is driven by what each feature imports:
 ```
 shared/branding  ✅ done
     → shared/primitives   ✅ done — `Pressable.tsx` (§9.2.1)
-  → shared/{components, hooks}   (blocked on the palette seam, §9.3)
+  → shared/components   ✅ done (Screen frame, §9.2.3); hooks deferred (§8)
   → infrastructure/{storage,sync,database,analytics}
   → features/{audio,league,achievements,progression,settings,account,hints,ads,gameplay}
   → app/  re-pointed last, feature by feature
 ```
 
-**The remaining blockers are the two upward edges on `Screen.tsx`, and `useThemeAssets`
-is no longer one of them.** §5 assigns `src/components/Screen.tsx` to `shared/components/`.
-That one file carries **two** dependencies that point up out of `shared/`, not one:
+**One of the two upward edges on `Screen.tsx` is now closed; `useThemeAssets`, a third,
+closed first (2c-1).** §5 assigns `src/components/Screen.tsx` to `shared/components/`.
+That file carried **two** dependencies that point up out of `shared/`; 2c-2 removed the first:
 
-- `useTheme()` reads `themeId` from `@state` (`FORBIDDEN_SHARED` bans `state` — correctly:
-  a shared component reaching into a feature's zustand store is a feature wearing a disguise).
-- `IconButton` calls `withClick` from `./sound.ts`, which reads `playSfx` from `@services/audio`.
-  This edge is **not** banned today only because `services` is not in `FORBIDDEN_SHARED`; it
-  becomes a `shared → features/audio` violation the moment §5 lands (`features/audio/services/`),
-  since the shared row of the §3 matrix bans `features`. A rule that is green now and red only in
-  Phase 9 is the migration's favorite silent break — see the `require()` note in §9 / item 12.
+- **closed by 2c-2** — `useTheme()` read `themeId` from `@state` (`FORBIDDEN_SHARED` bans
+  `state` — correctly: a shared component reaching into a feature's zustand store is a feature
+  wearing a disguise). The frame now takes `palette` as a prop instead (§9.2.3), so the file
+  that moved under `shared/` has no `@state` edge at all.
+- **still open, deferred to Phase 9** — `IconButton` calls `withClick` from `./sound.ts`, which
+  reads `playSfx` from `@services/audio`. This edge is **not** banned today only because
+  `services` is not in `FORBIDDEN_SHARED`; it becomes a `shared → features/audio` violation the
+  moment §5 lands (`features/audio/services/`), since the shared row of the §3 matrix bans
+  `features`. A rule that is green now and red only in Phase 9 is the migration's favorite
+  silent break — see the `require()` note in §9 / item 12. `sound.ts`/`ScreenHeader`/
+  `IconButton` stayed in `components/` precisely so this edge is not yet in `shared/`.
 
 **`useThemeAssets` was the same shape once — `theme/` importing `@state` — and is already
 resolved.** It is not a theme concern; it is a *settings* concern (it exists only to subscribe

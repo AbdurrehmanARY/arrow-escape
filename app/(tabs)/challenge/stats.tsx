@@ -42,7 +42,7 @@ export default function ChallengeStatsScreen() {
   const hintless = wins.filter((r) => r.hintsUsed === 0).length;
 
   return (
-    <Screen scroll>
+    <Screen palette={palette} scroll>
       <ScreenHeader
         palette={palette}
         title="Statistics"

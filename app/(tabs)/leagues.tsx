@@ -72,7 +72,7 @@ export default function LeaguesScreen() {
   };
 
   return (
-    <Screen scroll>
+    <Screen palette={palette} scroll>
       <View style={styles.container}>
         {/* ---- Header: League Title, Countdown, and Info Button ----------- */}
         <View style={styles.header}>

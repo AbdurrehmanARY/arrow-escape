@@ -34,7 +34,7 @@ export default function ChallengeRewardsScreen() {
   const locked = list.filter((r) => r.state === 'locked');
 
   return (
-    <Screen scroll>
+    <Screen palette={palette} scroll>
       <ScreenHeader
         palette={palette}
         title="Rewards"
