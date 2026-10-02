@@ -1,8 +1,8 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** Feature-based migration **Phase 0 (enforcement) and Phase 1 (inventory)
-> complete** — see [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
+> **Last updated:** Feature-based migration **Phases 0–2a complete** — see
+> [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
 > Phase 1 mapped all 178 `.ts`/`.tsx` files to a proposed feature home, recorded **9
 > documented deviations** (notably `src/game/`, `src/data/`, `src/render/` and `app/`
 > pinned, because moving them disarms the architecture checker or the level pipeline),
@@ -13,8 +13,19 @@
 > cases. Without it, creating `src/features/` would have left the checker printing
 > "No architecture violations." and exiting 0 while enforcing nothing, and the
 > `game/` purity guarantee would have stopped being verified silently.
-> **No source file has moved.** Migration is blocked on device validation, which is
-> unavailable in this environment.
+> **Phase 2a (commit `a7ff7bf`) moved the first production file**,
+> `src/brand/index.ts` → `src/shared/branding/index.ts`; `@brand` is gone.
+> **Two findings that outrank the move itself.** (1) The §9 phase order is wrong:
+> Home and level-selection are `app/` routes, `app/` is pinned, and Home owns zero
+> files — "migrating Home" is re-pointing eleven imports *into other features*, so it
+> is the last thing that can happen, not the fourth. The real order is bottom-up
+> (FEATURE_MIGRATION.md §9.3). (2) `tsc` does **not** catch a moved file's
+> depth-relative `require()` of a PNG: the home screen was importing a module that no
+> longer existed with typecheck silent, and only jest failed (7 suites). The same
+> hazard sits in `audioAssets.ts` 34 times over.
+> **Next step is blocked on a decision, not on effort** — `Screen.tsx` and
+> `useThemeAssets` are mapped to `shared/` but both read the settings store, which
+> `shared/` may not import. Options are in §9.3.
 > Previous: Master Growth & Design Brief completed and approved — see [docs/MASTER_BRIEF_GROWTH_DESIGN.md](MASTER_BRIEF_GROWTH_DESIGN.md). Includes codebase audit, 10 key decisions, 10-tier computable difficulty formula, 1,000-level sawtooth pacing, 2026 ad monetization architecture & eCPM benchmarks, micro-haptics specs, LiveOps/retention schedule, telemetry schema, and 6-month roadmap.
 > Release state and the full remaining checklist live in [PROGRESS.md](PROGRESS.md).
 
