@@ -13,9 +13,9 @@ import { LeagueIntro, Screen, Springy, useTheme, withClick } from '@components';
 import { playMusic } from '@services/audio';
 import { syncProfile } from '@services/sync';
 import { useAuthStore } from '@state';
-import { fonts, radius, spacing, typography } from '@theme';
+import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
-import { useLeagueBoard } from '../../src/hooks/useLeagueBoard';
+import { NEUTRAL_AVATAR, useLeagueBoard } from '../../src/hooks/useLeagueBoard';
 import { useThemeAssets } from '@features/settings';
 
 export default function LeaguesScreen() {
@@ -29,7 +29,7 @@ export default function LeaguesScreen() {
   const session = useAuthStore((state) => state.session);
 
   const defaultName: string = useMemo(() => {
-    if (!session?.user) return 'AtifPasha';
+    if (!session?.user) return 'Player';
     const meta = session.user.user_metadata;
     if (meta?.full_name && typeof meta.full_name === 'string' && meta.full_name.trim()) {
       return meta.full_name.trim();
@@ -57,7 +57,7 @@ export default function LeaguesScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const { userLeague, remainingText, leaderboardData } = useLeagueBoard({
+  const { userLeague, remainingText, leaderboardData, loading } = useLeagueBoard({
     now,
     userName,
   });
@@ -106,7 +106,9 @@ export default function LeaguesScreen() {
 
         {/* ---- Leaderboard List -------------------------------------------- */}
         <View style={styles.leaderboard}>
-          {leaderboardData.map((row) => (
+          {loading || leaderboardData.length === 0 ? (
+            <Empty palette={palette} />
+          ) : leaderboardData.map((row) => (
             <View key={row.id}>
               {row.rank === 11 ? (
                 <View style={styles.zoneDivider}>
@@ -153,9 +155,10 @@ export default function LeaguesScreen() {
                   )}
                 </View>
 
-                {/* Flag / Avatar */}
+                {/* Neutral avatar. Real rows carry only a display name, so a
+                    country flag here would be inventing a fact about a player. */}
                 <View style={styles.flagContainer}>
-                  <Text style={styles.flagText}>{row.flag}</Text>
+                  <Text style={styles.flagText}>{NEUTRAL_AVATAR}</Text>
                 </View>
 
                 {/* Name */}
@@ -240,6 +243,31 @@ export default function LeaguesScreen() {
         />
       </View>
     </Screen>
+  );
+}
+
+/**
+ * The table when there is nothing to put in it.
+ *
+ * The house empty state — the same dashed card, glyph and three lines as
+ * Challenge history and Statistics — rather than a blank rectangle, because a
+ * blank rectangle reads as broken.
+ *
+ * It shows while the fetch is in flight as well as when the table comes back
+ * empty, which is a deliberate conflation: "still asking" and "nobody else is
+ * playing" both mean "no rows to draw yet", and a spinner that resolves into
+ * this is a smaller promise than one that resolves into a number.
+ */
+function Empty({ palette }: { palette: Palette }) {
+  return (
+    <View style={[styles.empty, { borderColor: palette.border }]}>
+      <Text style={[styles.emptyGlyph, { color: palette.textFaint }]}>◆</Text>
+      <Text style={[styles.emptyTitle, { color: palette.text }]}>No one to compare with yet</Text>
+      <Text style={[styles.emptyBody, { color: palette.textMuted }]}>
+        Your league, shield and countdown are above. The table fills in as other players in your
+        league clear levels.
+      </Text>
+    </View>
   );
 }
 
@@ -463,4 +491,16 @@ const styles = StyleSheet.create({
     height: 64,
   },
   sheetGlyph: { fontSize: 40, fontWeight: '800' },
+
+  empty: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  emptyGlyph: { fontSize: 40 },
+  emptyTitle: { ...typography.heading },
+  emptyBody: { ...typography.body, textAlign: 'center' },
 });

@@ -29,7 +29,6 @@
  */
 export * from './Hud';
 export * from './Celebration';
-export * from './CoachCard';
 export * from './Overlays';
 export * from './PauseMenu';
 export * from '@shared/primitives/Pressable';
@@ -38,12 +37,10 @@ export * from '@shared/components/Screen';
 export * from './sound';
 export * from './ChallengeBadges';
 export * from './MonthlyTrophyModal';
-export * from './DummyAdModal';
 export * from './AwardInfoLayout';
 export * from './AwardInfoPage';
 export * from './levels/ChapterGrid';
 export * from './levels/ChapterList';
-export * from './levels/JumpToLevel';
 export * from './levels/LevelTile';
 export * from './LeagueIntro';
 export * from './StreakRewardModal';

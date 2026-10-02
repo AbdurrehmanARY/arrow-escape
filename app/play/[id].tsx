@@ -153,9 +153,10 @@ export default function PlayScreen() {
     resetHint,
   });
 
-  // Coach cards removed — gameplay starts immediately with no instructional popups.
-  // The CoachCard component and onboardingStore remain in the codebase for
-  // potential future use in dedicated tutorial levels.
+  // No instructional popups: gameplay starts immediately. The one-time coach
+  // cards that used to explain the arrowhead were removed and their component
+  // deleted with it — a rule the player can infer from watching does not earn a
+  // modal, and one that cannot should be taught by the level, not by a card.
 
   useEffect(() => {
     setLastPlayed(levelId);

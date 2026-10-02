@@ -9,7 +9,6 @@
  * *derived*, never stored, so it has nothing to drift out of sync with.
  */
 
-import { UNLOCK_ALL_LEVELS } from '@config';
 import {
   clearedByQuality,
   clearedCount,
@@ -17,7 +16,6 @@ import {
   isCleared,
   nextLevel,
   perfectCount,
-  playableUpTo,
   totalMistakes,
   type LevelRecord,
 } from '@state';
@@ -138,14 +136,14 @@ describe('quality breakdown', () => {
   });
 });
 
-describe('the unlock-all testing flag', () => {
-  it('opens everything while it is on, without touching real progress', () => {
-    // The flag must change only what the UI *offers*. If it leaked into
-    // `highestUnlocked`, turning it off would leave saved progress claiming a
-    // player had reached level 600.
+describe('where unlocking sends a fresh player', () => {
+  it('offers only level 1, without inventing progress it did not earn', () => {
+    // Unlocking is derived from the completed set, so an empty save cannot
+    // claim anything. The old unlock-all testing flag used to make this
+    // selector return the last level; it is gone, and the derivation is now
+    // the whole story.
     const fresh: Record<number, LevelRecord> = {};
 
-    expect(playableUpTo(fresh, 600)).toBe(UNLOCK_ALL_LEVELS ? 600 : 1);
     expect(highestUnlocked(fresh, 600)).toBe(1);
     expect(clearedCount(fresh)).toBe(0);
   });

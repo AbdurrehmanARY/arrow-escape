@@ -1,104 +1,65 @@
 /**
- * hooks/useLeagueBoard.ts — the fifty-row table the leagues screen draws.
+ * hooks/useLeagueBoard.ts — the weekly table the leagues screen draws.
  *
- * Purpose:      Work out which league the player is in this week and where they
- *               sit in its table, from the clock the screen already ticks.
+ * Purpose:      Work out which league the player is in this week, how long is
+ *               left, and where they sit among *real* opponents.
  * Responsibilities:
  *               - Own the week / stats / leaderboard memos and their dependency arrays.
- *               - Own `LeaderboardEntry` and the `LEADERBOARD_ROSTER` the table is
- *                 built from.
+ *               - Fetch this week's actual table from `services/sync`.
  *               - Report the league, the countdown text, the player's arrow count
- *                 and the rank-ordered rows.
- * Notes:        The three memos and their dependency arrays are carried over exactly
- *               as they were. The clock advances once a minute and the table is
- *               rebuilt with it, so widening or narrowing a dependency array here
- *               changes how often forty-nine synthetic scores are regenerated —
- *               which is the difference between a table that holds still and one
- *               whose opponents shuffle under the player's eyes.
+ *                 and the rank-ordered rows, plus whether the fetch is still in flight.
+ * Notes:        **This used to invent its opponents.** A roster of forty-nine
+ *               hardcoded names with flag emoji (`LEADERBOARD_ROSTER`), with
+ *               scores scaled into the band above the player's own league every
+ *               time the clock ticked — `ratio = 1 - index / 48` — then merged
+ *               with the player and ranked. It read as a race and it was
+ *               fiction. A player who signed in, played a week and climbed to
+ *               second place had been racing nobody, which is worse than an
+ *               empty table because an empty table tells the truth.
  *
- *               `userName` is an argument rather than another store read, because the
- *               screen holds a name the player has typed but not yet saved, and the
- *               table has to place *that* name. The stores it does read are the two
- *               the table is derived from and nothing else.
+ *               The real table is `leaderboard(weekId)` in `services/sync`. It
+ *               returns `[]` when Supabase is not configured or there is no
+ *               account, and the screen renders its empty state rather than
+ *               filling the gap with people who do not exist.
  *
- *               Extracted verbatim from `app/(tabs)/leagues.tsx`.
+ * Notes:        `userName` is an argument rather than another store read, because
+ *               the screen holds a name the player has typed but not yet saved,
+ *               and the table has to place *that* name. The stores it does read
+ *               are the ones the table is derived from and nothing else.
+ *
+ * Notes:        The fetch runs on `weekId`, not on the clock. The countdown
+ *               ticks once a minute and this must not chase it — a table that
+ *               refetched every minute would be a request a player never asked
+ *               for, and the merge below already folds in anything the device
+ *               knows that the server does not.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { today } from '@challenge';
 import { arrowsFor, formatRemaining, leagueForArrows, msRemaining, weekOf } from '@league';
-import { statsOf, useChallengeStore , arrowsThisWeek, useLeagueStore } from '@state';
-
+import { leaderboard, type LeaderboardRow } from '@services/sync';
+import { statsOf, useAuthStore, arrowsThisWeek, useChallengeStore, useLeagueStore } from '@state';
 
 /** One row of the weekly table, once it has been scored and ranked. */
 export interface LeaderboardEntry {
+  /** The account id for a real row, or `'you'` for the player's own. */
   id: string;
   rank: number;
-  flag: string;
   name: string;
   arrows: number;
   isUser?: boolean;
 }
 
 /**
- * The forty-nine opponents, in the order they are seeded.
+ * A placeholder avatar for every row.
  *
- * Rank and score are not here on purpose: both fall out of where the player lands,
- * so a fixed roster would be a fixed table, and the point is that the table is the
- * player's own league at their own level.
+ * The old roster attached a country flag to each fabricated player, and real
+ * rows come back from `profiles.display_name` with no country at all — inventing
+ * a flag would be inventing a fact about a real person. One neutral glyph for
+ * everyone says "there is a player here" without saying anything untrue.
  */
-const LEADERBOARD_ROSTER: Omit<LeaderboardEntry, 'rank' | 'isUser' | 'arrows'>[] = [
-  { id: '1', flag: '🇨🇦', name: 'Player02997' },
-  { id: '2', flag: '🇺🇸', name: 'AdrianLee' },
-  { id: '3', flag: '🇬🇧', name: 'OliviaRoss' },
-  { id: '4', flag: '🇪🇬', name: 'UnicornCape' },
-  { id: '5', flag: '🌐', name: 'CobaltFern5' },
-  { id: '6', flag: '🇮🇪', name: 'LateToGame' },
-  { id: '7', flag: '🌐', name: 'OopsIWon' },
-  { id: '8', flag: '🇨🇾', name: 'Crispy5' },
-  { id: '9', flag: '🇫🇷', name: 'Player07688' },
-  { id: '10', flag: '🌐', name: 'X3na' },
-  { id: '11', flag: '🇪🇸', name: 'ArrowPro99' },
-  { id: '12', flag: '🇩🇪', name: 'MasterNinja' },
-  { id: '13', flag: '🇯🇵', name: 'KageRider' },
-  { id: '14', flag: '🇧🇷', name: 'SilvaSpeed' },
-  { id: '15', flag: '🇦🇺', name: 'OzzyEscape' },
-  { id: '16', flag: '🇨🇳', name: 'ChenZen' },
-  { id: '17', flag: '🇲🇽', name: 'MateoV' },
-  { id: '18', flag: '🇸🇪', name: 'SvenBold' },
-  { id: '19', flag: '🇮🇳', name: 'MayaP' },
-  { id: '20', flag: '🇷🇺', name: 'ViktorK' },
-  { id: '21', flag: '🇰🇷', name: 'ChloeSun' },
-  { id: '22', flag: '🇨🇦', name: 'LiamW' },
-  { id: '23', flag: '🇺🇸', name: 'SophiaStar' },
-  { id: '24', flag: '🇳🇴', name: 'LucasNord' },
-  { id: '25', flag: '🇮🇹', name: 'IsabellaB' },
-  { id: '26', flag: '🇬🇧', name: 'EthanHunt' },
-  { id: '27', flag: '🇦🇪', name: 'AmiraL' },
-  { id: '28', flag: '🇿🇦', name: 'NoahZ' },
-  { id: '29', flag: '🇳🇱', name: 'EmmaV' },
-  { id: '30', flag: '🇳🇿', name: 'OliverQ' },
-  { id: '31', flag: '🇸🇬', name: 'ZoeSwift' },
-  { id: '32', flag: '🇦🇷', name: 'LeoFire' },
-  { id: '33', flag: '🇵🇹', name: 'AriaSky' },
-  { id: '34', flag: '🇦🇹', name: 'MaxPower' },
-  { id: '35', flag: '🇮🇪', name: 'LilyBloom' },
-  { id: '36', flag: '🇭🇰', name: 'KaiStorm' },
-  { id: '37', flag: '🇩🇰', name: 'NoraGold' },
-  { id: '38', flag: '🇨🇱', name: 'GabrielS' },
-  { id: '39', flag: '🇬🇷', name: 'ElenaR' },
-  { id: '40', flag: '🇧🇪', name: 'HugoBoss' },
-  { id: '41', flag: '🇵🇱', name: 'MilaZen' },
-  { id: '42', flag: '🇸🇦', name: 'TariqK' },
-  { id: '43', flag: '🇫🇮', name: 'SaraMoon' },
-  { id: '44', flag: '🇵🇪', name: 'DiegoR' },
-  { id: '45', flag: '🇯🇵', name: 'YukiT' },
-  { id: '46', flag: '🇩🇪', name: 'LarsB' },
-  { id: '47', flag: '🇹🇷', name: 'FatimaH' },
-  { id: '48', flag: '🇪🇸', name: 'CarlosM' },
-  { id: '49', flag: '🇺🇦', name: 'AnnaBell' },
-];
+export const NEUTRAL_AVATAR = '◆';
 
 export interface UseLeagueBoardArgs {
   /**
@@ -112,17 +73,18 @@ export interface UseLeagueBoardArgs {
 }
 
 /**
- * The player's league and the weekly table around them.
+ * The player's league and this week's real table around them.
  *
- * Opponents are scaled into the band above the player's own league entry, so the
- * table always reads as a race rather than as a list of strangers with impossible
- * scores. The player is then merged in and the whole thing ranked, which is why the
- * rows carry their rank rather than being numbered by the caller: the zones drawn
- * between rows sit at fixed ranks, not at fixed positions in the roster.
+ * Rows carry their rank rather than being numbered by the caller: the zones the
+ * screen draws sit at fixed *ranks*, so on a short table the promotion divider
+ * at rank 11 and the demotion divider at rank 46 simply never render. That is
+ * the guard — there is no length threshold to get wrong, because each divider
+ * already keys off the rank it labels.
  */
 export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
   const weeks = useLeagueStore((state) => state.weeks);
   const challengeRecords = useChallengeStore((state) => state.records);
+  const session = useAuthStore((state) => state.session);
 
   const week = useMemo(() => weekOf(now), [now]);
   const stats = useMemo(
@@ -134,51 +96,74 @@ export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
   const userLeague = leagueForArrows(userArrows);
   const remainingText = formatRemaining(msRemaining(week, now));
 
-  // Construct dynamic 50-player leaderboard starting from Bronze
-  const leaderboardData = useMemo(() => {
-    const maxScore =
-      userLeague.id === 'bronze'
-        ? 380
-        : userLeague.id === 'silver'
-          ? 1150
-          : userLeague.id === 'gold'
-            ? 2450
-            : userLeague.id === 'ruby'
-              ? 4950
-              : userLeague.id === 'obsidian'
-                ? 8950
-                : 15000;
+  const weekId = week.id;
+  const userId = session?.user.id;
 
-    const minScore = userLeague.entryArrows + 5;
+  const [remote, setRemote] = useState<readonly LeaderboardRow[]>([]);
+  /**
+   * The week `remote` actually belongs to, rather than a `loading` flag.
+   *
+   * `loading = fetched !== weekId` is derived instead of set, because the only
+   * write in the effect below happens inside an awaited callback. A synchronous
+   * `setLoading(true)` at the top of an effect would cascade a render for a
+   * state that was already knowable — the week changed, so the old rows are
+   * already stale — and React's rule against it is the right one.
+   */
+  const [fetched, setFetched] = useState<string | undefined>(undefined);
 
-    // Generate 49 opponent scores realistically scaled across league range
-    const opponents: LeaderboardEntry[] = LEADERBOARD_ROSTER.map((opp, index) => {
-      const ratio = 1 - index / 48;
-      const arrows = Math.max(1, Math.round(minScore + ratio * (maxScore - minScore)));
-      return {
-        ...opp,
-        rank: 0,
-        arrows,
-      };
-    });
-
-    const userEntry: LeaderboardEntry = {
-      id: 'you',
-      rank: 0,
-      flag: '🇵🇰',
-      name: userName,
-      arrows: userArrows,
-      isUser: true,
+  useEffect(() => {
+    let cancelled = false;
+    const load = async (): Promise<void> => {
+      let rows: readonly LeaderboardRow[] = [];
+      try {
+        rows = await leaderboard(weekId);
+      } catch {
+        // A query that throws is the same as a query that found nothing: no
+        // table, not a broken screen.
+        rows = [];
+      }
+      if (cancelled) return;
+      setRemote(rows);
+      setFetched(weekId);
     };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [weekId]);
 
-    const combined = [...opponents, userEntry];
-    combined.sort((a, b) => b.arrows - a.arrows);
+  const loading = fetched !== weekId;
 
-    return combined.map((entry, idx) => ({
-      ...entry,
-      rank: idx + 1,
+  const leaderboardData = useMemo<LeaderboardEntry[]>(() => {
+    // No server rows means no table. The player still sees their league, shield,
+    // countdown and arrow count above the list; what is missing is a thing that
+    // does not exist. Filling it in would be inventing opponents, and an empty
+    // table is the only honest answer to "who else is playing this week?".
+    if (remote.length === 0) return [];
+
+    const entries: LeaderboardEntry[] = remote.map((row) => ({
+      id: row.userId,
+      rank: row.rank,
+      name: row.name,
+      arrows: row.arrows,
+      isUser: userId !== undefined && row.userId === userId,
     }));
-  }, [userArrows, userLeague, userName]);
 
-  return { week, stats, userArrows, userLeague, remainingText, leaderboardData };
+    const own = entries.find((entry) => entry.isUser);
+    if (own) {
+      // The name may be one the player has typed but not saved, and the local
+      // count can be ahead of the row the server last saw — the push happens
+      // after a clear. Neither is fabrication: this device is correcting a
+      // player who is already in the table.
+      own.name = userName;
+      own.arrows = Math.max(own.arrows, userArrows);
+    } else if (userId !== undefined) {
+      entries.push({ id: userId, rank: 0, name: userName, arrows: userArrows, isUser: true });
+    }
+
+    entries.sort((a, b) => b.arrows - a.arrows);
+    return entries.map((entry, index) => ({ ...entry, rank: index + 1 }));
+  }, [remote, userArrows, userId, userName]);
+
+  return { week, stats, userArrows, userLeague, remainingText, leaderboardData, loading };
 }

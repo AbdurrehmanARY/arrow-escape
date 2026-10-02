@@ -17,7 +17,11 @@
 --           second run changes nothing. Section 4 is the teardown.
 --
 --           Every table references `auth.users`, so section 1 seeds whoever has
---           actually signed in. It invents no accounts.
+--           actually signed in. **This file invents no accounts and no players.**
+--           It used to add 24 rival accounts so the league table looked busy;
+--           that section is gone, and an empty league now renders the Leagues
+--           screen's empty state instead of a table full of people who do not
+--           exist. See section 2.
 
 -- ===========================================================================
 -- 1. Progress, challenges and league scores for every real account
@@ -77,64 +81,19 @@ cross join (values
 on conflict (user_id, week_id) do update set arrows = excluded.arrows;
 
 -- ===========================================================================
--- 2. Rivals, so the league table is a table
+-- 2. Rivals
 -- ===========================================================================
 --
--- OPTIONAL, and the only part of this file that invents accounts. A leaderboard
--- with one row cannot show promotion and demotion zones, which are the point of
--- the screen — `zoneFor` needs a populated week to mean anything.
+-- This section used to insert 24 invented accounts into `auth.users`
+-- (`rival1@arrowpath.invalid` …) with scores tuned so promotion and demotion
+-- both had occupants. It is gone: fake leaderboard users are exactly what must
+-- not ship, and a development database full of people who do not exist is how
+-- those people end up in a production screenshot.
 --
--- These are rows in `auth.users` with an empty password and a `.invalid` domain,
--- so nobody can sign in as them and no mail can reach them. They exist to be
--- *read* by the leaderboard query. Skip this section on any project that is not
--- a development one; section 4 removes them.
---
--- Inserting here fires `handle_new_user`, so each rival gets its `profiles` row
--- automatically — the same path a real signup takes.
-
-insert into auth.users (
-  instance_id, id, aud, role, email,
-  encrypted_password, email_confirmed_at, created_at, updated_at,
-  raw_app_meta_data, raw_user_meta_data, is_sso_user, is_anonymous
-)
-select
-  '00000000-0000-0000-0000-000000000000',
-  ('00000000-0000-4000-8000-' || lpad(g.n::text, 12, '0'))::uuid,
-  'authenticated', 'authenticated',
-  'rival' || g.n || '@arrowpath.invalid',
-  '', now(), now() - ((60 - g.n) || ' days')::interval, now(),
-  '{"provider":"seed","providers":["seed"]}'::jsonb,
-  jsonb_build_object('full_name', (array[
-    'Ada','Bo','Cass','Dev','Eli','Fen','Gio','Hana','Ines','Jun',
-    'Kai','Lux','Mira','Nils','Oona','Pax','Quin','Rhea','Soren','Tova',
-    'Uma','Vero','Wren','Zia'
-  ])[g.n]),
-  false, false
-from generate_series(1, 24) as g(n)
-on conflict (id) do nothing;
-
--- Scores spread across the ladder, so promotion (top 10) and demotion (bottom 5)
--- both have occupants and the real account lands mid-table where the zone
--- boundaries are actually visible.
-insert into public.league_scores (user_id, week_id, arrows, updated_at)
-select
-  ('00000000-0000-4000-8000-' || lpad(g.n::text, 12, '0'))::uuid,
-  '2026-W34',
-  9600 - (g.n * 371) - ((g.n * 53) % 97),
-  now()
-from generate_series(1, 24) as g(n)
-on conflict (user_id, week_id) do update set arrows = excluded.arrows;
-
--- Prior weeks for the rivals too, so week-over-week movement is visible.
-insert into public.league_scores (user_id, week_id, arrows, updated_at)
-select
-  ('00000000-0000-4000-8000-' || lpad(g.n::text, 12, '0'))::uuid,
-  w.week_id,
-  greatest(0, 9600 - (g.n * 371) - w.drop),
-  now()
-from generate_series(1, 24) as g(n)
-cross join (values ('2026-W33', 900), ('2026-W32', 1700)) as w(week_id, drop)
-on conflict (user_id, week_id) do nothing;
+-- The consequence is honest and accepted — a single-player league shows the
+-- Leagues screen's empty state rather than a populated table. `zoneFor` still
+-- works; it simply has nothing to draw a zone around until real players compete.
+-- Section 1 still seeds whoever has actually signed in, and it invents nothing.
 
 -- ===========================================================================
 -- 3. What landed
@@ -145,17 +104,16 @@ union all select 'level_records',     count(*) from public.level_records
 union all select 'challenge_records', count(*) from public.challenge_records
 union all select 'league_scores',     count(*) from public.league_scores;
 
--- ===========================================================================
+-- ---------------------------------------------------------------------------
 -- 4. Teardown
--- ===========================================================================
+-- ---------------------------------------------------------------------------
 --
--- Uncomment to undo. The rivals cascade: deleting from `auth.users` takes their
--- profiles and scores with them through `on delete cascade`, which is why every
--- table declares it.
+-- Uncomment to undo. Everything above references `auth.users`, so these three
+-- statements clear the seeded rows for real accounts; deleting from `auth.users`
+-- would cascade to their profiles and scores, which is why every table declares
+-- `on delete cascade`.
 --
--- delete from auth.users where email like '%@arrowpath.invalid';
---
--- To clear the seeded rows for real accounts as well:
+-- There are no invented accounts left to delete.
 --
 -- delete from public.level_records;
 -- delete from public.challenge_records;

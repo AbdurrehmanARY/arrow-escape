@@ -321,13 +321,30 @@ export function recordLevelCompleteAndCheckInterstitial(): Promise<boolean> {
   return showInterstitial();
 }
 
+/**
+ * Ad lifecycle chatter, kept out of release logs.
+ *
+ * These four lines are for a developer watching a device on USB: which unit id
+ * was requested, and when the interstitial closed. In a player's logcat they are
+ * noise with the ad unit id in them, which is the sort of detail nobody needs to
+ * publish. `__DEV__` is the switch, so a release build drops them entirely while
+ * a development build keeps them.
+ *
+ * The four `console.warn`s below are deliberately *not* behind this. They fire
+ * only when something has already failed — an ad that would not create, show or
+ * load — and silencing those would mean release crashes arrive with no trace.
+ */
+function debug(...args: unknown[]): void {
+  // eslint-disable-next-line no-console
+  if (__DEV__) console.log(...args);
+}
+
 /** Show an interstitial ad with safe fallbacks. */
 export function showInterstitial(): Promise<boolean> {
   const module = loadSdk();
   if (!module) {
     // Expo Go simulated mode
-    // eslint-disable-next-line no-console
-    console.log('[AdMob] Interstitial in Expo Go simulated mode.');
+    debug('[AdMob] Interstitial in Expo Go simulated mode.');
     return new Promise((resolve) => setTimeout(() => resolve(true), 800));
   }
 
@@ -335,8 +352,7 @@ export function showInterstitial(): Promise<boolean> {
     try {
       // In native production, fetch and display InterstitialAd unit
       const unit = USE_TEST_ADS ? module.TestIds.INTERSTITIAL : AD_UNIT_IDS.interstitial;
-      // eslint-disable-next-line no-console
-      console.log(`[AdMob] Requesting InterstitialAd with unitId: ${unit}`);
+      debug(`[AdMob] Requesting InterstitialAd with unitId: ${unit}`);
       const interstitial = (module as any).InterstitialAd?.createForAdRequest?.(unit, {
         requestNonPersonalizedAdsOnly: true,
       });
@@ -365,8 +381,7 @@ export function showInterstitial(): Promise<boolean> {
       };
 
       unsubClosed = interstitial.addAdEventListener(module.AdEventType.CLOSED, () => {
-        // eslint-disable-next-line no-console
-        console.log('[AdMob] Interstitial CLOSED.');
+        debug('[AdMob] Interstitial CLOSED.');
         finish(true);
       });
 
@@ -376,8 +391,7 @@ export function showInterstitial(): Promise<boolean> {
       });
 
       unsubLoaded = interstitial.addAdEventListener(module.AdEventType.LOADED, () => {
-        // eslint-disable-next-line no-console
-        console.log('[AdMob] Interstitial LOADED, showing now...');
+        debug('[AdMob] Interstitial LOADED, showing now...');
         try {
           interstitial.show();
         } catch (e) {

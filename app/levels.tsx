@@ -22,32 +22,24 @@ import { useRouter } from 'expo-router';
 import {
   ChapterGrid,
   ChapterList,
-  JumpToLevel,
   Screen,
   ScreenHeader,
   useTheme,
 } from '@components';
 import { LEVEL_COUNT } from '@data';
 import type { Chapter } from '@data';
-import {
-  clearedCount,
-  highestUnlocked,
-  isCleared,
-  playableUpTo,
-  useProgressStore,
-} from '@state';
-import { UNLOCK_ALL_LEVELS } from '@config';
+import { clearedCount, highestUnlocked, isCleared, useProgressStore } from '@state';
 
 export default function LevelSelectScreen() {
   const router = useRouter();
   const { palette } = useTheme();
   const records = useProgressStore((state) => state.records);
 
-  // Two different questions, and conflating them is how the testing flag would
-  // start lying: `unlocked` is what the UI will let you open, `reached` is where
-  // you genuinely are. With every level open the first is always `LEVEL_COUNT`.
-  const unlocked = useMemo(() => playableUpTo(records, LEVEL_COUNT), [records]);
-  const reached = useMemo(() => highestUnlocked(records, LEVEL_COUNT), [records]);
+  // What the UI will let you open, and where the player genuinely is. These were
+  // two different numbers while `UNLOCK_ALL_LEVELS` existed — the flag opened
+  // everything without claiming the player had reached it. The flag is gone for
+  // production, so there is one question and one memo: sequential progress.
+  const unlocked = useMemo(() => highestUnlocked(records, LEVEL_COUNT), [records]);
   const clearedTotal = useMemo(() => clearedCount(records), [records]);
   const cleared = useCallback((id: number) => isCleared(records, id), [records]);
 
@@ -64,24 +56,20 @@ export default function LevelSelectScreen() {
         onBack={() => (openChapter ? setOpenChapter(null) : router.back())}
       />
 
-      {UNLOCK_ALL_LEVELS ? (
-        <JumpToLevel palette={palette} onJump={(id) => router.push(`/play/${id}`)} />
-      ) : null}
-
       {openChapter ? (
         <ChapterGrid
           palette={palette}
           chapter={openChapter}
           records={records}
           unlocked={unlocked}
-          current={reached}
+          current={unlocked}
           onOpenLevel={(id) => router.push(`/play/${id}`)}
         />
       ) : (
         <ChapterList
           palette={palette}
           unlocked={unlocked}
-          current={reached}
+          current={unlocked}
           isLevelCleared={cleared}
           onOpen={setOpenChapter}
         />
