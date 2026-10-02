@@ -134,7 +134,7 @@ function isEngineFacade(file: string): boolean {
 /** Aliases that name a layer. Anything else beginning with `@` is a package. */
 const LAYER_ALIASES = new Set([
   'game', 'render', 'components', 'theme', 'state', 'services', 'config',
-  'data', 'challenge', 'league', 'brand', 'shared', 'infrastructure', 'features',
+  'data', 'challenge', 'league', 'shared', 'infrastructure', 'features',
 ]);
 
 /** The layer an import specifier points at, or null if it is not a layer edge. */
@@ -165,7 +165,7 @@ function targetLayer(from: string, spec: string): string | null {
 
 /** ARCHITECTURE.md §3. Layers a given layer may never import. */
 const FORBIDDEN: Record<string, string[]> = {
-  game: ['react', 'react-native', 'expo', 'state', 'services', 'components', 'hooks', 'theme', 'tools', 'app', 'render', 'config', 'data', 'challenge', 'league', 'brand'],
+  game: ['react', 'react-native', 'expo', 'state', 'services', 'components', 'hooks', 'theme', 'tools', 'app', 'render', 'config', 'data', 'challenge', 'league', 'shared', 'infrastructure', 'features'],
   render: ['state', 'services', 'components', 'app', 'hooks'],
   components: ['app', 'tools', 'render'],
   hooks: ['app', 'components'],

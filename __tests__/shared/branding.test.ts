@@ -22,7 +22,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PNG } from 'pngjs';
 
-import { APP_NAME, BRAND, brandMark, brandWordmark, isDarkColor } from '../../src/brand';
+import { APP_NAME, BRAND, brandMark, brandWordmark, isDarkColor } from '../../src/shared/branding';
 import { getThemeAssets } from '../../src/theme/themeAssets';
 import { THEMES } from '../../src/theme/themes';
 

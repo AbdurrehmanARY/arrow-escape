@@ -35,10 +35,13 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join, sep } from 'node:path';
 
 const CHECKER = join(process.cwd(), 'tools', 'check-architecture.ts');
+
+/** The `src/` roots introduced by the feature-based migration (ARCHITECTURE.md §10). */
+const NEW_LAYER_ROOTS = ['src/features', 'src/shared', 'src/infrastructure'] as const;
 
 /**
  * How to invoke the checker in a child process.
@@ -115,6 +118,31 @@ function pruneEmptyDirs(from: string): void {
       return;
     }
   }
+}
+
+/**
+ * A sorted listing of everything under the three new layer roots.
+ *
+ * Purpose: The residue check compares this before and after seeding. Comparing
+ *          *contents* rather than mere existence is what lets the roots hold real
+ *          files: `src/shared/branding/index.ts` is expected to be there and to
+ *          still be exactly that afterwards, while a stray
+ *          `src/features/gameplay/` is not.
+ * Notes:    `readdirSync(..., { recursive: true })` yields both files and
+ *          directories, and directories are deliberately kept — an orphaned *empty*
+ *          `src/features/gameplay/` is exactly the residue that would corrupt every
+ *          later assertion in this file, so listing files alone would miss it.
+ */
+function newLayerRoots(): string[] {
+  const found: string[] = [];
+  for (const root of NEW_LAYER_ROOTS) {
+    const full = join(process.cwd(), root);
+    if (!existsSync(full)) continue;
+    for (const entry of readdirSync(full, { recursive: true })) {
+      found.push(`${root}/${String(entry).split(sep).join('/')}`);
+    }
+  }
+  return found.sort();
 }
 
 /**
@@ -237,6 +265,14 @@ describe('architecture boundaries', () => {
 });
 
 describe('feature-based layers', () => {
+  // Captured before the first seeded case runs, and compared by the last one. Jest
+  // runs a file's `it` blocks in declaration order, so this lands after the clean
+  // tree has been asserted and before anything has been planted.
+  let TREE_BEFORE_SEEDS: readonly string[] = [];
+  beforeAll(() => {
+    TREE_BEFORE_SEEDS = newLayerRoots();
+  });
+
   it('fails when one feature imports another', () => {
     withSeededFile(
       'src/features/gameplay/components/__seed.ts',
@@ -420,14 +456,19 @@ describe('feature-based layers', () => {
     );
   });
 
-  it('leaves no feature directories behind after every seeded case', () => {
+  it('leaves the repository exactly as it found it', () => {
     // `src/features/**` is a layer, so an orphaned empty `src/features/gameplay/`
     // left behind by an earlier run would silently change what every later
     // assertion in this file means — and a green suite would then depend on
     // whether it happened to run first.
-    for (const dir of ['src/features', 'src/shared', 'src/infrastructure']) {
-      expect(existsSync(join(process.cwd(), dir))).toBe(false);
-    }
+    //
+    // This was originally written as "none of these three directories exist",
+    // which was true only while they were empty scaffolding. `src/shared/` now
+    // holds real production code, so that phrasing had become a false statement
+    // about the project rather than a check on the test. The invariant actually
+    // worth protecting is that *seeding* leaves no residue, which stays true
+    // whether or not a root has real files in it.
+    expect(newLayerRoots()).toEqual(TREE_BEFORE_SEEDS);
   });
 });
 

@@ -33,8 +33,10 @@ Everything outside a layer imports that layer's public surface, never a file ins
 | `services/` | `@services` |
 | `challenge/` | `@challenge` |
 | `league/` | `@league` |
-| `brand/` | `@brand` |
 | `config/` | `@config` |
+
+`brand/` used to be a layer here with alias `@brand`. It is now `shared/branding/`,
+imported as `@shared/branding` — the first file to move under §10.
 
 A barrel is a promise: it says "these are the supported names." If a consumer needs
 something the barrel does not export, **add it to the barrel** — do not route around it.
@@ -71,9 +73,9 @@ be obeyed.
 | `hooks/` | `game/`, `state/`, `services/` | `app/`, `render/`, `components/` |
 | `state/` | `services/`, `game/`, `data/` | React components, `app/`, `render/` |
 | `services/` | platform / external APIs | `components/`, `state/`, `app/`, `render/`, `hooks/` |
-| `challenge/` | `game/`, `data/`, `state/`, `brand/` | `app/`, `components/`, `services/` |
-| `league/` | `game/`, `data/`, `state/`, `brand/` | `app/`, `components/`, `services/` |
-| `theme/` | `brand/` | `state/`, `services/`, `components/`, `game/` |
+| `challenge/` | `game/`, `data/`, `state/`, `shared/` | `app/`, `components/`, `services/` |
+| `league/` | `game/`, `data/`, `state/`, `shared/` | `app/`, `components/`, `services/` |
+| `theme/` | `shared/` | `state/`, `services/`, `components/`, `game/` |
 | `tools/` | `game/`, `data/` | `app/`, `components/`, `state/`, `services/` |
 | `app/` | everything below it | — (orchestration only; owns no domain logic) |
 
@@ -199,7 +201,7 @@ not examining.
 
 | layer | may import | must NOT import |
 |---|---|---|
-| `features/<name>/` | `shared/`, `infrastructure/`, and the pinned layers (`game/`, `render/`, `theme/`, `data/`, `components/`, `state/`, `config/`, `brand/`) | **any other `features/<name>/`**, `app/`, `tools/` |
+| `features/<name>/` | `shared/`, `infrastructure/`, and the pinned layers (`game/`, `render/`, `theme/`, `data/`, `components/`, `state/`, `config/`) | **any other `features/<name>/`**, `app/`, `tools/` |
 | `shared/` | `features/*` no — downward only: `@theme`, `@game`, and its own sub-roots | `features/*`, `app/`, `infrastructure/`, `tools/`, `state/` |
 | `infrastructure/` | `shared/`, platform APIs | `features/*`, `app/`, `tools/`, `components/`, `state/`, `render/`, `hooks/` |
 
@@ -252,9 +254,14 @@ to the same layer on both sides, so §2 never applies to it.
 
 ### 10.5 What is pinned
 
-`game/`, `data/`, `render/`, `theme/`, `config/`, `brand/`, root `app/`, root
+`game/`, `data/`, `render/`, `theme/`, `config/`, root `app/`, root
 `assets/`, `tools/` and `__tests__/` are **not** moving. `game/` and `render/` are
 pinned by the guarantees above; `app/` and `assets/` are pinned by Expo Router and
 Metro (`main: "expo-router/entry"`, and `app.json` plus 34 static `require()` paths
 in `audioAssets.ts`); `tools/` is pinned because `levels:validate` runs inside
 `npm run verify`. Full reasoning in FEATURE_MIGRATION.md §6.
+
+`brand/` is the exception that proves the list: it was a layer, it is now
+`shared/branding/`. It was also the only layer in the repository with **no**
+platform dependency beyond a React Native type, which is what makes it the one
+file that could move before anything else exists to move to.

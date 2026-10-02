@@ -11,7 +11,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { MonthlyTrophyBadge, Screen, Springy, useTheme, withClick } from '@components';
-import { APP_NAME, brandWordmark, isDarkColor } from '@brand';
+import { APP_NAME, brandWordmark, isDarkColor } from '@shared/branding';
 import { playMusic } from '@services/audio';
 import { challengeId, daysInMonth, today } from '@challenge';
 import { LEVEL_COUNT, tierOf } from '@data';

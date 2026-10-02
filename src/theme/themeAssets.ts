@@ -14,7 +14,7 @@
  */
 
 import type { ImageSourcePropType } from 'react-native';
-import { brandMark, isDarkColor } from '../brand';
+import { brandMark, isDarkColor } from '@shared/branding';
 import { themeById } from './themes';
 
 export interface ThemeVisualAssets {

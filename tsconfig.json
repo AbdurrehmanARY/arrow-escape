@@ -73,9 +73,6 @@
       "@config": [
         "./src/config/index.ts"
       ],
-      "@brand": [
-        "./src/brand/index.ts"
-      ],
       "@shared/*": [
         "./src/shared/*"
       ],

@@ -31,7 +31,6 @@ module.exports = {
     '^@services/(.*)$': '<rootDir>/src/services/$1',
     '^@config$': '<rootDir>/src/config',
     '^@config/(.*)$': '<rootDir>/src/config/$1',
-    '^@brand$': '<rootDir>/src/brand',
     '^@data$': '<rootDir>/src/data',
     '^@data/(.*)$': '<rootDir>/src/data/$1',
     // The feature-based migration. `@features/gameplay/...` resolves the feature
