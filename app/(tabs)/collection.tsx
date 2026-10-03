@@ -318,7 +318,13 @@ function AwardTile({
 
   return (
     <Pressable style={styles.tileWrap} onPress={withClick(onPress)}>
-      <View style={[styles.tileCard, { backgroundColor: 'white' }]}>
+      {/* Transparent, like `Tile` and `TrophyTile` above. This one tile was the only
+          card in the grid painted an opaque `'white'`, which read as correct against
+          the light Paper theme and as a hole cut in the screen on the other five —
+          the award art is alpha-cut 3D imagery, so there is nothing for a white
+          plate behind it to reveal. `AwardInfoLayout` already draws the same artwork
+          on transparent for the same reason. */}
+      <View style={[styles.tileCard, { backgroundColor: 'transparent' }]}>
         <Image
           source={image}
           style={[styles.tileImage, state === 'locked' && { opacity: 0.75 }]}

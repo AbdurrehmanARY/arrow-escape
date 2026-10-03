@@ -13,7 +13,7 @@ import { LeagueIntro, Screen, Springy, useTheme, withClick } from '@components';
 import { playMusic } from '@services/audio';
 import { syncProfile } from '@services/sync';
 import { useAuthStore } from '@state';
-import { fonts, radius, spacing, typography, type Palette } from '@theme';
+import { fonts, radius, spacing, typography, withAlpha, type Palette } from '@theme';
 
 import { NEUTRAL_AVATAR, useLeagueBoard } from '../../src/hooks/useLeagueBoard';
 import { useThemeAssets } from '@features/settings';
@@ -112,17 +112,17 @@ export default function LeaguesScreen() {
             <View key={row.id}>
               {row.rank === 11 ? (
                 <View style={styles.zoneDivider}>
-                  <View style={[styles.zoneLine, { backgroundColor: '#10B981' }]} />
-                  <Text style={[styles.zoneLabel, { color: '#10B981' }]}>PROMOTION ZONE (TOP 10)</Text>
-                  <View style={[styles.zoneLine, { backgroundColor: '#10B981' }]} />
+                  <View style={[styles.zoneLine, { backgroundColor: palette.success }]} />
+                  <Text style={[styles.zoneLabel, { color: palette.success }]}>PROMOTION ZONE (TOP 10)</Text>
+                  <View style={[styles.zoneLine, { backgroundColor: palette.success }]} />
                 </View>
               ) : null}
 
               {row.rank === 46 ? (
                 <View style={styles.zoneDivider}>
-                  <View style={[styles.zoneLine, { backgroundColor: '#EF4444' }]} />
-                  <Text style={[styles.zoneLabel, { color: '#EF4444' }]}>DEMOTION ZONE (BOTTOM 5)</Text>
-                  <View style={[styles.zoneLine, { backgroundColor: '#EF4444' }]} />
+                  <View style={[styles.zoneLine, { backgroundColor: palette.danger }]} />
+                  <Text style={[styles.zoneLabel, { color: palette.danger }]}>DEMOTION ZONE (BOTTOM 5)</Text>
+                  <View style={[styles.zoneLine, { backgroundColor: palette.danger }]} />
                 </View>
               ) : null}
 
@@ -131,7 +131,7 @@ export default function LeaguesScreen() {
                   styles.row,
                   { backgroundColor: palette.surface, borderColor: palette.border },
                   row.isUser && [styles.userRow, { backgroundColor: palette.accentMuted, borderColor: palette.accent }],
-                  row.rank <= 10 && !row.isUser && { borderColor: 'rgba(16, 185, 129, 0.3)' },
+                  row.rank <= 10 && !row.isUser && { borderColor: withAlpha(palette.success, 0.3) },
                 ]}
               >
                 {/* Rank (Podium Medal for 1, 2, 3) */}

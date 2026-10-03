@@ -176,6 +176,14 @@ export default function RootLayout() {
   );
 }
 
+// The error screen is the one place in the app that does NOT read the palette, and
+// the literals below are deliberate rather than an oversight left in an audit sweep.
+//
+// It renders when the provider tree above it has failed — a theme lookup that threw,
+// a store that would not hydrate — so `useTheme()` is not merely unnecessary here,
+// it is the most likely thing to be the thing that is broken. Hardcoding gives the
+// boundary one guarantee that nothing can take away: it always draws, legibly, in
+// every theme, including a theme that has no `background` to give.
 const styles = StyleSheet.create({
   errorRoot: { flex: 1, backgroundColor: '#11141b' },
   errorBody: { padding: 24, paddingTop: 72, gap: 12 },

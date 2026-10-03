@@ -10,6 +10,9 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { getMonthlyTrophyAsset } from '@challenge';
 
+import { useTheme } from './Screen';
+import { withAlpha } from '@theme';
+
 export interface MonthlyTrophyBadgeProps {
   readonly month: number;
   readonly earned: boolean;
@@ -24,6 +27,9 @@ export function MonthlyTrophyBadge({
   showBadge = false,
 }: MonthlyTrophyBadgeProps) {
   const asset = getMonthlyTrophyAsset(month, earned);
+  // Only for the badge below. The cup itself is baked art in a fixed colour, so it
+  // takes the palette like everything else rather than being re-tinted per theme.
+  const { palette } = useTheme();
 
   return (
     <View
@@ -35,12 +41,17 @@ export function MonthlyTrophyBadge({
       <Image source={asset} style={styles.image} resizeMode="contain" />
       {showBadge ? (
         earned ? (
-          <View style={[styles.starBadge, { backgroundColor: '#10B981' }]}>
-            <Text style={styles.starText}>✓</Text>
+          <View style={[styles.starBadge, { backgroundColor: palette.success }]}>
+            {/* `palette.background`, not white: `success` runs from `#0B6E4F` (Paper,
+                near-black green) to `#6BFFB0` (a near-neon mint), so a fixed white
+                tick is legible on the dark end and all but invisible on the light
+                end. The background token is the one colour guaranteed to contrast
+                with the theme's own fills, and it is what the lock glyph below uses. */}
+            <Text style={[styles.starText, { color: palette.background }]}>✓</Text>
           </View>
         ) : (
-          <View style={[styles.starBadge, { backgroundColor: 'rgba(100, 116, 139, 0.75)' }]}>
-            <FontAwesome name="lock" size={10} color="#FFFFFF" />
+          <View style={[styles.starBadge, { backgroundColor: withAlpha(palette.textFaint, 0.9) }]}>
+            <FontAwesome name="lock" size={10} color={palette.background} />
           </View>
         )
       ) : null}
@@ -72,7 +83,6 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   starText: {
-    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '900',
   },

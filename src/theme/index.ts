@@ -142,3 +142,36 @@ export const PRESS_SCALE = 0.96;
 
 /** Minimum touch target, in dp. Below this, taps start getting missed. */
 export const MIN_TOUCH_TARGET = 44;
+
+/**
+ * The same colour at a different opacity.
+ *
+ * Exists because "a tint of the accent" is a real and frequent need — a promotion
+ * border, a hover wash, a progress track — and the only way to ask for it before
+ * this helper was to write the theme's hex out by hand at some alpha. That is how
+ * `rgba(16, 185, 129, 0.3)` ended up on the Leagues promotion border: `#10B981` is
+ * Kinetic Neon's `success`, so the border was correct on one theme out of six and
+ * silently ignored the other five. A literal cannot track a palette; this can.
+ *
+ * Accepts `#RGB` and `#RRGGBB`/`#RRGGBBAA`, the two forms the themes are written
+ * in, and passes anything else (an `rgba()` literal, a named colour) through
+ * untouched rather than guessing — a wrong tint is harder to notice than an
+ * unthemed one.
+ */
+export function withAlpha(color: string, alpha: number): string {
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(color);
+  if (!hex) return color;
+
+  const digits =
+    hex[1]!.length === 3
+      ? hex[1]!
+          .split('')
+          .map((d) => d + d)
+          .join('')
+      : hex[1]!;
+  const r = parseInt(digits.slice(0, 2), 16);
+  const g = parseInt(digits.slice(2, 4), 16);
+  const b = parseInt(digits.slice(4, 6), 16);
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
