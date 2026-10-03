@@ -359,6 +359,35 @@ describe('feature-based layers', () => {
     );
   });
 
+  it('allows the sanctioned feature -> feature edges', () => {
+    // `useThemeAssets` lives in `features/settings` and is read by Home and
+    // League, so those two edges are named in SANCTIONED_FEATURE_IMPORTS. This
+    // is the half of the rule that proves the allowlist is reachable at all —
+    // without it the exemption could silently stop matching and nobody would
+    // find out until the real screens stopped building.
+    withSeededFile(
+      'src/features/home/screens/__seed_ok.ts',
+      "import { useThemeAssets } from '@features/settings';\nexport const seed = useThemeAssets;\n",
+      (result) => {
+        expect(result.output).not.toContain('features do not depend on each other');
+      },
+    );
+  });
+
+  it('fails when an unsanctioned feature imports another feature', () => {
+    // The half that matters more. The allowlist names *sources*, not just the
+    // target, so `features/account` reaching for the same module is still a
+    // violation. If this ever passes, the allowlist has widened.
+    withSeededFile(
+      'src/features/account/__seed.ts',
+      "import { useThemeAssets } from '@features/settings';\nexport const seed = useThemeAssets;\n",
+      (result) => {
+        expect(result.status).toBe(1);
+        expect(result.output).toContain('features/account/ must not import features/settings/');
+      },
+    );
+  });
+
   it('fails when the engine facade imports React', () => {
     withSeededFile(
       'src/features/gameplay/engine/__seed.ts',

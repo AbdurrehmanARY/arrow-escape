@@ -1,5 +1,5 @@
 /**
- * hooks/useBoardViewport.ts — how much of the screen the board is allowed.
+ * features/gameplay/hooks/useBoardViewport.ts — how much of the screen the board is allowed.
  *
  * Purpose:      Turn the window, the safe-area insets and the fixed chrome into
  *               the viewport the board is fitted into, fit the board into it, and
@@ -14,7 +14,8 @@
  *               the player will blame themselves. Nothing here fetches, and no
  *               effect runs — it is arithmetic over values the caller already has,
  *               so moving it out of the screen cannot have changed when a board is
- *               laid out. Extracted verbatim from `app/play/[id].tsx`.
+ *               laid out. Extracted verbatim from what is now
+ *               `features/gameplay/screens/PlayScreen.tsx`.
  */
 
 import { useMemo } from 'react';

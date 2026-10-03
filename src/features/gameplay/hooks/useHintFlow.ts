@@ -1,5 +1,5 @@
 /**
- * hooks/useHintFlow.ts — the whole life of a hint.
+ * features/gameplay/hooks/useHintFlow.ts — the whole life of a hint.
  *
  * Purpose:      Own everything a hint is: spending one, earning one from a
  *               rewarded ad, pointing the camera at the answer, holding the
@@ -14,7 +14,8 @@
  * Notes:        `spendHint` is called, never read from render: the value captured
  *               at render would still be zero inside the closure that runs after an
  *               ad, and the store is the only thing that can answer truthfully.
- *               Extracted verbatim from `app/play/[id].tsx`; the timers, their
+ *               Extracted verbatim from what is now
+ *               `features/gameplay/screens/PlayScreen.tsx`; the timers, their
  *               durations and every dependency array are unchanged.
  */
 

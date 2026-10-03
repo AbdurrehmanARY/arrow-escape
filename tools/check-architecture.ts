@@ -134,7 +134,7 @@ function isEngineFacade(file: string): boolean {
 /** Aliases that name a layer. Anything else beginning with `@` is a package. */
 const LAYER_ALIASES = new Set([
   'game', 'render', 'components', 'theme', 'state', 'services', 'config',
-  'data', 'challenge', 'league', 'shared', 'infrastructure', 'features',
+  'data', 'challenge', 'league', 'shared', 'infrastructure', 'features', 'hooks',
 ]);
 
 /** The layer an import specifier points at, or null if it is not a layer edge. */
@@ -287,6 +287,61 @@ const SANCTIONED_DEEP_IMPORTS = new Set([
 ]);
 
 /**
+ * Feature -> feature edges that are allowed anyway, keyed by specifier.
+ *
+ * ARCHITECTURE.md §10. The sibling-feature ban exists so that two features cannot
+ * quietly grow a dependency on each other, and the allowlist is deliberately kept
+ * to a single entry per (source, target) pair so that the ban still does its job:
+ * a *new* edge is red, and the cost of deleting one of these is one line here.
+ *
+ * `@features/settings` is reachable from Home and League because both read the
+ * player's theme assets through `useThemeAssets`, which lives in
+ * `features/settings/hooks/`. That hook cannot move anywhere else today:
+ *
+ *   - `shared/` is where a cross-feature hook belongs, but `shared` bans `state`
+ *     and the hook subscribes to the settings store's `themeId`.
+ *   - `src/theme/` is pinned and reachable, but `theme` bans `state` too, for the
+ *     same reason.
+ *   - Home and League are where it would otherwise belong, and putting it in
+ *     either one just moves the sibling edge onto the other.
+ *   - `infrastructure/` bans `state` as well.
+ *
+ * Prop-injecting the assets down from `app/` was the remaining option and was
+ * rejected: it would thread a theme payload through every route wrapper to reach
+ * code that already resolves its own theme, which is a much larger behavioural
+ * risk than the edge it avoids. This entry is the cheap, reversible half of that
+ * trade, and it disappears when the settings store moves out of
+ * `features/settings` in the state-migration phase.
+ */
+const SANCTIONED_FEATURE_IMPORTS = new Map<string, Set<string>>([
+  [
+    '@features/settings',
+    new Set([
+      'features/home',
+      'features/league',
+    ]),
+  ],
+]);
+
+/**
+ * Whether a feature -> feature edge has been sanctioned by name.
+ *
+ * Purpose: `SANCTIONED_DEEP_IMPORTS` keys on the specifier alone, which is
+ * sound there because those two edges have exactly one legitimate importer. A
+ * feature edge needs the *source* named too — otherwise allowlisting
+ * `@features/settings` for Home would silently license League, and any feature
+ * added later, to reach into it as well. Keying on both sides keeps every
+ * exception as narrow as the problem that created it.
+ *
+ * Returns: True when `spec` is sanctioned for `from`; false when it is not, or
+ *          when it is sanctioned only for a different source feature.
+ */
+function isSanctionedFeatureImport(from: string, target: string, spec: string): boolean {
+  const allowed = SANCTIONED_FEATURE_IMPORTS.get(spec);
+  return allowed !== undefined && allowed.has(from);
+}
+
+/**
  * The platform packages `game/` must never touch.
  *
  * Purpose:      These are not layers, so `targetLayer` returns null for them and the
@@ -379,7 +434,8 @@ for (const dir of SCAN) {
       if (
         from.startsWith('features/') &&
         target.startsWith('features/') &&
-        target !== from
+        target !== from &&
+        !isSanctionedFeatureImport(from, target, spec)
       ) {
         violations.push(
           `${rel}: ${from}/ must not import ${target}/ ("${spec}") — features do not depend on each other (ARCHITECTURE.md §10)`,

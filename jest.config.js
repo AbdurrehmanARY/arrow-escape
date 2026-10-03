@@ -37,6 +37,11 @@ module.exports = {
     // itself; these mirror tsconfig.json exactly, because a mapping that exists in
     // one and not the other is a test that passes for the wrong reason.
     '^@shared/(.*)$': '<rootDir>/src/shared/$1',
+    // `@hooks` has no `@hooks/*` twin on purpose. The barrel is the only legal way
+    // in: a deep `@hooks/useCurrentShield` would be the second path to a layer that
+    // the barrel rule exists to collapse, and features must not reach into
+    // `src/hooks/` file by file — `src/hooks/` is not one of their sub-folders.
+    '^@hooks$': '<rootDir>/src/hooks',
     '^@infrastructure/(.*)$': '<rootDir>/src/infrastructure/$1',
     '^@features/(.*)$': '<rootDir>/src/features/$1',
   },

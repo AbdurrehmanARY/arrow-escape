@@ -76,6 +76,9 @@
       "@shared/*": [
         "./src/shared/*"
       ],
+      "@hooks": [
+        "./src/hooks/index.ts"
+      ],
       "@infrastructure/*": [
         "./src/infrastructure/*"
       ],

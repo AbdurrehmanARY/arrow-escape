@@ -1,7 +1,37 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** Feature-based migration **Phase 2c-2 complete** (`Screen` frame → `shared/components/`, `palette`-as-prop, 16 sites); phase 3 (`app/` audit) next — see [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
+> **Last updated:** Settings & navigation cleanup **complete** — Levels browser removed, legal pages published, dead rows deleted, `RECORD_AUDIO` dropped.
+> **`app/levels.tsx` is gone and nothing links to it.** The level *browser* was a
+> second way into a level that duplicated what Home, Challenge and the Play screen's
+> own "Next" already do — and the reference design had no such screen. What was
+> deleted is the browser only: `src/data/levels/` (20 packs, 1000 levels), `LEVEL_COUNT`,
+> `levelById`, and `/play/[id]` are untouched, so progression and deep links are
+> unchanged. `HomeScreen`'s `clearedCount`/`secondary` styles went with it; the
+> progress count now lives only where it is earned.
+> **Legal pages are real and reachable.** `app/legal/{privacy,terms}.tsx` are thin
+> routes over `src/features/settings/screens/`, re-exported by the existing
+> `@features/settings` barrel. The text lives in **data**, not JSX, so a wording change
+> is a data edit and cannot introduce layout the styles were not written for.
+> `LegalDocumentScreen` is the one frame both draw in — two hand-rolled legal screens
+> is how they drift apart visually. **Every claim in them was read out of the code:**
+> no analytics SDK, no crash reporter, AdMob yes, Supabase sync yes. There is
+> deliberately no purchases clause, because there is no purchase.
+> **`RECORD_AUDIO` removed from `app.json`.** `src/services/audio/` only ever calls
+> `createAudioPlayer` and `setAudioModeAsync({playsInSilentMode})` — it plays, it
+> never records, and nothing in the repo requests microphone access. The permission
+> was both a Play Store unused-sensitive-permission flag and a direct contradiction
+> of the privacy policy now published in-app. A parent reading a mic permission on a
+> puzzle game is right to be suspicious; it should not be there to explain.
+> **The two dead Settings rows are gone: Rate us, Write us.** They called
+> `playSfx('buttonClick')` and nothing else. A row that accepts a tap and does nothing
+> teaches a player that the whole screen is decorative. Language, Remove Ads and
+> Restore purchases went the same way for the same reason, one step further: Remove Ads
+> was a `useState(false)` switch that changed no ad behaviour, i.e. a switch that lies.
+> **Purchase is now one honest row** reading "Not available", built like the Account
+> screen's not-configured state. `src/services/ads.ts` is untouched — rewarded hints
+> and interstitials are real and still work; only the fake switch went.
+> Gate: tsc/lint/**432 tests**/levels:validate/arch — all green after every change above.
 > **Production cleanup Phase E complete (current commit) — hardcoded colours.**
 > `#10B981` and `#EF4444` had been written by hand on the Leagues promotion/demotion
 > zone rules; those are Kinetic Neon's `success`/`danger`, so the zones were correct

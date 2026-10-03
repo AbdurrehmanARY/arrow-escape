@@ -1,5 +1,5 @@
 /**
- * hooks/useLeagueBoard.ts — the weekly table the leagues screen draws.
+ * features/league/hooks/useLeagueBoard.ts — the weekly table the leagues screen draws.
  *
  * Purpose:      Work out which league the player is in this week, how long is
  *               left, and where they sit among *real* opponents.
@@ -53,7 +53,7 @@ import { today } from '@challenge';
 import { formatRemaining, msRemaining, weekOf, LEAGUES } from '@league';
 import { leaderboard, type LeaderboardRow } from '@services/sync';
 import { statsOf, useAuthStore, useChallengeStore } from '@state';
-import { useCurrentShield } from './useCurrentShield';
+import { useCurrentShield } from '@hooks';
 
 /** One row of the weekly table, once it has been scored and ranked. */
 export interface LeaderboardEntry {

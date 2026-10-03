@@ -46,7 +46,7 @@ follows are in **[docs/MECHANIC_ANALYSIS.md](docs/MECHANIC_ANALYSIS.md)**.
 ## Layout
 
 ```
-app/             expo-router routes: menu, levels, play/[id], stats, settings
+app/             expo-router routes: menu, play/[id], account, challenge, legal
 src/game/        pure TypeScript rules engine — no React, no I/O
 src/components/  SVG renderer + pure drawing geometry + overlays
 src/state/       game reducer + persisted Zustand stores

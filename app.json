@@ -21,14 +21,13 @@
       "package": "com.abdurrehmanary.arrowpath",
       "versionCode": 23,
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "react-native-google-mobile-ads": {
-      "android_app_id": "ca-app-pub-1159231009656865~8175461307",
+      "android_app_id": "ca-app-pub-1159231009656865~7919651294",
       "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
     },
     "plugins": [
@@ -37,7 +36,7 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-1159231009656865~8175461307",
+          "androidAppId": "ca-app-pub-1159231009656865~7919651294",
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
       ],

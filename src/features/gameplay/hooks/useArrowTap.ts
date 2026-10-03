@@ -1,5 +1,5 @@
 /**
- * hooks/useArrowTap.ts — what a finger does to the board.
+ * features/gameplay/hooks/useArrowTap.ts — what a finger does to the board.
  *
  * Purpose:      Own every callback the board's gestures call, and the feedback
  *               that follows the tap they resolved.
@@ -14,7 +14,7 @@
  *               mid-interaction, which is its own source of dropped touches — so
  *               everything returned here is wrapped in `useCallback` and depends
  *               on as little as it can. Extracted verbatim from
- *               `app/play/[id].tsx`; no logic changed when it moved.
+ *               `features/gameplay/screens/PlayScreen.tsx`; no logic changed when it moved.
  */
 
 import { useCallback, useEffect, useRef, type Dispatch } from 'react';
