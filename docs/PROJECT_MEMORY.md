@@ -2,7 +2,24 @@
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
 > **Last updated:** Feature-based migration **Phase 2c-2 complete** (`Screen` frame → `shared/components/`, `palette`-as-prop, 16 sites); phase 3 (`app/` audit) next — see [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
-> **Production cleanup Phase D complete (current commit) — the shield award.**
+> **Production cleanup Phase E complete (current commit) — hardcoded colours.**
+> `#10B981` and `#EF4444` had been written by hand on the Leagues promotion/demotion
+> zone rules; those are Kinetic Neon's `success`/`danger`, so the zones were correct
+> on one of six themes and ignored the player's skin on the other five. The
+> Collection award tile was the visible one — a single `backgroundColor: 'white'`
+> amid otherwise-transparent siblings, fine on Paper and a hole cut in the screen
+> everywhere else, over alpha-cut artwork that has no plate to reveal.
+> `MonthlyTrophyBadge`'s copy of the same green sat on a `showBadge` branch no caller
+> enables, so that fix is for the day it is switched on; its white `✓` was a real
+> contrast bug, since `success` spans `#0B6E4F` to `#6BFFB0`. **`withAlpha(color, alpha)`
+> added to `@theme`** because "a tint of a token" had no expression except hand-writing
+> `rgba(16, 185, 129, 0.3)`; it passes unparseable input through rather than guessing,
+> and one test walks every colour role of every theme so a new theme cannot fall
+> through. `app/_layout.tsx`'s error boundary keeps its literals **on purpose** — it
+> renders when the providers above it have failed, so `useTheme()` is the likeliest
+> thing to be broken; that is now documented at the call site so a sweep leaves it.
+> Gate: tsc/lint/**432 tests**/levels:validate/arch (651 imports, 0 violations).
+> **Production cleanup Phase D — the shield award.**
 > `src/hooks/useCurrentShield.ts` is the single owner of "which shield does this
 > player hold": `{ shield: League | undefined, score, weekId, hasShield }`, with
 > `hasShield === arrowsThisWeek(...) > 0` so **no shield is representable** rather
