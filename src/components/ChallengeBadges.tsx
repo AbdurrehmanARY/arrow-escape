@@ -1,9 +1,17 @@
 /**
  * ChallengeBadges.tsx — Badges section for Challenge and Record Awards.
  *
- * Displays all 8 Record Award types using the single source of truth hook.
+ * Displays all 9 Record Award types using the single source of truth hook.
+ *
+ * Notes:        **The shield tile resolves its tier through `useCurrentShield`,
+ *               not through the reward map alone.** The map knows *whether* a
+ *               shield is held; the hook knows *which* one. Passing only the map's
+ *               boolean would leave every shield tile drawing the bronze fallback
+ *               even for a Diamond player, which is the one thing a shield that
+ *               changes with your league must never do.
  */
 
+import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -11,12 +19,15 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useCalculatedRewards } from '@challenge';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
+import { useCurrentShield } from '../hooks/useCurrentShield';
+
 const BADGE_ORDER = [
   'level-legend',
   'perfect-play',
   'unstoppable',
   'league-climber',
   'league-fighter',
+  'shield',
   'longest-streak',
   'highest-win-streak',
   'most-wins',
@@ -24,7 +35,11 @@ const BADGE_ORDER = [
 
 export function ChallengeBadges({ palette }: { palette: Palette }) {
   const router = useRouter();
-  const rewardsMap = useCalculatedRewards();
+  // A mount-stable instant, not `Date.now()` inline: the clock belongs in state so
+  // a re-render cannot resolve a different week than the one already on screen.
+  const [nowMs] = useState(() => Date.now());
+  const { shield } = useCurrentShield(nowMs);
+  const rewardsMap = useCalculatedRewards({ shieldId: shield?.id, nowMs });
 
   const items = BADGE_ORDER.map((id) => rewardsMap[id]!).filter(Boolean);
 

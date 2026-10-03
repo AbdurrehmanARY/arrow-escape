@@ -14,6 +14,7 @@
  *               inactive, and locked states all show distinct artwork everywhere.
  */
 
+import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -22,11 +23,16 @@ import { Screen, ScreenHeader, useTheme, withClick } from '@components';
 import { useCalculatedRewards, type CalculatedRewardItem } from '@challenge';
 import { radius, spacing, typography, type Palette } from '@theme';
 
+import { useCurrentShield } from '../../../src/hooks/useCurrentShield';
+
 export default function ChallengeRewardsScreen() {
   const router = useRouter();
   const { palette } = useTheme();
+  // Mount-stable instant — see `ChallengeBadges` for why the clock lives in state.
+  const [nowMs] = useState(() => Date.now());
+  const { shield } = useCurrentShield(nowMs);
 
-  const rewards = useCalculatedRewards();
+  const rewards = useCalculatedRewards({ shieldId: shield?.id, nowMs });
   const list = Object.values(rewards);
 
   const earned = list.filter((r) => r.active);

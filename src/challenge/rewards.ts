@@ -2,15 +2,30 @@
  * rewards.ts — Single source of truth for Record Awards & Badges.
  *
  * Purpose:      Centralise calculation logic, thresholds, active/inactive images,
- *               progress metrics, and display strings for all 8 Record Awards so that
- *               the Challenge page and all Reward Info pages display identical,
- *               synchronized data derived deterministically from Zustand stores.
+ *               progress metrics, and display strings for the Record Awards and the
+ *               shield award, so that the Challenge, Collection and Reward Info
+ *               surfaces all display identical, synchronized data derived
+ *               deterministically from Zustand stores.
+ * Notes:        **The shield is the ninth item and the fifth award.** It is unlike
+ *               the other eight in that it is not a *counter*: a player either
+ *               holds a league shield this week or does not. `current` is therefore
+ *               0 or 1 against a requirement of 1, which is what makes the item
+ *               both "Unlocked" and "Locked" — and never "In progress" — without a
+ *               second kind of award state.
+ *
+ *               Its artwork cannot be baked here, because which shield it is
+ *               depends on the player's league, so the item carries the league id
+ *               in `shieldId` and resolves the bitmap through the shared image
+ *               registry (`SHIELD_IMAGES`). That registry is the same table
+ *               `useThemeAssets()` builds `shields` from, so the award is
+ *               theme-correct while `challenge/` still needs no edge into `state/`
+ *               (the theme's home) or `hooks/` (which would be a cycle).
  */
 
 import { useMemo } from 'react';
 import type { ImageSourcePropType } from 'react-native';
 
-import { AWARD_IMAGES, RECORD_IMAGES } from '@shared/assets/images';
+import { AWARD_IMAGES, RECORD_IMAGES, SHIELD_IMAGES, imageByKey } from '@shared/assets/images';
 
 import { today } from './schedule';
 import type { ChallengeStats } from './types';
@@ -56,6 +71,30 @@ const ARROW_ACTIVE: ImageSourcePropType = RECORD_IMAGES.mostWins.source;
 const ARROW_INACTIVE: ImageSourcePropType = RECORD_IMAGES.mostWinsInactive.source;
 const ARROW_LOCKED: ImageSourcePropType = RECORD_IMAGES.mostWinsLocked.source;
 
+/**
+ * The floor of the shield ladder.
+ *
+ * Six leagues ship one shield each, but only five are distinct bitmaps
+ * (`obsidian` and `diamond` share art) and there is no "not holding one" asset at
+ * all. Bronze is the honest stand-in for both: it is the lowest tier, so a player
+ * with no shield sees the bottom of the ladder rather than a broken image — the
+ * same fallback Home has always used for its league emblem.
+ */
+const SHIELD_FALLBACK: ImageSourcePropType = SHIELD_IMAGES.bronze.source;
+
+/**
+ * The shield bitmap for a league id, or `undefined` if the id is not a tier.
+ *
+ * `imageByKey` rather than `SHIELD_IMAGES[id]`, because the id arrives as a
+ * `string` from outside this layer and the registry's keys are narrow literals.
+ * Narrowing by lookup keeps the function total: an unknown id yields no picture
+ * rather than a type assertion that claims otherwise.
+ */
+function shieldArtFor(shieldId: string | undefined): ImageSourcePropType | undefined {
+  if (shieldId === undefined) return undefined;
+  return imageByKey(`shield.${shieldId}`)?.source;
+}
+
 export type AwardState = 'active' | 'inactive' | 'locked';
 
 export interface CalculatedRewardItem {
@@ -74,6 +113,15 @@ export interface CalculatedRewardItem {
   readonly displayValue: string;
   readonly statusText: string;
   readonly unit: string;
+  /**
+   * The league whose shield this award draws, when the award is the shield.
+   *
+   * Optional and absent on every other award: only the shield's artwork depends
+   * on *who the player is*, so only it needs to hand a surface something to
+   * resolve through `useThemeAssets()`. `image` is already the correct bitmap
+   * today; this is what lets a surface re-resolve it against the active theme.
+   */
+  readonly shieldId?: string | undefined;
 }
 
 export type RewardMetric = 'won' | 'streak' | 'perfect';
@@ -114,8 +162,21 @@ function resolveRewardItem(args: {
   lockedImage: ImageSourcePropType;
   route: string;
   unit: string;
+  shieldId?: string | undefined;
 }): CalculatedRewardItem {
-  const { id, title, description, current, requirement, activeImage, inactiveImage, lockedImage, route, unit } = args;
+  const {
+    id,
+    title,
+    description,
+    current,
+    requirement,
+    activeImage,
+    inactiveImage,
+    lockedImage,
+    route,
+    unit,
+    shieldId,
+  } = args;
   const active = current >= requirement;
   const state: AwardState = active ? 'active' : current > 0 ? 'inactive' : 'locked';
   const image = state === 'active' ? activeImage : state === 'inactive' ? inactiveImage : lockedImage;
@@ -138,6 +199,7 @@ function resolveRewardItem(args: {
     displayValue,
     statusText,
     unit,
+    shieldId,
   };
 }
 
@@ -147,13 +209,26 @@ export function calculateAllRewards(inputs: {
   leagueWeeks: Record<string, any>;
   leagueCounted: readonly number[];
   nowMs?: number;
+  /**
+   * The league whose shield the player holds, from `useCurrentShield`.
+   *
+   * Passed in rather than derived here, because deriving it needs
+   * `arrowsFor` + `leagueForArrows` from `@league` — a second copy of the very
+   * chain `useCurrentShield` exists to own, and the one §6 of the cleanup plan
+   * was written to delete. The *existence* test does not need it: `leagueWeeks`
+   * and `nowMs` are already here, so an empty `shieldId` still produces the
+   * locked award and the bronze fallback rather than a guess at a tier.
+   */
+  shieldId?: string;
 }): Record<string, CalculatedRewardItem> {
-  const { progressRecords, challengeRecords, leagueWeeks, leagueCounted, nowMs = Date.now() } = inputs;
+  const { progressRecords, challengeRecords, leagueWeeks, leagueCounted, nowMs = Date.now(), shieldId } = inputs;
   const day = today();
   const stats = statsOf({ records: challengeRecords }, day);
 
   const clearedLevels = Object.values(progressRecords).filter((r) => r.timesCleared > 0).length;
   const thisWeekArrows = arrowsThisWeek({ weeks: leagueWeeks }, nowMs);
+  const holdsShield = thisWeekArrows > 0;
+  const shieldArt = shieldArtFor(shieldId) ?? SHIELD_FALLBACK;
 
   const list: CalculatedRewardItem[] = [
     resolveRewardItem({
@@ -217,6 +292,19 @@ export function calculateAllRewards(inputs: {
       unit: 'Battles',
     }),
     resolveRewardItem({
+      id: 'shield',
+      title: 'League Shield',
+      description: 'Hold a league shield at the end of the week.',
+      current: holdsShield ? 1 : 0,
+      requirement: 1,
+      activeImage: shieldArt,
+      inactiveImage: shieldArt,
+      lockedImage: shieldArt,
+      route: '/challenge/info/shield',
+      unit: 'Shield',
+      shieldId,
+    }),
+    resolveRewardItem({
       id: 'longest-streak',
       title: 'Longest Streak',
       description: 'Maintain a 7-day challenge streak.',
@@ -261,11 +349,42 @@ export function calculateAllRewards(inputs: {
   return map;
 }
 
-export function useCalculatedRewards(): Record<string, CalculatedRewardItem> {
+/**
+ * The live reward map, for surfaces that draw more than one award.
+ *
+ * `shieldId` is optional because only the shield award's artwork depends on it,
+ * and the shield itself lives in `useCurrentShield` (a `hooks/` concern). A screen
+ * that already knows the player's league passes `shieldId` so the tile draws the
+ * right tier; a screen that does not still gets a correct bronze fallback.
+ *
+ * `nowMs` exists because `calculateAllRewards` resolves the *week* the shield is
+ * counted against, and letting it default to its own `Date.now()` would give a
+ * caller two different answers on the same screen: `useCurrentShield(nowMs)` at
+ * the mount instant, and this hook at whatever time the memo happened to run. A
+ * player who leaves Collection open across Monday rollover would see the shield
+ * award flip to Locked while the tile beside it still draws last week's tier.
+ * The instant belongs to the caller, for the same reason it is a parameter.
+ *
+ *               The options here accept `| undefined` while `calculateAllRewards`
+ *               below does not, and the gap is deliberate. Every caller reaches
+ *               these options from `useCurrentShield(...).shield?.id`, so "no
+ *               shield yet" is a normal, expected value of a field that is
+ *               otherwise always present — the option type should say so rather
+ *               than force five call sites to write a conditional spread. The
+ *               domain function is the other way round: it is a pure `Result`
+ *               producer with no notion of a screen, so it takes the key absent
+ *               and lets its own default speak. This hook is the adapter between
+ *               the two, and its job is to drop the keys that carry nothing.
+ */
+export function useCalculatedRewards(
+  options?: { readonly shieldId?: string | undefined; readonly nowMs?: number | undefined },
+): Record<string, CalculatedRewardItem> {
   const progressRecords = useProgressStore((state) => state.records);
   const challengeRecords = useChallengeStore((state) => state.records);
   const leagueWeeks = useLeagueStore((state) => state.weeks);
   const leagueCounted = useLeagueStore((state) => state.counted);
+  const shieldId = options?.shieldId;
+  const nowMs = options?.nowMs;
 
   return useMemo(() => {
     return calculateAllRewards({
@@ -273,12 +392,23 @@ export function useCalculatedRewards(): Record<string, CalculatedRewardItem> {
       challengeRecords,
       leagueWeeks,
       leagueCounted,
+      // Spread rather than pass straight through. This project compiles with
+      // `exactOptionalPropertyTypes`, where `shieldId?: string` means "a string, or
+      // the key absent" — passing `shieldId: undefined` is a type error even though
+      // the default reads exactly the same at runtime. A conditional spread omits the
+      // key when the caller has nothing to say, which is the case the default covers.
+      ...(shieldId !== undefined ? { shieldId } : {}),
+      ...(nowMs !== undefined ? { nowMs } : {}),
     });
-  }, [progressRecords, challengeRecords, leagueWeeks, leagueCounted]);
+  }, [progressRecords, challengeRecords, leagueWeeks, leagueCounted, shieldId, nowMs]);
 }
 
-export function useRewardBadge(id: string): CalculatedRewardItem | undefined {
-  const rewards = useCalculatedRewards();
+/** One award by id, or `undefined` when the id is not an award. */
+export function useRewardBadge(
+  id: string,
+  options?: { readonly shieldId?: string | undefined; readonly nowMs?: number | undefined },
+): CalculatedRewardItem | undefined {
+  const rewards = useCalculatedRewards(options);
   return rewards[id];
 }
 

@@ -2,6 +2,25 @@
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
 > **Last updated:** Feature-based migration **Phase 2c-2 complete** (`Screen` frame → `shared/components/`, `palette`-as-prop, 16 sites); phase 3 (`app/` audit) next — see [docs/FEATURE_MIGRATION.md](FEATURE_MIGRATION.md).
+> **Production cleanup Phase D complete (current commit) — the shield award.**
+> `src/hooks/useCurrentShield.ts` is the single owner of "which shield does this
+> player hold": `{ shield: League | undefined, score, weekId, hasShield }`, with
+> `hasShield === arrowsThisWeek(...) > 0` so **no shield is representable** rather
+> than defaulting to Bronze. `shield` is the ninth item and fifth award in
+> `calculateAllRewards`, a 0-or-1 counter so it is only ever Unlocked or Locked,
+> with `shieldId` passed *down* from the hook — deriving it in `rewards.ts` would
+> have been a fourth copy of the chain §6 existed to delete. Artwork resolves
+> through `SHIELD_IMAGES` (the registry `useThemeAssets()` also builds from), with
+> Bronze as the total fallback. Route: `app/(tabs)/challenge/info/shield.tsx`,
+> which reads the hook itself rather than taking `?shieldId=` — a query param
+> meant a hand-typed or stale link could render a shield the player does not hold.
+> **All three duplicated chains now call the hook** (`app/(tabs)/index.tsx`,
+> `useLeagueBoard`, the award). Home and Leagues keep a `LEAGUES[0]` *board*
+> fallback because zone labels are drawn relative to the player's rung; that is a
+> layout placeholder, not an award. Every caller captures its own instant via
+> `useState(() => Date.now())` rather than `Date.now()` inline, so a re-render
+> cannot resolve a different week than the one on screen.
+> Gate: tsc/lint/**425 tests**/levels:validate/arch (648 imports, 0 violations).
 > Phase 1 mapped all 178 `.ts`/`.tsx` files to a proposed feature home, recorded **9
 > documented deviations** (notably `src/game/`, `src/data/`, `src/render/` and `app/`
 > pinned, because moving them disarms the architecture checker or the level pipeline),

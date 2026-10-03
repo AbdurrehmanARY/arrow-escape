@@ -3,6 +3,13 @@
  *
  * Purpose:      Everything the player can customize, matching the exact reference
  *               design with grouped card rows and smooth interactive controls.
+ * Notes:        The **League Shield** row is the one row here that reports state
+ *               instead of setting it. It is read-only, and it is disabled when no
+ *               shield is held — tapping a row that leads to an award you cannot
+ *               have is a dead end, and a row that always looks live teaches
+ *               players that rows here are settings. This is the only place the
+ *               "no shield" state becomes visible to a player; everywhere else the
+ *               artwork falls back to Bronze so the screen still draws.
  */
 
 import { useState } from 'react';
@@ -16,6 +23,8 @@ import { APP_VERSION } from '@config';
 import { playSfx } from '@services/audio';
 import { accountEmail, useAuthStore , useSettingsStore } from '@state';
 import { fonts, radius, spacing, THEMES } from '@theme';
+import { useCurrentShield } from '../../src/hooks/useCurrentShield';
+import { useRewardBadge } from '../../src/challenge/rewards';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -29,6 +38,12 @@ export default function SettingsScreen() {
   const [showThemeModal, setShowThemeModal] = useState(false);
 
   const [removeAds, setRemoveAds] = useState(false);
+
+  // One instant for both hooks below. They must resolve the same week, or the row
+  // would show a tier from one moment and a state from another.
+  const [nowMs] = useState(() => Date.now());
+  const { shield, hasShield } = useCurrentShield(nowMs);
+  const shieldAward = useRewardBadge('shield', { shieldId: shield?.id, nowMs });
 
   const currentTheme = THEMES.find((t) => t.id === settings.themeId) ?? THEMES[0]!;
 
@@ -137,8 +152,53 @@ export default function SettingsScreen() {
           </Springy>
         </View>
 
-        {/* ---- Group 2: Account Connection -------------------------------- */}
+        {/* ---- Group 2: Progress (League Shield, Account Connection) -------- */}
         <View style={[styles.cardGroup, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+          {/* League Shield — read-only, and only navigable while one is held. */}
+          {hasShield && shieldAward ? (
+            <Springy
+              accessibilityRole="button"
+              accessibilityLabel={`League Shield, ${shield?.name ?? ''}`}
+              onPress={withClick(() => router.push('/challenge/info/shield'))}
+              style={styles.row}
+            >
+              <View style={styles.rowLeft}>
+                <FontAwesome name="shield" size={16} color={palette.textMuted} style={styles.icon} />
+                <Text style={[styles.rowLabel, { color: palette.text }]}>League Shield</Text>
+              </View>
+              <View style={styles.rowRight}>
+                {shieldAward.image ? (
+                  <Image
+                    source={shieldAward.image}
+                    style={styles.shieldThumb}
+                    resizeMode="contain"
+                    accessibilityLabel={`${shield?.name ?? ''} shield`}
+                  />
+                ) : null}
+                <Text style={[styles.rowValue, { color: palette.textFaint }]}>
+                  {shield?.name ?? ''}
+                </Text>
+                <FontAwesome name="chevron-right" size={12} color={palette.textFaint} />
+              </View>
+            </Springy>
+          ) : (
+            <View
+              accessibilityRole="text"
+              accessibilityLabel="League Shield, none held this week"
+              style={styles.row}
+            >
+              <View style={styles.rowLeft}>
+                <FontAwesome name="shield" size={16} color={palette.textFaint} style={styles.icon} />
+                <Text style={[styles.rowLabel, { color: palette.textFaint }]}>League Shield</Text>
+              </View>
+              <View style={styles.rowRight}>
+                <Text style={[styles.rowValue, { color: palette.textFaint }]}>None held</Text>
+              </View>
+            </View>
+          )}
+
+          <View style={[styles.divider, { backgroundColor: palette.border }]} />
+
           <View style={styles.row}>
             <View style={styles.rowLeft}>
               <FontAwesome name="user" size={16} color={palette.textMuted} style={styles.icon} />
@@ -356,6 +416,12 @@ const styles = StyleSheet.create({
   rowValue: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  // The shield thumb rides at row height rather than at asset size so the row
+  // keeps its 48px target and the emblem does not force the card taller.
+  shieldThumb: {
+    width: 24,
+    height: 24,
   },
   divider: {
     height: 1,

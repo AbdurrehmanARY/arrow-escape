@@ -4,6 +4,17 @@
  * Purpose:      Get the player into a level in one tap, and put the two recurring
  *               things — leagues and today's challenge — where they cannot be
  *               missed.
+ * Notes:        **The league card reads `useCurrentShield`, like every other
+ *               surface.** It used to build the answer itself —
+ *               `arrowsFor(arrowsThisWeek(...), stats.won)` then
+ *               `leagueForArrows(...)` — which was the third copy of a rule that
+ *               had no single owner, and the only one of the three that could
+ *               disagree with the shield drawn on the very same card.
+ *
+ *               The Bronze fallback below is deliberate and is *not* an award: a
+ *               player holding nothing still has to be placed somewhere for the
+ *               zone labels to make sense. Only `useCurrentShield().shield` is
+ *               allowed to mean "you hold a shield".
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -16,10 +27,12 @@ import { playMusic } from '@services/audio';
 import { challengeId, daysInMonth, today } from '@challenge';
 import { LEVEL_COUNT, tierOf } from '@data';
 import { TIER_LABELS } from '@game';
-import { clearedCount, nextLevel, useProgressStore , isDayWon, statsOf, useChallengeStore , arrowsThisWeek, useLeagueStore } from '@state';
-import { arrowsFor, formatRemaining, leagueForArrows, msRemaining, weekOf } from '@league';
+import { clearedCount, nextLevel, useProgressStore , isDayWon, useChallengeStore } from '@state';
+import { formatRemaining, msRemaining, weekOf, LEAGUES } from '@league';
 import { fonts, MIN_TOUCH_TARGET, radius, spacing, typography, type Palette } from '@theme';
 import { useThemeAssets } from '@features/settings';
+
+import { useCurrentShield } from '../../src/hooks/useCurrentShield';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -33,11 +46,9 @@ export default function HomeScreen() {
 
   const records = useProgressStore((state) => state.records);
   const challengeRecords = useChallengeStore((state) => state.records);
-  const leagueWeeks = useLeagueStore((state) => state.weeks);
 
   const now = useMemo(() => today(), []);
   const [nowMs] = useState(() => Date.now());
-  const stats = useMemo(() => statsOf({ records: challengeRecords }, now), [challengeRecords, now]);
   const challengeDone = isDayWon({ records: challengeRecords }, now);
 
   const isCurrentMonthCompleted = useMemo(() => {
@@ -55,8 +66,8 @@ export default function HomeScreen() {
   const resumeTier = tierOf(resume);
   const resumeTierLabel = resumeTier ? TIER_LABELS[resumeTier] : 'Medium';
 
-  const score = arrowsFor(arrowsThisWeek({ weeks: leagueWeeks }, nowMs), stats.won);
-  const league = leagueForArrows(score);
+  const { shield, score } = useCurrentShield(nowMs);
+  const league = shield ?? LEAGUES[0]!;
   const currentWeek = useMemo(() => weekOf(nowMs), [nowMs]);
   const remainingText = formatRemaining(msRemaining(currentWeek, nowMs));
 

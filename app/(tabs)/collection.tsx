@@ -33,6 +33,7 @@ import {
   type CalculatedRewardItem,
 } from '@challenge';
 import { statsOf, useChallengeStore , clearedCount, perfectCount, useProgressStore } from '@state';
+import { useCurrentShield } from '../../src/hooks/useCurrentShield';
 
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
 
@@ -53,6 +54,8 @@ function getAwardInfoRoute(id: string): string {
       return '/challenge/info/league-climber';
     case 'league-fighter':
       return '/challenge/info/league-fighter';
+    case 'shield':
+      return '/challenge/info/shield';
     case 'longest-streak':
       return '/challenge/info/longest-streak';
     case 'highest-win-streak':
@@ -60,7 +63,7 @@ function getAwardInfoRoute(id: string): string {
     case 'most-wins':
       return '/challenge/info/most-wins';
     default:
-      return '/challenge/info/level-legend';
+      return '/';
   }
 }
 
@@ -70,6 +73,10 @@ export default function CollectionScreen() {
 
   const records = useChallengeStore((state) => state.records);
   const progressRecords = useProgressStore((state) => state.records);
+  // Mount-stable, for the same reason as every other caller: a re-render must not
+  // be able to resolve a different week than the tiles already drawn.
+  const [nowMs] = useState(() => Date.now());
+  const { shield } = useCurrentShield(nowMs);
 
   useEffect(() => {
     playMusic('menu');
@@ -78,7 +85,7 @@ export default function CollectionScreen() {
   const now = useMemo(() => today(), []);
   const stats = useMemo(() => statsOf({ records }, now), [records, now]);
 
-  const calculatedRewards = useCalculatedRewards();
+  const calculatedRewards = useCalculatedRewards({ shieldId: shield?.id, nowMs });
   const rewardsList = useMemo(
     () =>
       Object.values(calculatedRewards).filter(

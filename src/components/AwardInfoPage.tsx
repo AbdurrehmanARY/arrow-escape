@@ -21,6 +21,10 @@ import { AwardInfoLayout } from './AwardInfoLayout';
 export interface AwardInfoPageProps {
   /** Reward id, spelled exactly as the reward table spells it. */
   readonly badgeId: string;
+  /** Optional shield id for the shield award. */
+  readonly shieldId?: string | undefined;
+  /** The instant to resolve weekly awards against. Callers own the clock. */
+  readonly nowMs?: number | undefined;
 }
 
 /**
@@ -31,8 +35,8 @@ export interface AwardInfoPageProps {
  * becomes either "Unlocked!" or a progress line. That is what was being copied
  * eight times.
  */
-export function AwardInfoPage({ badgeId }: AwardInfoPageProps) {
-  const reward = useRewardBadge(badgeId);
+export function AwardInfoPage({ badgeId, shieldId, nowMs }: AwardInfoPageProps) {
+  const reward = useRewardBadge(badgeId, { shieldId, nowMs });
 
   if (!reward) return null;
 

@@ -130,10 +130,10 @@ anonymous, test-login or bypass path exists anywhere.
 ### 5. Awards — two overlapping systems
 
 - **Live:** `calculateAllRewards()` / `useCalculatedRewards()` / `useRewardBadge()`
-  in `src/challenge/rewards.ts` → **8** `CalculatedRewardItem`s
+  in `src/challenge/rewards.ts` → **9** `CalculatedRewardItem`s
   (`level-legend`, `perfect-play`, `unstoppable`, `league-climber`,
-  `league-fighter`, `longest-streak`, `highest-win-streak`, `most-wins`), each
-  with active/inactive/locked art and a `route`.
+  `league-fighter`, `shield`, `longest-streak`, `highest-win-streak`, `most-wins`),
+  each with active/inactive/locked art and a `route`.
 - **Legacy:** `REWARDS` (6 `RewardDefinition`s) + `rewardProgress` /
   `earnedCount` / `nextReward`, covered by `__tests__/challenge/rewards.test.ts`.
 - Surfaces: `collection.tsx` (`AwardTile`), `challenge/rewards.tsx`
@@ -153,6 +153,10 @@ That chain is duplicated at `app/(tabs)/index.tsx:58-59`,
 `src/hooks/useLeagueBoard.ts:133-134`, and inside `rewards.ts`. There is **no
 shield store, no shield setting, and no representable "no shield"** —
 `leagueForArrows(0)` returns Bronze.
+
+**Resolved in Phase D.** `src/hooks/useCurrentShield.ts` now owns the chain and
+returns `shield: League | undefined`, so "no shield" is a state the code can
+represent. All three copies call it.
 
 ### 7. Theme / award backgrounds — one violation
 
@@ -223,7 +227,7 @@ Declared permissions include `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`,
 | Seed | strip §2 (24 rivals) from `supabase/seed.sql` |
 | Auth | verify only — no change |
 
-## Phase D — Fifth award = shield
+## Phase D — Fifth award = shield — **DONE**
 
 1. New derived accessor **`src/hooks/useCurrentShield.ts`** returning
    `{ shield: League | undefined, score, weekId, hasShield }`. It lives in
@@ -231,11 +235,35 @@ Declared permissions include `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`,
    in `state/` would create a cycle with `challenge → state`, and in
    `challenge/` would cycle with `hooks → challenge`.
 2. `hasShield === arrowsThisWeek(...) > 0` (decision, §Decisions).
-3. Add the `shield` item to `calculateAllRewards` using inputs it already has,
-   plus an optional `shieldId` so UIs resolve art via `useThemeAssets()` — the
-   only way to keep the award theme-correct **without** a `challenge → state` edge.
-4. Add `app/(tabs)/challenge/info/shield.tsx`, `AwardInfoPage badgeId="shield"`,
+3. The `shield` item is in `calculateAllRewards` using inputs it already has, plus
+   an optional `shieldId` so surfaces resolve the right tier — the only way to keep
+   the award theme-correct **without** a `challenge → state` edge. It was passed
+   *down* from `useCurrentShield` rather than derived in `rewards.ts`, which would
+   have been a fourth copy of the chain §6 existed to delete.
+4. `app/(tabs)/challenge/info/shield.tsx`, `AwardInfoPage badgeId="shield"`,
    `BADGE_ORDER`, `getAwardInfoRoute`.
+
+**What shipped beyond the plan, and why.**
+
+- **The shield id is not a query param.** The route reads `useCurrentShield`
+  itself. Passing `?shieldId=` meant a hand-typed URL, or a link minted before a
+  league change, rendered a shield the player does not hold — a stale value with
+  no way to notice it was stale.
+- **All three duplicated chains now call the hook** — `app/(tabs)/index.tsx`,
+  `src/hooks/useLeagueBoard.ts` and the award itself. Home and Leagues keep a
+  `LEAGUES[0]` (Bronze) *board* fallback because their zone labels are drawn
+  relative to the player's rung; that is a layout placeholder, not an award, and
+  only `useCurrentShield().shield` is allowed to mean "you hold one".
+- **Every caller owns its clock.** `atMs` is passed in and captured in
+  `useState(() => Date.now())` at each call site, never `Date.now()` inline —
+  `react-hooks/purity` rejects the latter, and it is the correct rule: a render
+  must not be able to resolve a different week than the one already on screen.
+
+Covered by `__tests__/hooks/useCurrentShield.test.tsx` (10 cases: no-shield is
+`undefined` not Bronze, last week does not carry over, the challenge bonus raises
+the score without creating a shield, agreement with `leagueForArrows`, week
+rollover) and 11 new cases in `__tests__/challenge/rewards.test.ts` (nine items,
+0-or-1 state, bronze fallback, every league resolving to real artwork).
 
 ## Phase E — Theme integration
 
@@ -254,8 +282,8 @@ clearly-marked constant — **no company or email invented**.
 
 ## Phase G — Verification
 
-`npm run verify` (typecheck + lint + 396 tests + 1000 levels) ·
-`npm run architecture:check` (634 imports, 0 violations) · the grep sweeps
+`npm run verify` (typecheck + lint + 425 tests + 1000 levels) ·
+`npm run architecture:check` (648 imports, 0 violations) · the grep sweeps
 below · route-tree diff · `docs/PROJECT_MEMORY.md`, `docs/FEATURE_MIGRATION.md`.
 
 ---

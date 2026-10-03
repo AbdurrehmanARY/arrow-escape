@@ -32,14 +32,28 @@
  *               refetched every minute would be a request a player never asked
  *               for, and the merge below already folds in anything the device
  *               knows that the server does not.
+ *
+ * Notes:        **The league and score come from `useCurrentShield`, not from a
+ *               chain written out here.** This file used to compute
+ *               `arrowsFor(arrowsThisWeek(...), stats.won)` and
+ *               `leagueForArrows(...)` inline — the second of three copies of
+ *               the same rule, in a layer that already composes `@league` and
+ *               `@state`, which is precisely what `useCurrentShield` exists to
+ *               own. Note the fallback: this hook always returns a league, because
+ *               the zones on screen are drawn relative to the player's own, so a
+ *               player holding no shield is placed in Bronze. That is a *board*
+ *               placeholder, not an award — `useCurrentShield().shield` is
+ *               `undefined` for the same player, and only that value is allowed to
+ *               say "you hold nothing".
  */
 
 import { useEffect, useMemo, useState } from 'react';
 
 import { today } from '@challenge';
-import { arrowsFor, formatRemaining, leagueForArrows, msRemaining, weekOf } from '@league';
+import { formatRemaining, msRemaining, weekOf, LEAGUES } from '@league';
 import { leaderboard, type LeaderboardRow } from '@services/sync';
-import { statsOf, useAuthStore, arrowsThisWeek, useChallengeStore, useLeagueStore } from '@state';
+import { statsOf, useAuthStore, useChallengeStore } from '@state';
+import { useCurrentShield } from './useCurrentShield';
 
 /** One row of the weekly table, once it has been scored and ranked. */
 export interface LeaderboardEntry {
@@ -82,7 +96,6 @@ export interface UseLeagueBoardArgs {
  * already keys off the rank it labels.
  */
 export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
-  const weeks = useLeagueStore((state) => state.weeks);
   const challengeRecords = useChallengeStore((state) => state.records);
   const session = useAuthStore((state) => state.session);
 
@@ -92,8 +105,8 @@ export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
     [challengeRecords],
   );
 
-  const userArrows = arrowsFor(arrowsThisWeek({ weeks }, now), stats.won);
-  const userLeague = leagueForArrows(userArrows);
+  const { shield, score: userArrows } = useCurrentShield(now);
+  const userLeague = shield ?? LEAGUES[0]!;
   const remainingText = formatRemaining(msRemaining(week, now));
 
   const weekId = week.id;
