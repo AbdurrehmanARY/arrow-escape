@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.abdurrehmanary.arrowpath",
+      "package": "com.abdurrehmanary.arrowpuzzle",
       "versionCode": 23,
       "permissions": [
         "android.permission.MODIFY_AUDIO_SETTINGS",
@@ -70,7 +70,7 @@
       "@react-native-google-signin/google-signin",
       "expo-font"
     ],
-    "scheme": "arrowpath",
+    "scheme": "arrowpuzzle",
     "androidStatusBar": {
       "backgroundColor": "#EEEBE4",
       "barStyle": "dark-content"
@@ -85,7 +85,7 @@
         "anonKey": "sb_publishable_JPJbVOlZ7pSrP055-O7f4A_DnApYwqJ"
       },
       "google": {
-        "webClientId": "920357438418-5v1bpaavm7ssqsgfsomsghosnrf0b7qp.apps.googleusercontent.com"
+        "webClientId": "1050627218207-vbo9411jcdig0eje8hgcva6lek8rop3h.apps.googleusercontent.com"
       }
     },
     "runtimeVersion": {

@@ -84,7 +84,7 @@ describe('the image registry', () => {
   it('resolves to the intended file, not merely to one that exists', () => {
     // Filenames with spaces, a trailing space, and a generated name: the cases
     // a hand-typed path is most likely to get wrong.
-    expect(IMAGES.wordmarkDark.source).toBe(require('../../assets/brand/wordmark.png'));
+    expect(IMAGES.wordmarkDark.source).toBe(require('../../assets/brand/wordmark-dark.png'));
     expect(IMAGES.largestStreak.source).toBe(require('../../assets/records/largest streak.webp'));
     expect(RECORD_IMAGES.mostWinsInactive.source).toBe(
       require('../../assets/records/most_win_inative.webp'),

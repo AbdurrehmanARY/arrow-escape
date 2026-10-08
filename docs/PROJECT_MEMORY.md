@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** Settings & navigation cleanup **complete** — Levels browser removed, legal pages published, dead rows deleted, `RECORD_AUDIO` dropped.
+> **Last updated:** App running on device successfully. Fixed package name mismatch (`arrowpuzzle` vs `arrowpath`), rebuilt APK. Missing `wordmark-light.png` asset restored.
 > **`app/levels.tsx` is gone and nothing links to it.** The level *browser* was a
 > second way into a level that duplicated what Home, Challenge and the Play screen's
 > own "Next" already do — and the reference design had no such screen. What was

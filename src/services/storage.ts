@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 /** Bump when the shape of a persisted slice changes, and add a migration below. */
 export const SAVE_VERSION = 1;
 
-const KEY_PREFIX = 'arrowpath:v1:';
+const KEY_PREFIX = 'arrowpuzzle:v1:';
 
 export interface SaveEnvelope<T> {
   readonly version: number;

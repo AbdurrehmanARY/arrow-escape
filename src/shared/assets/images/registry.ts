@@ -110,7 +110,7 @@ export const BRAND_IMAGES = {
     'brand.wordmarkDark',
     'Arrow Puzzle wordmark (dark ink)',
     'The arrow mark locked up with the game name, in charcoal, for light grounds.',
-    require('../../../../assets/brand/wordmark.png'),
+    require('../../../../assets/brand/wordmark-dark.png'),
     { accessibilityLabel: 'Arrow Puzzle' },
   ),
   /** Mark plus name, bone ink, for dark grounds. */

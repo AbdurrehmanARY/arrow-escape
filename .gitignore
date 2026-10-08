@@ -68,3 +68,13 @@ __pycache__/
 *.apk
 /tools/_scratch-*.ts
 
+# Orphan / duplicate image patterns from the Phase A audit.
+# These are byte-identical duplicates or unreferenced orphans that should
+# never be re-committed. Tracked under their canonical names only.
+#   - awards/*_YYYYMMDDHHMM.webp: timestamped duplicate variants kept by
+#     the source tool's naming convention (e.g. unstoppable.jpg_*.webp).
+#   - Loose branding images at assets/ root, not referenced by the registry.
+assets/awards/*_*[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].*
+assets/Charcoal_3D_arrow_icon_*.webp
+assets/Black_silhouette_logo_mark_*.webp
+

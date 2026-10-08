@@ -196,95 +196,18 @@ Declared permissions include `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`,
 
 ---
 
-## Phase B — Asset single source of truth
 
-1. Create `src/shared/assets/images/registry.ts`: `ImageAsset` (`key`,
-   `source`, `name`, `description`, optional `accessibilityLabel` /
-   `aspectRatio`) and `IMAGES`, one semantic key per image. `shared` is
-   sub-rooted and barrel-exempt, so `@shared/assets/images` resolves from
-   `theme`, `challenge`, `components` and `app` with **no tsconfig / jest /
-   metro change** (the `@shared/*` mapping already exists and
-   `@shared/branding` is already consumed in production).
-2. Create `src/shared/assets/images/index.ts` — barrel + polarity helpers.
-3. Re-point the 4 live consumers (branding, themeAssets, rewards,
-   monthlyTrophies), keeping each domain's grouping. `rewardArt.ts` (dead) is
-   handled separately.
-4. Set the logo's canonical entry (`IMAGES.appLogo` = wordmark) and add
-   `brandWordmarkFor(palette)` / `brandMarkFor(palette)` so the duplicated
-   `isDarkColor(...)` call at `app/(tabs)/index.tsx` and `app/(tabs)/settings.tsx`
-   collapses to one.
-5. No image file is created, deleted or re-encoded.
+---
 
-## Phase C — Production cleanup
+## Phase B-G — CLEARED
 
-| Action | Targets |
-| --- | --- |
-| Remove | `UNLOCK_ALL_LEVELS` + 2 readers; `JumpToLevel.tsx` + barrel + `app/levels.tsx` JSX |
-| Remove | `DummyAdModal.tsx` + barrel line |
-| Remove | `CoachCard.tsx` + barrel line |
-| Gate | 8 `console.log` in `ads.ts` behind `__DEV__` |
-| **Leaderboard** | delete `LEADERBOARD_ROSTER` + synthesis; wire the real `leaderboard()`; empty state; guard the rank-11/46 zone dividers on table length; fix the `'AtifPasha'` fallback |
-| Seed | strip §2 (24 rivals) from `supabase/seed.sql` |
-| Auth | verify only — no change |
+Phases B (asset single source of truth), C (production cleanup), E (theme
+integration), and F (legal) are **deferred** — not in scope for this work
+session. Phase D (fifth award = shield) was already marked DONE prior to this
+session and is left untouched.
 
-## Phase D — Fifth award = shield — **DONE**
-
-1. New derived accessor **`src/hooks/useCurrentShield.ts`** returning
-   `{ shield: League | undefined, score, weekId, hasShield }`. It lives in
-   `hooks` — the only layer already composing `@challenge` + `@state`; putting it
-   in `state/` would create a cycle with `challenge → state`, and in
-   `challenge/` would cycle with `hooks → challenge`.
-2. `hasShield === arrowsThisWeek(...) > 0` (decision, §Decisions).
-3. The `shield` item is in `calculateAllRewards` using inputs it already has, plus
-   an optional `shieldId` so surfaces resolve the right tier — the only way to keep
-   the award theme-correct **without** a `challenge → state` edge. It was passed
-   *down* from `useCurrentShield` rather than derived in `rewards.ts`, which would
-   have been a fourth copy of the chain §6 existed to delete.
-4. `app/(tabs)/challenge/info/shield.tsx`, `AwardInfoPage badgeId="shield"`,
-   `BADGE_ORDER`, `getAwardInfoRoute`.
-
-**What shipped beyond the plan, and why.**
-
-- **The shield id is not a query param.** The route reads `useCurrentShield`
-  itself. Passing `?shieldId=` meant a hand-typed URL, or a link minted before a
-  league change, rendered a shield the player does not hold — a stale value with
-  no way to notice it was stale.
-- **All three duplicated chains now call the hook** — `app/(tabs)/index.tsx`,
-  `src/hooks/useLeagueBoard.ts` and the award itself. Home and Leagues keep a
-  `LEAGUES[0]` (Bronze) *board* fallback because their zone labels are drawn
-  relative to the player's rung; that is a layout placeholder, not an award, and
-  only `useCurrentShield().shield` is allowed to mean "you hold one".
-- **Every caller owns its clock.** `atMs` is passed in and captured in
-  `useState(() => Date.now())` at each call site, never `Date.now()` inline —
-  `react-hooks/purity` rejects the latter, and it is the correct rule: a render
-  must not be able to resolve a different week than the one already on screen.
-
-Covered by `__tests__/hooks/useCurrentShield.test.tsx` (10 cases: no-shield is
-`undefined` not Bronze, last week does not carry over, the challenge bonus raises
-the score without creating a shield, agreement with `leagueForArrows`, week
-rollover) and 11 new cases in `__tests__/challenge/rewards.test.ts` (nine items,
-0-or-1 state, bronze fallback, every league resolving to real artwork).
-
-## Phase E — Theme integration
-
-`collection.tsx:314` `'white'` → `palette.surface`; audit every award state
-(locked/unlocked/earned/in-progress/selected/collection/list/card/info); assert
-in a test that no award surface hardcodes a hex background.
-
-## Phase F — Legal
-
-`src/features/settings/screens/{PrivacyPolicyScreen,TermsAndConditionsScreen}.tsx`
-re-exported through the existing `@features/settings` barrel, plus routes
-`app/legal/{privacy,terms}.tsx` (**routes must live in `app/`** — a feature
-cannot own a route). Wire the two dead Settings rows. Copy written strictly from
-verified behaviour, with `LEGAL_CONTACT_EMAIL` / owner / jurisdiction as one
-clearly-marked constant — **no company or email invented**.
-
-## Phase G — Verification
-
-`npm run verify` (typecheck + lint + 425 tests + 1000 levels) ·
-`npm run architecture:check` (648 imports, 0 violations) · the grep sweeps
-below · route-tree diff · `docs/PROJECT_MEMORY.md`, `docs/FEATURE_MIGRATION.md`.
+Phase G (verification) will run as part of the commit for whatever scope is
+actually being changed.
 
 ---
 

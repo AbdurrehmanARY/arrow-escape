@@ -35,7 +35,7 @@ const ACTIVE_LINE = 'debuggableVariants = []';
 const TEMPLATE_COMMENT = '// debuggableVariants = ["liteDebug", "prodDebug"]';
 
 /** Marker block inserted by this plugin, for idempotency. */
-const MARKER = '/* ArrowPath: standalone debug build — bundle JS into the APK */';
+const MARKER = '/* ArrowPuzzle: standalone debug build — bundle JS into the APK */';
 
 // Kotlin Gradle Plugin version pinned to avoid Internal Compiler Error (ICE)
 // in react-native-safe-area-context during debug builds.

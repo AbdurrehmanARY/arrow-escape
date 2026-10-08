@@ -19,7 +19,7 @@ interface Fixture {
 
 const FALLBACK: Fixture = { value: 0, label: 'fresh' };
 const KEY = 'testslice';
-const FULL_KEY = `arrowpath:v1:${KEY}`;
+const FULL_KEY = `arrowpuzzle:v1:${KEY}`;
 
 beforeEach(async () => {
   await AsyncStorage.clear();

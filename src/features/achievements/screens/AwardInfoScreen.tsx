@@ -1,11 +1,18 @@
-import { useEffect, useState } from 'react';
-import { useTheme } from '@components';
-import { Screen, ScreenHeader, withClick } from '@components';
+/**
+ * src/features/achievements/screens/AwardInfoScreen.tsx — Award Info screen.
+ *
+ * Purpose: Display detailed information about player achievements.
+ */
+
+import { useMemo } from 'react';
+import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet } from 'react-native';
+import { useTheme, Screen, ScreenHeader } from '@components';
 import { challengeFor, isChallengeDay, parseChallengeId, today } from '@challenge';
+import { useChallengeStore } from '@state';
 import { TIER_LABELS } from '@game/codec';
 import { summaryOf, tierOf } from '@data';
-import { formatDuration } from './ChallengeScreen';
-import { fonts, radius, spacing, typography, type Palette } from '@theme';
+import { fonts, spacing } from '@theme';
 
 export function AwardInfoScreen({ id }: { id: string }) {
   const router = useRouter();
@@ -30,7 +37,7 @@ export function AwardInfoScreen({ id }: { id: string }) {
   const tier = levelId === undefined ? undefined : tierOf(levelId);
   const summary = levelId === undefined ? undefined : summaryOf(levelId);
   const record = records[id];
-  const playable = isChallengeDay(id);
+  const playable = isChallengeDay(date, now);
 
   const tierLabel = tier ? TIER_LABELS[tier] : 'Unknown';
   const summaryText = summary ? summary.rows * summary.cols : 'No summary';
@@ -44,11 +51,13 @@ export function AwardInfoScreen({ id }: { id: string }) {
       <Text style={[styles.subtitle, { color: palette.textMuted }]}>
         {date.year} – {date.month} – {date.day}
       </Text>
-      <div style={[styles.content, { padding: spacing.md }]}>
+      <View style={styles.content}>
         <Text style={[styles.tileSub, { color: palette.text }]}>
           {tierLabel}
         </Text>
-        {summaryText}
+        <Text style={[styles.body, { color: palette.textMuted }]}>
+          {summaryText}
+        </Text>
         {playable && levelId !== undefined ? (
           <>
             <Text style={[styles.verdict, { color: palette.success }]}>
@@ -71,36 +80,46 @@ export function AwardInfoScreen({ id }: { id: string }) {
             </Text>
           </>
         )}
-      </div>
+      </View>
     </Screen>
   );
 }
 
-function styles() {
-  return {
-    content: {
-      padding: spacing.md,
-    },
-    tileSub: {
-      fontSize: 12,
-      fontWeight: '700',
-      fontFamily: fonts.bodyBold,
-      textAlign: 'center',
-      marginTop: 1,
-    },
-    verdict: {
-      fontSize: 14,
-      fontWeight: '700',
-      fontFamily: fonts.displayExtra,
-      marginTop: spacing.sm,
-    },
-    subtitle: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: palette.textMuted,
-      marginBottom: spacing.xs,
-    },
-  };
-}
+const styles = StyleSheet.create({
+  body: {
+    fontSize: 14,
+    fontFamily: fonts.bodyRegular,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: fonts.displayBold,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  content: {
+    padding: spacing.md,
+  },
+  tileSub: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: fonts.bodyBold,
+    textAlign: 'center',
+    marginTop: 1,
+  },
+  verdict: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: fonts.displayExtra,
+    marginTop: 8,
+  },
+  subtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+});
 
 export default AwardInfoScreen;
