@@ -4,7 +4,7 @@ Fixes for three interconnected issues identified during Phase 22 playtest
 preparation, plus the ongoing investigation into heart-deduction inconsistency
 across Android versions.
 
-All changes pass `npm run verify` (typecheck + lint + 434 tests + level validation).
+All changes pass `npm run verify` (typecheck + lint + 438 tests + level validation).
 
 ## Phase 1: Multiplayer League Leaderboard — FIXED
 
@@ -105,12 +105,55 @@ Physical Android devices (10-16) to verify:
 - Correct count after background/resume
 - Consistent behavior across versions
 
+## Phase 5: BannerAd Size Crash (v16) — FIXED
+
+### Root Cause
+After the Phase 2 banner mounting work went live, `react-native-google-mobile-ads`
+was upgraded to v16. In v16, `BaseAd.validateSize` requires the `size` prop to be
+a key of the (uppercase) `BannerAdSize` enum (`BANNER`, `FULL_BANNER`, …). The
+value `size: 'banner'` (lowercase) — valid through v14 — fails the runtime
+`'banner' in BannerAdSize` check and `BaseAd` throws from inside a `useEffect`
+at mount. React error boundaries catch effect-time throws, so every screen that
+renders the banner (HomeScreen, PlayScreen) crashed through the root boundary as
+a full-screen "Something broke".
+
+### Fix Applied
+- `src/services/ads.ts` — `size: 'banner'` → `size: 'BANNER'`, sourced from a
+  new exported `BANNER_SIZE_KEY` constant (typed as the literal `'BANNER'` so
+  TypeScript rejects any other value, and exported so a test can assert it).
+- Removed the dead `adPosition: 'bottom'` prop, dropped/unsupported in v16.
+- Wrapped the ad in a fixed-height `View` (50dp tall, full width, centered).
+  v16's `BannerAd` no longer forwards a caller `style` — `BaseAd` computes its
+  own from reported dimensions — so without the wrapper the banner collapsed to
+  0×0 until the first `onAdLoaded`. The outer `View` reserves the slot the
+  screens already budget for via `bannerHeight()`.
+- Tightened null-guards so a missing/invalid SDK shape can never crash mount.
+
+### Verification
+- `npx tsc --noEmit` clean; `npx eslint . --max-warnings 0` clean.
+- New `__tests__/services/ads.test.ts` (4 tests):
+  - Asserts `BANNER_SIZE_KEY` is a member of the *installed* SDK's `BannerAdSize`
+    enum (deep-imports the real enum — a future SDK rename fails loud in CI).
+  - Asserts the lowercase `'banner'` is rejected by that same enum.
+  - Mounts the wrapper into `react-test-renderer` via a mock `BannerAd` that
+    reproduces v16's size validation, asserting `size: 'BANNER'` + the test unit
+    id are passed and the ad is wrapped in a `View`.
+  - Asserts `getBannerComponent()` returns `undefined` when the native SDK is
+    absent (graceful degradation).
+- Regression proof: temporarily reverting the literal to `'banner'` makes both
+  the enum cross-check and the mount test fail (the mock throws), confirming the
+  guard catches the exact regression that shipped.
+
+### Files Modified
+- `src/services/ads.ts`: `size: 'BANNER'` + `BANNER_SIZE_KEY` + View wrapper
+- `__tests__/services/ads.test.ts`: new regression suite
+
 ## Testing Summary
 
 ### Automated Verification ✓
 - `npx tsc --noEmit`: No type errors
 - `npx eslint . --max-warnings=0`: No lint errors
-- `npm test`: All 434 tests pass (34 test suites)
+- `npm test`: All 438 tests pass (35 test suites)
 - `npm run levels:validate`: All 1000 levels decode and are solvable
 
 ### Manual Verification Required

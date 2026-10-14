@@ -480,6 +480,15 @@ touch-handling variance. Requires physical Android 10–16 testing to verify.
 
 
 
+326. **v16 banner size must be uppercase.** `react-native-google-mobile-ads` v16
+renamed the `BannerAdSize` keys to uppercase (`BANNER`, `FULL_BANNER`, …), and
+`BaseAd.validateSize` rejects anything that is not a key — throwing from a
+`useEffect` that the root error boundary surfaces as a crash. `getBannerComponent()`
+now uses the exported `BANNER_SIZE_KEY` (`'BANNER'`); `__tests__/services/ads.test.ts`
+asserts it against the installed SDK's own enum so a future rename fails in CI.
+The ad is also wrapped in a fixed-height `View` because v16 no longer forwards a
+caller `style`, and the unsupported `adPosition` prop was removed.
+
 ## Pending work
 
 Full breakdown, with the release checklist, in [PROGRESS.md](PROGRESS.md).
@@ -512,7 +521,7 @@ Full breakdown, with the release checklist, in [PROGRESS.md](PROGRESS.md).
 
 ## Known issues / technical debt
 
-- The ad service has no unit tests — a thin I/O wrapper whose only real behaviour is degrading gracefully, which is exercised by the app running without it. `services/audio.ts` is the same, but the layer *above* it is now covered: `__tests__/components/sound.test.tsx` pins `withClick`'s ordering and `useSheetSound`'s edge-triggering, which sit under every button in the app and whose failure mode is silence — something no other test would notice.
+- `services/ads.ts` now has a unit suite (`__tests__/services/ads.test.ts`) covering the v16 size crash regression, mount behaviour, and the absent-SDK degraded path. The remaining ad surfaces (interstitial cadence, reward lifecycle) are still covered only by running without the SDK and by device testing. `services/audio.ts` is the same, but the layer *above* it is now covered: `__tests__/components/sound.test.tsx` pins `withClick`'s ordering and `useSheetSound`'s edge-triggering, which sit under every button in the app and whose failure mode is silence — something no other test would notice.
 - **The mix has never been heard on a device.** Every sound is wired, spaced and gain-balanced on reasoning rather than on listening: `SFX_GAIN` was written before any file existed, and the fanfare spacing is an estimate. Expect to retune both on hardware — particularly `wrongMove`, which fires on any tap that misses and is the most likely to be found annoying.
 - Component test coverage is thin but no longer absent: the board's tap surface and `ArrowSnake`'s memo are covered (`heartsUi`, `arrowSnakeMemo`). Every other screen is still covered only by the bundle building and by manual testing — and decision 79 is what that gap costs.
 - `npm audit` reports moderate advisories from the Expo dependency tree; none are in code paths this app uses.

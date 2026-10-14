@@ -20,7 +20,7 @@
  *               To enable for real, see `docs/ADS_SETUP.md`.
  */
 
-import { NativeModules, TurboModuleRegistry } from 'react-native';
+import { NativeModules, TurboModuleRegistry, View } from 'react-native';
 import React from 'react';
 
 import { AD_UNIT_IDS, USE_TEST_ADS } from '@config';
@@ -49,6 +49,24 @@ interface RewardedAdLike {
 
 /** Height of a standard banner in dp. Used to reserve space when sdk is absent. */
 const BANNER_HEIGHT_DP = 50;
+
+/**
+ * The canonical `size` value to pass to `BannerAd`.
+ *
+ * In `react-native-google-mobile-ads` v16+ the validator inside `BaseAd` tests
+ * a banner `size` against the keys of its `BannerAdSize` enum, and those keys are
+ * **uppercase** (`BANNER`, `FULL_BANNER`, …). The lowercase `'banner'` spelling
+ * that worked through v14 fails the runtime `'banner' in BannerAdSize` check and
+ * `BaseAd` throws from inside a `useEffect` during mount — which the root error
+ * boundary surfaces as a full-screen "Something broke" crash on HomeScreen and
+ * PlayScreen.
+ *
+ * Typed as the literal `'BANNER'` (not `string`) so any drift is flagged by
+ * TypeScript, and exported so a unit test can assert it against the installed
+ * SDK's own enum — a future rename then fails loud in CI instead of on a
+ * player's device.
+ */
+export const BANNER_SIZE_KEY: 'BANNER' = 'BANNER';
 
 interface AdsModule {
   RewardedAd: { createForAdRequest: (unitId: string, options?: unknown) => RewardedAdLike };
@@ -491,20 +509,27 @@ export function bannerHeight(): number {
 export function getBannerComponent(): React.ComponentType<{ style?: object }> | undefined {
   const module = loadSdk();
   if (!module) return undefined;
-
   const BannerAd = (module as any).BannerAd;
   if (!BannerAd) return undefined;
 
   const unitId = USE_TEST_ADS ? module.TestIds.BANNER : AD_UNIT_IDS.banner;
 
+  // v16's `BannerAd` no longer honours a caller-supplied `style` — `BaseAd`
+  // computes one from the ad's reported dimensions — and it rejects the old
+  // `adPosition` prop outright. Without an outer wrapper the view collapses to
+  // 0×0 until the first `onAdLoaded` fires, so we pin a 50dp tall slot here.
+  // `BANNER` (uppercase) and `requestNonPersonalizedAdsOnly: true` are both
+  // validated by the SDK at mount time — see `BANNER_SIZE_KEY`.
   return function BannerAdWrapper(props: { style?: object }) {
-    return React.createElement(BannerAd, {
-      unitId,
-      adPosition: 'bottom',
-      size: 'banner',
-      requestOptions: { requestNonPersonalizedAdsOnly: true },
-      style: [{ height: BANNER_HEIGHT_DP }, props.style],
-    });
+    return React.createElement(
+      View,
+      { style: [{ height: BANNER_HEIGHT_DP, width: '100%', alignItems: 'center' }, props.style] },
+      React.createElement(BannerAd, {
+        unitId,
+        size: BANNER_SIZE_KEY,
+        requestOptions: { requestNonPersonalizedAdsOnly: true },
+      }),
+    );
   };
 }
 
