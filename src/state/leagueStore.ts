@@ -24,6 +24,20 @@ import { weekOf } from '@league';
 import { loadSlice, saveSlice, STORAGE_KEYS } from '@services/storage';
 import { syncLeague } from '@services/sync';
 
+/**
+ * Simple debounce implementation.
+ *
+ * Returns a debounced version of `fn` that delays invoking `fn` until after
+ * `wait` milliseconds have elapsed since the last call to the debounced.
+ */
+function debounce<T extends (...args: any[]) => any>(fn: T, wait: number): T {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  return ((...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), wait);
+  }) as T;
+}
+
 /** How many past weeks to keep. Enough for a history view, small enough to stay cheap. */
 const HISTORY_WEEKS = 12;
 
@@ -59,6 +73,21 @@ const EMPTY: PersistedLeague = { weeks: {}, counted: [] };
 /** Bonus arrows for a daily challenge. Mirrors `arrowsFor` in the domain. */
 const CHALLENGE_BONUS = 250;
 
+/**
+ * Sync this week's score to the account.
+ *
+ * Called debounced from the store actions below. We read state directly
+ * via `useLeagueStore.getState()` to avoid stale closure issues with
+ * the debounced function and the store's `get`.
+ */
+const pushWeekDebounced = debounce(async () => {
+  const id = weekOf(Date.now()).id;
+  const arrows = useLeagueStore.getState().weeks[id] ?? 0;
+  if (arrows > 0) {
+    await syncLeague(id, arrows);
+  }
+}, 1000);
+
 function persist(state: PersistedLeague): void {
   void saveSlice(STORAGE_KEYS.league, state);
 }
@@ -93,6 +122,7 @@ export const useLeagueStore = create<LeagueState>((set, get) => ({
     };
     set(next);
     persist(next);
+    void pushWeekDebounced();
   },
 
   addChallengeWin: (atMs) => {
@@ -104,6 +134,7 @@ export const useLeagueStore = create<LeagueState>((set, get) => ({
     };
     set(next);
     persist(next);
+    void pushWeekDebounced();
   },
 
   addBonusPoints: (points, atMs = Date.now()) => {
@@ -115,6 +146,7 @@ export const useLeagueStore = create<LeagueState>((set, get) => ({
     };
     set(next);
     persist(next);
+    void pushWeekDebounced();
   },
 
   resetLeague: () => {

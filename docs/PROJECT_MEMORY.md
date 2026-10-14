@@ -1,7 +1,7 @@
 # PROJECT_MEMORY.md — ArrowPath
 
 > **Authoritative source of project state.** Read this before starting any task. Update it after every completed phase.
-> **Last updated:** App running on device successfully. Fixed package name mismatch (`arrowpuzzle` vs `arrowpath`), rebuilt APK. Missing `wordmark-light.png` asset restored.
+> **Last updated:** League leaderboard fixed (two-query JS join), banner ads mounted, tap delay fixed. All passing `npm run verify`. Heart deduction still needs Android device testing.
 > **`app/levels.tsx` is gone and nothing links to it.** The level *browser* was a
 > second way into a level that duplicated what Home, Challenge and the Play screen's
 > own "Next" already do — and the reference design had no such screen. What was
@@ -416,10 +416,7 @@ cannot reach the LAN dev server. The Wi-Fi adapter also has no DHCP lease
 
 ## Testing build
 
-`UNLOCK_ALL_LEVELS` in `src/config/index.ts` is currently **true**. Every level is
-open, level select carries a jump-to-number box, and both the menu and level
-select show a TESTING badge. Set it to `false` for production; nothing else needs
-changing.
+The `UNLOCK_ALL_LEVELS` development flag has been removed from the codebase. Normal sequential progression (level 1 → 2 → 3…) is enforced by `highestUnlocked()` in `src/state/progressStore.ts`. The TESTING badge and jump-to-number box no longer appear.
 
 309. **Blocked arrow taps move forward to the collision point and trigger impact haptics at the exact collision moment.** A blocked tap moves the arrow forward along its exit vector by `freeCells * cellSize` (or 0.25 cells for an adjacent blocker). At the exact collision impact, `onCollisionHit` triggers physical device vibration (`triggerCollisionHaptic`) and switches the rendered color to `palette.arrowBlocked`, before returning smoothly to its original position and restoring normal color. Hint haptics (`triggerHintHaptic`) remain strictly isolated.
 310. **All 12 monthly challenge trophies are displayed and accessible across both Arrow & Paper themes.** `CollectionScreen` iterates all 12 months (January to December), rendering 3D sculpted cup badges in Paper Theme and high-res trophy images in Arrow Theme without numbers on transparent backgrounds. Clicking any monthly trophy redirects directly to `/challenge?month=X&year=2026`.
@@ -437,6 +434,48 @@ changing.
 317. **The splash needs two polarities, and the display name was free where the install identity was not.** `expo-splash-screen` uses a light ground in light mode and a dark one in dark mode, so one splash file would have been invisible on half of all launches — it now ships `splash-icon.png` (charcoal) and `splash-icon-dark.png` (bone). Separately: `expo.name` became **Arrow Puzzle**, while `slug`, `scheme`, `android.package`, `extra.eas.projectId` and `updates.url` were deliberately left alone. Those five are install identity — changing any of them forks the EAS project and orphans every OTA update already on players' phones — whereas the display name is free to change and is now defined once in `src/brand/index.ts`, asserted equal to `app.json`'s `name` by a test so the app cannot introduce itself under two different names.
 
 318. **Every brand asset is derived from the same five files, and the Play listing set is no longer missing.** `npm run icons:brand` (was: `icons:build`, which generated icons from the game's *code* geometry) emits the in-app marks, the wordmark lockup, the launcher icon, both adaptive-icon layers, the Android 13 monochrome silhouette, both splash marks, the favicon and the store assets — including the **512×512 store icon, the 1024×1024 icon and the 1024×500 feature graphic** that [PROGRESS.md](PROGRESS.md) had recorded as missing and blocking submission. Generating them all from one source is the point: the icon, the splash mark and the in-app logo cannot drift apart, because they are the same drawing at different sizes. The old 3D webp is left on disk, unreferenced rather than deleted — it is still the approved art should this be reversed, and it is no longer reachable from any screen.
+
+319. **League leaderboard now fetches via two-query JS join.** `leaderboard()` in
+`services/sync.ts` previously used a PostgREST embedded join
+`profiles(display_name)` on `league_scores` that fails with `PGRST200` because no
+FK path exists between the two tables (both point at `auth.users`, not at each
+other). Replaced with two separate queries — `league_scores` and `profiles` — joined
+in JS via a `Map`. Missing profiles default to `'Player'`. No schema change needed.
+
+320. **Scores push to server after every clear.** `leagueStore.ts` now calls
+`pushWeekDebounced()` (1000ms debounce) from `addClear()`, `addChallengeWin()`, and
+`addBonusPoints()`, so opponents see updated scores without requiring an app restart.
+
+321. **League screen refetches on app focus.** `useLeagueBoard.ts` now adds an
+`AppState` listener that calls `leaderboard(weekId)` when the app returns to the
+foreground, so returning players see fresh rankings immediately.
+
+322. **League leaderboard is multiplayer, not mock.** Replaced the forty-nine
+hardcoded names (`LEADERBOARD_ROSTER`) in `useLeagueBoard.ts` with the real
+`leaderboard(weekId)` fetch from `services/sync`. The table renders `[]` when no
+server is configured or no account exists, and the local score is merged in only
+when the player is already in the server's rows.
+
+323. **Banners mount at module scope, not inside render.** `getBannerComponent()`
+returns a function component created fresh each call; calling it inside JSX trips
+ESLint's `react-hooks/static-components` rule. Both `HomeScreen.tsx` and
+`PlayScreen.tsx` now resolve `const BannerAd = getBannerComponent()` and
+`const bannerSpace = bannerHeight()` at module scope, then conditionally render
+`{BannerAd && bannerSpace > 0 && <BannerAd style={{ height: bannerSpace }} />}`.
+
+324. **Tap guard during intro animation removed.** `useBoardGestures.ts` had
+`isIntroAnimating.value` guards in `onBegin` and `onEnd` that silently dropped
+taps for ~1.3s during the level-start zoom. Taps now fire immediately; the intro
+zoom still plays (for visual clarity) but no longer blocks input. `isIntroAnimating`
+was removed from `UseBoardGesturesArgs` and from SkiaBoard.tsx's call to
+`useBoardGestures`. The shared value still exists in `useBoardCamera.ts` for camera
+animation state tracking.
+
+325. **Heart deduction investigated — no rule-level bug found.** The `chargedArrows`
+logic in `game/rules.ts` charges exactly once per arrow; all 434 tests pass. The
+inconsistency hypothesis now points to the input layer: `Gesture.Race` between tap,
+pan, and pinch; the now-removed 1.3s intro tap-dead zone; and possible Android
+touch-handling variance. Requires physical Android 10–16 testing to verify.
 
 
 

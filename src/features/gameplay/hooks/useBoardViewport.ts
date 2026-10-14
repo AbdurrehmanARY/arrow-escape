@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { computeBoardLayout, initialScaleForTier } from '@render';
 import type { BuiltLevel, DifficultyTier, Result } from '@game';
+import { bannerHeight } from '@services/ads';
 
 /**
  * Chrome above and below the board that the board must not overlap.
@@ -99,7 +100,10 @@ export function useBoardViewport({
   const insets = useSafeAreaInsets();
 
   const viewportWidth = Math.min(width, 600);
-  const availableVertical = Math.max(220, height - insets.top - insets.bottom);
+  const availableVertical = Math.max(
+    220,
+    height - insets.top - insets.bottom - bannerHeight(),
+  );
   const viewportHeight = Math.max(220, availableVertical - CHROME_HEIGHT);
 
   const layout = useMemo(

@@ -37,7 +37,7 @@ import {
 import { LEVEL_COUNT, levelById, tierOf } from '@data';
 import { TIER_LABELS } from '@game/codec';
 import { WIN_OVERLAY_DELAY_MS } from '@config';
-import { recordLevelCompleteAndCheckInterstitial, showRewarded } from '@services/ads';
+import { bannerHeight, getBannerComponent, recordLevelCompleteAndCheckInterstitial, showRewarded } from '@services/ads';
 import { playMusic, playSfx, playSting, stopAllSfx, type SfxName } from '@services/audio';
 import { gameReducer, initGameState , statsOf, useChallengeStore , useLeagueStore , useProgressStore , useSettingsStore } from '@state';
 
@@ -51,6 +51,18 @@ import type { DifficultyTier } from '@game/codec';
 import { useArrowTap } from '../hooks/useArrowTap';
 import { useBoardViewport } from '../hooks/useBoardViewport';
 import { useHintFlow } from '../hooks/useHintFlow';
+
+/**
+ * Banner ad component, resolved once at module scope.
+ *
+ * `getBannerComponent()` returns a function component created from the native
+ * SDK wrapper — calling it during render trips ESLint's
+ * `react-hooks/static-components` rule, so it is resolved here instead.
+ */
+const BannerAd = getBannerComponent();
+const bannerSpace = bannerHeight();
+
+
 
 /**
  * Props for {@link PlayScreen}, forwarded from `app/play/[id].tsx`.
@@ -529,6 +541,9 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
         onConfirm={doRestart}
         onCancel={() => setShowRestartConfirm(false)}
       />
+
+      { /* ---- Banner Ad at bottom ------------------------------------------- */ }
+      {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
     </Screen>
   );
 }

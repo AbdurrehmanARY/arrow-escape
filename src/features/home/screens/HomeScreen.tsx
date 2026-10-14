@@ -24,6 +24,7 @@ import { useRouter } from 'expo-router';
 import { MonthlyTrophyBadge, Screen, Springy, useTheme, withClick } from '@components';
 import { APP_NAME, brandWordmarkFor } from '@shared/branding';
 import { playMusic } from '@services/audio';
+import { bannerHeight, getBannerComponent } from '@services/ads';
 import { challengeId, daysInMonth, today } from '@challenge';
 import { LEVEL_COUNT, tierOf } from '@data';
 import { TIER_LABELS } from '@game';
@@ -39,6 +40,16 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ] as const;
 
+/**
+ * Banner ad component, resolved once at module scope.
+ *
+ * `getBannerComponent()` returns a function component created from the native
+ * SDK wrapper — calling it during render trips ESLint's
+ * `react-hooks/static-components` rule, so it is resolved here instead.
+ */
+const BannerAd = getBannerComponent();
+const bannerSpace = bannerHeight();
+
 export function HomeScreen() {
   const router = useRouter();
   const { palette } = useTheme();
@@ -48,7 +59,7 @@ export function HomeScreen() {
   const challengeRecords = useChallengeStore((state) => state.records);
 
   const now = useMemo(() => today(), []);
-  const [nowMs] = useState(() => Date.now());
+    const [nowMs] = useState(() => Date.now());
   const challengeDone = isDayWon({ records: challengeRecords }, now);
 
   const isCurrentMonthCompleted = useMemo(() => {
@@ -165,6 +176,8 @@ export function HomeScreen() {
           </Springy>
 
           </View>
+          {/* ---- Banner Ad at bottom ------------------------------------------- */}
+          {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
       </View>
     </Screen>
   );

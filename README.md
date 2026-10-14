@@ -100,11 +100,7 @@ shifts across the game. The average climbs; any individual level is a surprise.
 
 ## Testing build
 
-`UNLOCK_ALL_LEVELS` in [src/config/index.ts](src/config/index.ts) is currently
-**true**: every level is open, level select has a jump-to-number box, and both the
-menu and level select show a TESTING badge so it cannot ship unnoticed. Set it to
-`false` to restore normal progression — it is read in one place, and real progress
-is tracked independently of it.
+Development builds open all levels via the `UNLOCK_ALL_LEVELS` flag for testing. That flag has been removed; normal sequential unlocking (level 1 → 2 → 3…) is enforced by `highestUnlocked()` in `src/state/progressStore.ts`. Development builds should not show a TESTING badge or a jump-to-number box. (If you need to test a higher level, use the JumpToLevel component temporarily for development only.)
 
 ## Theming
 

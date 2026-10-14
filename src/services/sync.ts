@@ -289,30 +289,58 @@ export async function syncLeague(weekId: string, arrows: number): Promise<number
  * Returns an empty array when there is no account or no connection, which the
  * Leagues screen already knows how to render — it has shown "no one to compare
  * with yet" since before this file existed.
+ *
+ * The join to profiles is done in JS because Supabase/PostgREST cannot traverse
+ * the FK path from league_scores.user_id → auth.users → profiles.id (both FKs point
+ * at auth.users, not at each other). Two queries joined in JS works reliably
+ * without schema changes and remains pure TypeScript.
  */
 export async function leaderboard(weekId: string, limit = 50): Promise<readonly LeaderboardRow[]> {
   const client = supabase();
   if (!client) return [];
 
   try {
-    const { data, error } = await client
+    const { data: scores, error: scoresError } = await client
       .from('league_scores')
-      .select('user_id, arrows, profiles(display_name)')
+      .select('user_id, arrows')
       .eq('week_id', weekId)
       .order('arrows', { ascending: false })
       .limit(limit);
 
-    if (error || !data) return [];
+    if (scoresError || !scores) return [];
+    if (scores.length === 0) return [];
 
-    return data.map((row, index) => {
-      const profile = row.profiles as { display_name?: string } | null;
-      return {
+    // Fetch profiles in a single query for all user_ids present.
+    const userIds = scores.map((row) => row.user_id);
+    const { data: profiles, error: profilesError } = await client
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', userIds);
+
+    if (profilesError || !profiles) {
+      // Return without display names — safe fallback rather than failing.
+      return scores.map((row, index) => ({
         userId: row.user_id as string,
-        name: profile?.display_name ?? 'Player',
+        name: 'Player',
         arrows: row.arrows as number,
         rank: index + 1,
-      };
-    });
+      }));
+    }
+
+    // Build a lookup map for profile names.
+    const profileNames = new Map(
+      (profiles as { id: string; display_name?: string | null }[]).map((p) => [
+        p.id,
+        p.display_name || undefined,
+      ]),
+    );
+
+    return scores.map((row, index) => ({
+      userId: row.user_id as string,
+      name: profileNames.get(row.user_id) ?? 'Player',
+      arrows: row.arrows as number,
+      rank: index + 1,
+    }));
   } catch {
     return [];
   }

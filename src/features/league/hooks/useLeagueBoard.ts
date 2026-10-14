@@ -122,7 +122,15 @@ export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
    * state that was already knowable — the week changed, so the old rows are
    * already stale — and React's rule against it is the right one.
    */
+  /**
+   * Refetch when the screen gains focus.
+   *
+   * Opponents' scores are pushed via `pushWeekDebounced` after every clear,
+   * but we need to pull updates on focus so a player who restarts the app
+   * sees fresh rankings immediately.
+   */
   const [fetched, setFetched] = useState<string | undefined>(undefined);
+  const loading = fetched !== weekId;
 
   useEffect(() => {
     let cancelled = false;
@@ -145,7 +153,25 @@ export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
     };
   }, [weekId]);
 
-  const loading = fetched !== weekId;
+  useEffect(() => {
+    let cancelled = false;
+    import('react-native').then(({ AppState }) => {
+      if (cancelled) return;
+      const listener = () => {
+        if (loading) return; // Don't refetch while initial load is pending
+        if (fetched !== weekId) return;
+        void leaderboard(weekId).then((rows) => {
+          setRemote(rows);
+        });
+      };
+      // Listen for app state changes - when app becomes active, refetch.
+      const subscription = AppState.addEventListener('change', listener);
+      return () => subscription.remove();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, fetched, weekId]);
 
   const leaderboardData = useMemo<LeaderboardEntry[]>(() => {
     // No server rows means no table. The player still sees their league, shield,

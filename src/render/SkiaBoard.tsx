@@ -239,7 +239,6 @@ export function SkiaBoard({
     savedX,
     savedY,
     isPinching,
-    isIntroAnimating,
     transform,
   } = useBoardCamera({
     width,
@@ -283,7 +282,6 @@ export function SkiaBoard({
     savedX,
     savedY,
     isPinching,
-    isIntroAnimating,
     onPressArrow,
     onTapArrow,
     onTapEmpty,

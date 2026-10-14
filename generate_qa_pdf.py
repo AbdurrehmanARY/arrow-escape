@@ -376,7 +376,7 @@ class Pdf(object):
 # ===========================================================================
 
 APP = "ArrowPath"
-BUILD_TAG = "1.0.1  /  versionCode 23"
+BUILD_TAG = "1.0.1  /  versionCode 26"
 
 
 def content_cover(pdf):
@@ -418,7 +418,7 @@ def content_cover(pdf):
             ["Application", "ArrowPath (Arrow Escape puzzle)"],
             ["Android package", "com.abdurrehmanary.arrowpath"],
             ["Version name", "1.0.1"],
-            ["Android versionCode", "23"],
+            ["Android versionCode", "26"],
             ["Expo SDK", "57"],
             ["React Native", "0.86.2"],
             ["Debug APK", "ArrowPath-DEBUG-testads-1.0.1-vc23.apk  (Google test ad units)"],
@@ -1360,4 +1360,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

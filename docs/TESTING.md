@@ -240,9 +240,7 @@ left instead, and the sheet behind it holds Resume, Restart, Settings, and Leave
 
 ### Jumping around
 
-Every level is open in this build. Level select has a **jump-to-number box** at
-the top — type 106, hit Go. Both the menu and level select carry a TESTING badge
-while that flag is on.
+Levels are unlocked sequentially. No jump-to-number box appears in production builds.
 
 ### Gates — new, and the most important thing to test
 

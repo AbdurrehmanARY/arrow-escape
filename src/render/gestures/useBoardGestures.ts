@@ -57,10 +57,9 @@ export interface UseBoardGesturesArgs {
   readonly savedScale: SharedValue<number>;
   readonly translateX: SharedValue<number>;
   readonly translateY: SharedValue<number>;
-  readonly savedX: SharedValue<number>;
+  readonly savedX: SharedValue<number>
   readonly savedY: SharedValue<number>;
   readonly isPinching: SharedValue<boolean>;
-  readonly isIntroAnimating: SharedValue<boolean>;
   readonly onPressArrow?: ((arrowIndex: number) => void) | undefined;
   readonly onTapArrow: (arrowIndex: number) => void;
   readonly onTapEmpty?: (() => void) | undefined;
@@ -105,7 +104,6 @@ export function useBoardGestures({
   savedX,
   savedY,
   isPinching,
-  isIntroAnimating,
   onPressArrow,
   onTapArrow,
   onTapEmpty,
@@ -259,7 +257,7 @@ export function useBoardGestures({
         .maxDuration(900)
         .onBegin((event) => {
           'worklet';
-          if (isIntroAnimating.value) return;
+          // No guard on isIntroAnimating — taps respond immediately.
           const point = toBoardPoint(
             event.x,
             event.y,
@@ -282,7 +280,7 @@ export function useBoardGestures({
         })
         .onEnd((event, success) => {
           'worklet';
-          if (!success || isIntroAnimating.value) return;
+          if (!success) return;
           const point = toBoardPoint(
             event.x,
             event.y,
@@ -307,7 +305,6 @@ export function useBoardGestures({
       handleTap,
       markPressed,
       pressedArrow,
-      isIntroAnimating,
     ],
   );
 

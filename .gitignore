@@ -63,10 +63,13 @@ __pycache__/
 .claude/settings.local.json
 .claude/*.tmp.*
 
-# Locally built APKs — large, and rebuilt from source on demand.
+# Locally built APKs, scratch scripts, and other build artifacts — large, and rebuilt from source on demand.
 /build/
 *.apk
+*.aab
 /tools/_scratch-*.ts
+fix.ps1
+fix_indent.py
 
 # Orphan / duplicate image patterns from the Phase A audit.
 # These are byte-identical duplicates or unreferenced orphans that should

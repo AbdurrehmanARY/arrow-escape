@@ -1,26 +1,27 @@
 /**
- * ads.ts — rewarded ads, and only rewarded ads.
+ * ads.ts — rewarded ads, interstitial ads, and banner ad component.
  *
- * Purpose:      Let a player earn a hint by watching an ad, and behave gracefully
- *               when they cannot.
+ * Purpose:      Let a player earn a hint by watching an ad, show interstitials on
+ *               level completion, and display a bottom banner on all screens.
  * Responsibilities:
- *               - Preload one rewarded ad when online.
- *               - Show it and report whether the reward was actually earned.
- * Notes:        **No ad appears anywhere except the explicit "earn a hint" action**
- *               (GDD §9). No interstitials, no banners, nothing on level complete.
+ *               - Preload one rewarded ad and one interstitial when online.
+ *               - Show them and report outcomes.
+ *               - Provide a banner component that renders with the production unit ID,
+ *                 or nothing when the native SDK is absent (Expo Go).
  *
- *               The SDK is loaded through a guarded dynamic `require`, not a
- *               static import. `react-native-google-mobile-ads` is a native module
- *               that Expo Go cannot load, and a static import would crash the app
- *               on launch there — taking Phases 1–5 testing down with it. Instead
- *               the module resolves at runtime and, when it is absent, the whole
- *               service reports `unavailable` and the game carries on. Restart is
- *               always free, so nothing is ever blocked behind an ad.
+ * Notes:        All three ad formats load the native module through a guarded dynamic
+ *               `require`, not a static import. `react-native-google-mobile-ads` is a
+ *               native module that Expo Go cannot load, and a static import would crash
+ *               the app on launch there — taking Phases 1–5 testing down. Instead
+ *               the module resolves at runtime and, when absent, the whole service
+ *               reports `unavailable` and the game carries on. Restart is always free,
+ *               so nothing is ever blocked behind an ad.
  *
  *               To enable for real, see `docs/ADS_SETUP.md`.
  */
 
 import { NativeModules, TurboModuleRegistry } from 'react-native';
+import React from 'react';
 
 import { AD_UNIT_IDS, USE_TEST_ADS } from '@config';
 import { trackTelemetry } from './telemetry';
@@ -46,11 +47,15 @@ interface RewardedAdLike {
   loaded: boolean;
 }
 
+/** Height of a standard banner in dp. Used to reserve space when sdk is absent. */
+const BANNER_HEIGHT_DP = 50;
+
 interface AdsModule {
   RewardedAd: { createForAdRequest: (unitId: string, options?: unknown) => RewardedAdLike };
   RewardedAdEventType: { LOADED: string; EARNED_REWARD: string };
+  InterstitialAd: { createForAdRequest: (unitId: string, options?: unknown) => RewardedAdLike };
   AdEventType: { CLOSED: string; ERROR: string; LOADED: string };
-  TestIds: { REWARDED: string; INTERSTITIAL: string };
+  TestIds: { REWARDED: string; INTERSTITIAL: string; BANNER: string };
   default?: () => { initialize: () => Promise<unknown> };
 }
 
@@ -58,6 +63,8 @@ let sdk: AdsModule | undefined;
 let sdkChecked = false;
 let rewarded: RewardedAdLike | undefined;
 let loaded = false;
+let interstitial: RewardedAdLike | undefined;
+let interstitialLoaded = false;
 
 /**
  * Is the *native* half of the ads SDK in this binary?
@@ -126,6 +133,7 @@ export async function initAds(): Promise<void> {
   try {
     await module.default?.().initialize();
     preload();
+    preloadInterstitial();
   } catch {
     // An SDK that will not initialise simply means no ads this session.
   }
@@ -154,6 +162,31 @@ export function preload(): void {
   } catch {
     rewarded = undefined;
     loaded = false;
+  }
+}
+
+/** Fetch the next interstitial in the background, the same pattern as rewarded. */
+export function preloadInterstitial(): void {
+  const module = loadSdk();
+  if (!module) return;
+
+  try {
+    const ad = module.InterstitialAd.createForAdRequest(
+      USE_TEST_ADS ? module.TestIds.INTERSTITIAL : AD_UNIT_IDS.interstitial,
+      { requestNonPersonalizedAdsOnly: true },
+    );
+    ad.addAdEventListener(module.AdEventType.LOADED, () => {
+      interstitialLoaded = true;
+    });
+    ad.addAdEventListener(module.AdEventType.ERROR, () => {
+      interstitialLoaded = false;
+    });
+    interstitial = ad;
+    interstitialLoaded = false;
+    ad.load();
+  } catch {
+    interstitial = undefined;
+    interstitialLoaded = false;
   }
 }
 
@@ -350,18 +383,27 @@ export function showInterstitial(): Promise<boolean> {
 
   return new Promise<boolean>((resolve) => {
     try {
-      // In native production, fetch and display InterstitialAd unit
-      const unit = USE_TEST_ADS ? module.TestIds.INTERSTITIAL : AD_UNIT_IDS.interstitial;
-      debug(`[AdMob] Requesting InterstitialAd with unitId: ${unit}`);
-      const interstitial = (module as any).InterstitialAd?.createForAdRequest?.(unit, {
-        requestNonPersonalizedAdsOnly: true,
-      });
-
-      if (!interstitial) {
-        console.warn('[AdMob] InterstitialAd.createForAdRequest returned undefined.');
-        resolve(false);
-        return;
+      // If a preloaded instance is ready, reuse it and preload the next immediately.
+      const ad = interstitialLoaded ? interstitial : undefined;
+      if (!ad) {
+        // Fallback: create on-demand.
+        const unit = USE_TEST_ADS ? module.TestIds.INTERSTITIAL : AD_UNIT_IDS.interstitial;
+        debug(`[AdMob] Requesting InterstitialAd with unitId: ${unit}`);
+        const fallback = (module as any).InterstitialAd?.createForAdRequest?.(unit, {
+          requestNonPersonalizedAdsOnly: true,
+        });
+        if (!fallback) {
+          console.warn('[AdMob] InterstitialAd.createForAdRequest returned undefined.');
+          resolve(false);
+          return;
+        }
+        interstitialLoaded = false;
+        interstitial = fallback;
+        fallback.load();
       }
+
+      const adToShow = interstitial!;
+      debug(`[AdMob] Showing preloaded InterstitialAd.`);
 
       let unsubClosed: (() => void) | undefined;
       let unsubError: (() => void) | undefined;
@@ -377,34 +419,93 @@ export function showInterstitial(): Promise<boolean> {
             payload: { format: 'interstitial', placement: 'level_complete' },
           });
         }
+        // Begin refilling the next interstitial immediately.
+        preloadInterstitial();
         resolve(shown);
       };
 
-      unsubClosed = interstitial.addAdEventListener(module.AdEventType.CLOSED, () => {
+      unsubClosed = adToShow.addAdEventListener(module.AdEventType.CLOSED, () => {
         debug('[AdMob] Interstitial CLOSED.');
         finish(true);
       });
 
-      unsubError = interstitial.addAdEventListener(module.AdEventType.ERROR, (err: unknown) => {
+      unsubError = adToShow.addAdEventListener(module.AdEventType.ERROR, (err: unknown) => {
         console.warn('[AdMob] Interstitial ERROR:', err);
         finish(false);
       });
 
-      unsubLoaded = interstitial.addAdEventListener(module.AdEventType.LOADED, () => {
+      unsubLoaded = adToShow.addAdEventListener(module.AdEventType.LOADED, () => {
         debug('[AdMob] Interstitial LOADED, showing now...');
         try {
-          interstitial.show();
+          adToShow.show();
         } catch (e) {
           console.warn('[AdMob] Interstitial show failed:', e);
           finish(false);
         }
       });
 
-      interstitial.load();
+      // The preloaded ad is already loaded; show it immediately if ready.
+      if (adToShow.loaded) {
+        unsubLoaded?.();
+        try {
+          adToShow.show();
+        } catch (e) {
+          console.warn('[AdMob] Interstitial show failed:', e);
+          finish(false);
+        }
+      } else {
+        adToShow.load();
+      }
     } catch (e) {
       console.warn('[AdMob] Exception in showInterstitial:', e);
       resolve(false);
     }
   });
 }
+
+// ---------------------------------------------------------------------------
+// Banner Ad support
+// ---------------------------------------------------------------------------
+
+/**
+ * Height (in dp) consumed by a bottom banner, or 0 when no banner will render.
+ *
+ * Both the layout code (`useBoardViewport`) and the screen frame (`Screen`) call
+ * this so a single truth decides whether banner space is reserved. When the native
+ * SDK is absent — Expo Go — the answer is `0`, so layouts match a real build and
+ * the banner simply does not appear.
+ */
+export function bannerHeight(): number {
+  return hasNativeAds() ? BANNER_HEIGHT_DP : 0;
+}
+
+/**
+ * Resolve a `BannerAd` React component bound to this project's unit id, or
+ * `undefined` when the SDK is absent.
+ *
+ * The component is fetched lazily from the guarded dynamic `require`, so a static
+ * import can never pull it into Expo Go and crash launch. Each call to the wrapper
+ * renders the real `BannerAd` when present, or `null` otherwise — keeping the
+ * layout contract identical across dev and release builds.
+ */
+export function getBannerComponent(): React.ComponentType<{ style?: object }> | undefined {
+  const module = loadSdk();
+  if (!module) return undefined;
+
+  const BannerAd = (module as any).BannerAd;
+  if (!BannerAd) return undefined;
+
+  const unitId = USE_TEST_ADS ? module.TestIds.BANNER : AD_UNIT_IDS.banner;
+
+  return function BannerAdWrapper(props: { style?: object }) {
+    return React.createElement(BannerAd, {
+      unitId,
+      adPosition: 'bottom',
+      size: 'banner',
+      requestOptions: { requestNonPersonalizedAdsOnly: true },
+      style: [{ height: BANNER_HEIGHT_DP }, props.style],
+    });
+  };
+}
+
 
