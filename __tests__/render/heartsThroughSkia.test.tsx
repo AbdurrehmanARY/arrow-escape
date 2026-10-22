@@ -23,6 +23,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import { createElement, type ReactNode } from 'react';
+import { Image } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import { buildLevel, parseAscii, EMPTY } from '@game';
@@ -207,5 +208,59 @@ describe('hearts, through the Skia hit-test path', () => {
       // And it was the arrow actually aimed at that reacted.
       expect(game.highlight?.blocked).toBe(2);
     }
+  });
+
+  it('renders a heart image per heart of the budget, never a ♥ glyph', () => {
+    const game: GameState = initGameState(FIXTURE.initial, 5);
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(hud(game.session));
+    });
+
+    // The original defect was a `♥` Text glyph whose colour was silently ignored
+    // by some OEM emoji fonts — a failure no colour-only assertion could catch.
+    // Prove the glyph is gone entirely.
+    const glyphNodes = tree.root.findAll((node) => node.props?.children === '♥');
+    expect(glyphNodes).toHaveLength(0);
+
+    // A heart image is "one of ours" iff it carries both a `source` (the asset)
+    // and a `tintColor` (its palette colour). That pairing is stable regardless
+    // of how the Jest image mock resolves `require()`, and it pins the alive
+    // colour to `palette.heart` / `palette.heartSpent` instead of a glyph colour.
+    const tintColorOf = (style: unknown): string | undefined => {
+      if (style == null) return undefined;
+      if (Array.isArray(style)) {
+        for (const piece of style) {
+          const hit = tintColorOf(piece);
+          if (hit !== undefined) return hit;
+        }
+        return undefined;
+      }
+      if (typeof style === 'object' && style !== null && 'tintColor' in style) {
+        const value = (style as { tintColor?: unknown }).tintColor;
+        return typeof value === 'string' ? value : undefined;
+      }
+      return undefined;
+    };
+
+    const rows = tree.root.findAll(
+      (node) =>
+        typeof node.props?.accessibilityLabel === 'string' &&
+        node.props.accessibilityLabel.endsWith('hearts left'),
+    );
+    // react-test-renderer surfaces the row twice — once as the host `View` and
+    // once as its class-component wrapper. The existing `heartsShown` helper
+    // already lives with that doubling (it reads index [1]); here we simply
+    // take the first match and count the tinted images beneath it.
+    const row = rows[0]!;
+    // Each RN host component is wrapped in a class-component that re-exposes the
+    // same props, so `findAll` by prop alone double-counts. Select the host
+    // `<Image>` nodes by their string type instead — that dedups to one node
+    // per rendered heart.
+    const hearts = row.findAll((node) => node.type === Image);
+    expect(hearts).toHaveLength(game.session.maxHearts);
+    expect(
+      hearts.every((img) => tintColorOf(img.props?.style) === defaultTheme.palette.heart),
+    ).toBe(true);
   });
 });

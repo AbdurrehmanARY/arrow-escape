@@ -22,6 +22,7 @@ import {
   AWARD_IMAGES,
   ALL_IMAGES,
   BRAND_IMAGES,
+  HEART_IMAGES,
   IMAGES,
   RECORD_IMAGES,
   SHIELD_IMAGES,
@@ -70,6 +71,7 @@ describe('the image registry', () => {
       TROPHY_IMAGES,
       THEME_IMAGES,
       SHIELD_IMAGES,
+      HEART_IMAGES,
     ];
     const fromGroups = groups.flatMap((group) => Object.values(group));
     expect(ALL_IMAGES).toHaveLength(fromGroups.length);

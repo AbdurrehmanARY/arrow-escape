@@ -4,7 +4,7 @@
  * Purpose:      Give the play screen one door out to everything that is not
  *               tapping an arrow, so the board is not surrounded by chrome.
  * Responsibilities:
- *               - `PauseMenu` — level identity, progress, and the four actions
+ *               - `PauseMenu` — level identity, progress, and the actions
  *                 that lead away from the board.
  * Notes:        This exists as much to *remove* things as to add them. The play
  *               screen used to carry a back button, a settings button and a hint
@@ -47,7 +47,6 @@ export interface PauseMenuProps {
   onResume: () => void;
   onRestart: () => void;
   onSettings: () => void;
-  onLevels: () => void;
 }
 
 export const PauseMenu = memo(function PauseMenu({
@@ -65,7 +64,6 @@ export const PauseMenu = memo(function PauseMenu({
   onResume,
   onRestart,
   onSettings,
-  onLevels,
 }: PauseMenuProps) {
   const cleared = arrowsTotal - arrowsLeft;
 
@@ -110,12 +108,6 @@ export const PauseMenu = memo(function PauseMenu({
             <Secondary palette={palette} label="Restart" glyph="↺" onPress={onRestart} />
             <Secondary palette={palette} label="Settings" glyph="⚙" onPress={onSettings} />
           </View>
-
-          <Pressable accessibilityRole="button" onPress={withClick(onLevels)} style={styles.leave}>
-            <Text style={[styles.leaveLabel, { color: palette.textMuted }]}>
-              Leave for level select
-            </Text>
-          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -266,8 +258,5 @@ const styles = StyleSheet.create({
   },
   secondaryGlyph: { fontSize: 15 },
   secondaryLabel: { ...typography.body, fontWeight: '700' },
-
-  leave: { alignSelf: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.md },
-  leaveLabel: { ...typography.small },
-
-});
+});
+/* stray duplicate close removed */

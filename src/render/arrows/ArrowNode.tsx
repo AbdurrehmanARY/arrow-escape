@@ -33,7 +33,7 @@ import {
 import type { Palette } from '@theme';
 
 import type { ArrowPaths } from '../skiaScene';
-import { releaseDurationMs } from '../timings';
+import { MS_PER_CELL, releaseDurationMs } from '../timings';
 
 /**
  * The one easing curve every arrow movement uses — exit, and both halves of the
@@ -164,7 +164,7 @@ export function ArrowNode({
     const targetDisplacement = Math.max(freeCells, 0.25);
     // Velocity matching: use the exact same cell velocity (ms per cell) as departure movement
     const departureDuration = releaseDurationMs(paths.travelCells);
-    const msPerCell = paths.travelCells > 0 ? departureDuration / paths.travelCells : 30;
+    const msPerCell = paths.travelCells > 0 ? departureDuration / paths.travelCells : MS_PER_CELL;
     const animDuration = Math.max(70, Math.round(targetDisplacement * msPerCell));
 
     setIsCollidedColor(false);

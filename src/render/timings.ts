@@ -24,12 +24,16 @@
  *
  * Duration therefore tracks distance. The floor stops a one-cell hop from being a
  * flicker; the ceiling stops a full-width exit on the biggest board from becoming a
- * three-second wait. Between them, speed varies by about three times rather than
+ * 0.8s wait. Between them, speed varies by about three times rather than
  * twenty.
+ *
+ * As of this writing the full-width exit on the largest board is clamped at
+ * MAX_RELEASE_MS (0.8s); the win-overlay delay sits just above that so the sheet
+ * never paints over the last snake mid-flight.
  */
-const MS_PER_CELL = 30;
-const MIN_RELEASE_MS = 300;
-const MAX_RELEASE_MS = 1000;
+export const MS_PER_CELL = 24;
+const MIN_RELEASE_MS = 240;
+const MAX_RELEASE_MS = 800;
 
 /** How long this arrow's exit should take, from how far it has to go. */
 export function releaseDurationMs(travelCells: number): number {

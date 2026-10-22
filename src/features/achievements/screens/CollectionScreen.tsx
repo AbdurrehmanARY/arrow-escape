@@ -32,7 +32,7 @@ import {
   useCalculatedRewards,
   type CalculatedRewardItem,
 } from '@challenge';
-import { statsOf, useChallengeStore , clearedCount, perfectCount, useProgressStore } from '@state';
+import { statsOf, useChallengeStore } from '@state';
 import { useCurrentShield } from '@hooks';
 
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
@@ -72,7 +72,6 @@ export function CollectionScreen() {
   const { palette } = useTheme();
 
   const records = useChallengeStore((state) => state.records);
-  const progressRecords = useProgressStore((state) => state.records);
   // Mount-stable, for the same reason as every other caller: a re-render must not
   // be able to resolve a different week than the tiles already drawn.
   const [nowMs] = useState(() => Date.now());
@@ -97,15 +96,14 @@ export function CollectionScreen() {
     [calculatedRewards],
   );
 
-  const cleared = useMemo(() => clearedCount(progressRecords), [progressRecords]);
-  const perfect = useMemo(() => perfectCount(progressRecords), [progressRecords]);
-
   /**
-   * All 12 monthly challenge trophies (January through December) for the current year.
+   * Monthly challenge trophies from January through the current month for the current year.
+   * Months that haven't started yet are not shown — a wall of zeros for future months
+   * is a to-do list, not a collection.
    */
   const trophies = useMemo(() => {
     const out: { month: number; won: number; days: number }[] = [];
-    for (let month = 1; month <= 12; month += 1) {
+    for (let month = 1; month <= now.month; month += 1) {
       const days = daysInMonth(now.year, month);
       let won = 0;
       for (let day = 1; day <= days; day += 1) {
@@ -221,9 +219,7 @@ export function CollectionScreen() {
 
   
 
-            <Text style={[styles.footnote, { color: palette.textFaint }]}>
-        {perfect} of your {cleared} cleared levels were read without a single mistake.
-      </Text><MonthlyTrophyModal
+        <MonthlyTrophyModal
         visible={modalMonth !== null}
         month={modalMonth ?? 1}
         year={now.year}
@@ -460,5 +456,4 @@ const styles = StyleSheet.create({
 
   year: { ...typography.heading, fontFamily: fonts.displayExtra, fontWeight: '800', marginBottom: spacing.sm },
   empty: { ...typography.body, marginBottom: spacing.lg },
-  footnote: { ...typography.small, textAlign: 'center', marginTop: spacing.lg },
 });

@@ -388,8 +388,8 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
         </Text>
         <PillButton
           palette={palette}
-          label="Back to levels"
-          onPress={() => router.replace('/levels')}
+          label="Main menu"
+          onPress={() => router.replace('/')}
         />
       </Screen>
     );
@@ -403,7 +403,7 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
             palette={palette}
             tierLabel={tierLabel}
             heartsLeft={state.session.heartsLeft}
-            maxHearts={3}
+            maxHearts={state.session.maxHearts}
             onBack={() => router.back()}
             onRestart={onRestartPressed}
             onHint={earning ? () => undefined : onHint}
@@ -491,7 +491,6 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
           setPaused(false);
           router.push('/settings');
         }}
-        onLevels={() => router.replace('/levels')}
       />
 
       <WinOverlay
@@ -504,7 +503,6 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
         perfectStreak={perfectStreak}
         onNext={levelId < LEVEL_COUNT ? () => router.replace(`/play/${levelId + 1}`) : undefined}
         onReplay={doRestart}
-        onLevels={() => router.replace('/levels')}
       />
 
       <FailOverlay
@@ -513,7 +511,7 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
         stillWinnable={!doomed}
         remainingArrows={state.session.state.remaining}
         onRetry={doRestart}
-        onLevels={() => router.replace('/levels')}
+        onHome={() => router.replace('/')}
         onNearMiss={() => {
           showRewarded().then((outcome) => {
             if (outcome.kind === 'earned') {
@@ -529,7 +527,6 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
         visible={status === 'stuck' || (status === 'playing' && doomed)}
         quietly={status === 'playing'}
         onRetry={doRestart}
-        onLevels={() => router.replace('/levels')}
       />
 
       <ConfirmDialog

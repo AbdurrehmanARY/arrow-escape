@@ -9,19 +9,20 @@
  */
 
 import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
 import { Springy, useGlow } from '@shared/primitives/Pressable';
+import { HEART_IMAGES } from '@shared/assets/images';
 import { withClick } from './sound';
 
 export interface HudProps {
   palette: Palette;
   tierLabel: string;
   heartsLeft: number;
-  maxHearts?: number;
+  maxHearts: number;
   onBack: () => void;
   onRestart: () => void;
   onHint: () => void;
@@ -32,7 +33,7 @@ function HudInner({
   palette,
   tierLabel,
   heartsLeft,
-  maxHearts = 3,
+  maxHearts,
   onBack,
   onRestart,
   onHint,
@@ -81,17 +82,21 @@ function HudInner({
           style={styles.heartsRow}
           accessibilityLabel={`${heartsLeft} of ${maxHearts} hearts left`}
         >
-          {Array.from({ length: maxHearts }, (_, i) => (
-            <Text
-              key={i}
-              style={[
-                styles.heart,
-                { color: i < heartsLeft ? palette.heart : palette.heartSpent },
-              ]}
-            >
-              ♥
-            </Text>
-          ))}
+          {Array.from({ length: maxHearts }, (_, i) => {
+            const alive = i < heartsLeft;
+            return (
+              <Image
+                key={i}
+                accessible={false}
+                source={alive ? HEART_IMAGES.heartFilled.source : HEART_IMAGES.heartOutline.source}
+                resizeMode="contain"
+                style={[
+                  styles.heart,
+                  { tintColor: alive ? palette.heart : palette.heartSpent },
+                ]}
+              />
+            );
+          })}
         </View>
       </View>
 
@@ -197,7 +202,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heart: {
-    fontSize: 18,
+    width: 18,
+    height: 18,
   },
   hintPill: {
     flexDirection: 'row',

@@ -5,12 +5,15 @@
  *               and who it shares it with.
  * Responsibilities:
  *               - Render the policy through the shared legal-document frame.
- * Notes:        **Every claim below was read out of the code, not invented.** The
- *               app has no analytics SDK and no crash reporter, so there is no
- *               analytics section; it does use AdMob, so there is an advertising
- *               one. If a future build adds a data partner, the corresponding
- *               section has to be added here in the same change — an out-of-date
- *               privacy policy is worse than none, because it is relied upon.
+ * Notes:        The wording below mirrors the published privacy policy document
+ *               that ships alongside the app; this file is the single source the
+ *               in-app screen draws from. The two must be updated together: an
+ *               out-of-date privacy policy is worse than none, because players
+ *               rely on it. If a future build adds a data partner, the matching
+ *               section has to be added here AND in the published document in the
+ *               same change. This build uses AdMob for ads and optional Google
+ *               sign-in backed by Supabase; there is no analytics SDK and never
+ *               has been.
  */
 
 import { APP_VERSION } from '@config';
@@ -20,61 +23,110 @@ import { LegalDocumentScreen, type LegalDocument } from './LegalDocumentScreen';
 
 const PRIVACY_POLICY: LegalDocument = {
   title: 'Privacy Policy',
-  effectiveDate: '1 March 2026',
+  effectiveDate: '20 October 2026',
   sections: [
     {
-      heading: 'The short version',
+      heading: 'Who We Are',
       paragraphs: [
-        `${APP_NAME} is a puzzle game. Most of what it knows about you never leaves your phone: your progress, your settings, your hints and your streak are stored on the device only, unless you choose to sign in with Google, in which case that same progress is also backed up to your account so it can follow you to a new phone.`,
-        'We do not sell your personal information, and we do not use it for advertising.',
+        `This Privacy Policy describes how information is collected when you use the ${APP_NAME} mobile game application.`,
+        'Developer: Abdur Rehman',
+        'Contact Email: aryousaf4@gmail.com',
       ],
     },
     {
-      heading: 'What is stored on your device',
+      heading: 'Information We Collect',
       paragraphs: [
-        'The following is written to local storage on your phone and is not transmitted anywhere: your level progress and personal bests, your settings for sound, haptics and theme, your remaining hints, whether you have seen the tutorial, your daily challenge results, your weekly league score, and your current streak.',
-        'If you sign out, or uninstall the app, this data is removed. Signing in and then signing out does not delete your cloud backup — see "Removing your data" below.',
+        'Information you provide:',
+        'Email address and profile information (when you sign in with Google)',
+        'Display name (from your Google profile)',
+        'Game preferences and settings you configure',
+        'Information collected automatically:',
+        'Gameplay progress and achievement data (saved locally and optionally synced to server)',
+        'Device information (device model, OS version, app version, IP address when syncing)',
+        'Game usage statistics (play frequency, level completion, streaks)',
+        'Advertising identifier (AAID/GAID) for ad personalization',
       ],
     },
     {
-      heading: 'What happens if you sign in with Google',
+      heading: 'How We Use Information',
       paragraphs: [
-        'Signing in is optional and the game is fully playable without it. If you choose to sign in, the app sends your Google ID token to our server, and Google tells us your email address and display name. We store your user identifier, that name, and your progress: the levels you have cleared, the challenge days you have won, and your weekly league score.',
-        'This exists so that clearing a level on one device means the level is already cleared on the next one, and so that your name appears on the weekly leaderboard. If you would rather not be listed, you can play without signing in and your device-only progress is never published to anyone.',
-        'Your sign-in session is held in the operating system’s secure keystore, not in ordinary app storage.',
+        'To save and sync your game progress across devices (when you sign in)',
+        'To provide personalized experiences and track achievements',
+        'To show relevant advertisements through AdMob',
+        'To analyze game usage and improve the app',
+        'To communicate with you about updates or important notices',
       ],
     },
     {
-      heading: 'Advertising',
+      heading: 'Third-Party Services',
       paragraphs: [
-        'The game shows advertisements supplied by Google AdMob. Rewarded advertisements are offered in exchange for a hint, which you choose to watch — nothing is taken automatically. Short interstitial advertisements may appear between levels.',
-        'Google and its partners may use the device advertising identifier and your approximate location to serve and measure these ads. This is done under Google’s own policies, and you can reset or delete the identifier in your device settings.',
-        'This build has no mechanism to remove ads by purchase, so every player sees the same ads.',
+        'We use the following third-party services:',
+        'AdMob (Google): Mobile advertising network. Used for: displaying advertisements in the game. Shares: advertising identifiers, device information, and usage data. Ads shown: rewarded video ads (for earning hints) and interstitial ads (level completion). Non-personalized ads are requested for all ad requests, and child-directed treatment is applied for users under 13. Privacy Policy: https://policies.google.com/privacy',
+        'Google Play Services: App distribution, sign-in, and crash reporting. Used for: Google Sign-In, app installation, updates, and crash reporting. Shares: profile information (when signing in) and device information. Privacy Policy: https://policies.google.com/privacy',
+        'Supabase: Backend services for data synchronization. Used for: storing and syncing user progress and achievements. Shares: user game data, authentication information, and device information (only when signed in). Privacy Policy: https://supabase.com/docs/guides/legal/privacy-policy',
+        'Expo / EAS Build: Application build and deployment. Used for: building and distributing the app. Privacy Policy: https://docs.expo.dev/privacy-policy/',
       ],
     },
     {
-      heading: 'What we do not do',
+      heading: 'Advertising and Device Identifiers',
       paragraphs: [
-        'There is no analytics or tracking SDK in this app. There is no crash reporter, no advertising identifier read by us, and no third-party profile of you assembled anywhere. We do not build a profile for advertising and we do not share your information with data brokers.',
+        'This app uses advertising to support development. We use Google AdMob which:',
+        'Collects and uses advertising identifiers (AAID/GAID) when permitted by your device settings',
+        'Shows non-personalized ads by default (no interest-based targeting)',
+        'Provides an opt-out option for interest-based ads via device settings',
+        'You can limit ad tracking or reset your advertising identifier in your device settings: Android → Settings → Google → Ads → Opt out of Ads Personalization.',
+        'Note: Rewarded video ads are only shown when you choose to watch them to earn hints.',
       ],
     },
     {
-      heading: 'Children',
+      heading: 'Children\'s Privacy',
       paragraphs: [
-        'The game is suitable for all ages, but it is not directed at children under 13, and we do not knowingly collect personal information from them. Because a Google account used for sign-in is an adult account, a younger player is better off playing without signing in.',
+        'COPPA Notice: This app is designed for users of all ages, including children under 13.',
+        'For children under 13:',
+        'Google Sign-In requires parental consent via Family Link',
+        'Cloud sync is disabled for accounts without parental verification',
+        'AdMob processes ads with child-directed treatment enabled',
+        'No personal information is collected from children without parental consent',
+        'If you are a parent and believe your child has provided us with personal information, please contact us at aryousaf4@gmail.com so we can promptly delete such information.',
       ],
     },
     {
-      heading: 'Your choices',
+      heading: 'Data Sharing, Retention, and Security',
       paragraphs: [
-        'You can play entirely offline of us, with no account and nothing transmitted. You can sign out at any time from the Account screen. You can delete your cloud data — and your account with it — from the same screen, which removes your progress from our servers permanently.',
+        'Data Sharing: We do not sell, rent, or share your personal information with third parties for their marketing purposes. We only share data with the third-party services listed above to provide app functionality.',
+        'Data Retention:',
+        'Local game progress: retained until you delete the app or reset progress',
+        'Cloud-synced data: retained for 24 months after last activity, then deleted',
+        'Account data: retained until account deletion (via email request)',
+        'Anonymous usage statistics: not collected or transmitted',
+        'Data Security: We implement reasonable security measures to protect your information, including encrypted transmission (HTTPS/TLS) and secure storage where applicable. Session tokens are stored in the device\'s secure keystore.',
       ],
     },
     {
-      heading: 'Changes to this policy',
+      heading: 'User Rights and Data Deletion',
       paragraphs: [
-        'If a future version of the app changes what is stored or who receives it, this page changes with it, and the effective date at the top changes too. Material changes are noted in the release notes for that version.',
+        'You have the right to:',
+        'Access, correct, or delete your personal information',
+        'Opt out of personalized advertising',
+        'Request deletion of your cloud-synced data',
+        'To request deletion of your data, email your request to aryousaf4@gmail.com. Include the email address associated with your account if applicable. We will delete your data within a reasonable time (typically 30 days).',
+        'Account Deactivation: You can also delete your account in-app through the Account screen, which triggers deletion via our Supabase backend.',
+      ],
+    },
+    {
+      heading: 'Changes to This Privacy Policy',
+      paragraphs: [
+        'We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated "Last updated" date. We encourage you to review this policy periodically.',
+        'We may notify you of material changes via email (if you have an account) or through an in-app notice.',
         `This policy describes version ${APP_VERSION} of the app.`,
+      ],
+    },
+    {
+      heading: 'Contact Us',
+      paragraphs: [
+        'If you have any questions about this Privacy Policy or your data, please contact us:',
+        'Email: aryousaf4@gmail.com',
+        'For children\'s privacy inquiries, please identify yourself as a parent in your email.',
       ],
     },
   ],

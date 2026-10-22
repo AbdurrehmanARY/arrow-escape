@@ -5,7 +5,7 @@
  *               hiding the board they just played.
  * Responsibilities:
  *               - `WinOverlay`  — cleared, with hearts left and a Next action.
- *               - `FailOverlay` — out of hearts, with the honest explanation.
+ *               - `FailOverlay` — out of hearts, with an honest explanation and Retry/Home actions.
  *               - `ConfirmDialog` — the restart confirmation.
  * Notes:        The fail copy matters more than it looks. Because a blocked tap
  *               changes nothing and no tap order can trap you, a failed level is
@@ -16,11 +16,12 @@
  */
 
 import { memo } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, StyleSheet, Text, View } from 'react-native';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
 import { Springy, useGlow } from '@shared/primitives/Pressable';
+import { HEART_IMAGES } from '@shared/assets/images';
 import { useSheetSound, withClick } from './sound';
 
 interface ActionProps {
@@ -101,10 +102,9 @@ export interface WinOverlayProps {
   mistakes: number;
   /** Consecutive perfect reads including this one. Shown only once it is a run. */
   perfectStreak?: number;
-  /** Undefined on the last level, which turns Next into Level select. */
+  /** Undefined on the last level — nothing is queued to play after the final board. */
   onNext: (() => void) | undefined;
   onReplay: () => void;
-  onLevels: () => void;
 }
 
 export const WinOverlay = memo(function WinOverlay({
@@ -117,7 +117,6 @@ export const WinOverlay = memo(function WinOverlay({
   perfectStreak = 0,
   onNext,
   onReplay,
-  onLevels,
 }: WinOverlayProps) {
   const perfect = mistakes === 0;
   // Only once it is genuinely a run. Announcing "streak: 1" on every clean level
@@ -130,14 +129,18 @@ export const WinOverlay = memo(function WinOverlay({
       <Text style={[styles.title, { color: palette.text }]}>{levelName}</Text>
 
       <View style={styles.hearts}>
-        {Array.from({ length: maxHearts }, (_, i) => (
-          <Text
-            key={i}
-            style={[styles.heart, { color: i < heartsLeft ? palette.heart : palette.heartSpent }]}
-          >
-            ♥
-          </Text>
-        ))}
+        {Array.from({ length: maxHearts }, (_, i) => {
+          const alive = i < heartsLeft;
+          return (
+            <Image
+              key={i}
+              accessible={false}
+              source={alive ? HEART_IMAGES.heartFilled.source : HEART_IMAGES.heartOutline.source}
+              resizeMode="contain"
+              style={[styles.heart, { tintColor: alive ? palette.heart : palette.heartSpent }]}
+            />
+          );
+        })}
       </View>
 
       <Text style={[styles.body, { color: palette.textMuted }]}>
@@ -158,15 +161,8 @@ export const WinOverlay = memo(function WinOverlay({
         <Action palette={palette} label="Replay" onPress={onReplay} />
         {onNext ? (
           <Action palette={palette} label="Next" onPress={onNext} primary />
-        ) : (
-          <Action palette={palette} label="Levels" onPress={onLevels} primary />
-        )}
+        ) : null}
       </View>
-      {onNext ? (
-        <Pressable accessibilityRole="button" onPress={onLevels} style={styles.textLink}>
-          <Text style={[styles.textLinkLabel, { color: palette.textMuted }]}>All levels</Text>
-        </Pressable>
-      ) : null}
     </Sheet>
   );
 });
@@ -181,7 +177,8 @@ export interface FailOverlayProps {
   /** Arrows remaining on board when failed. Used to detect Near-Miss state (<= 2). */
   remainingArrows?: number;
   onRetry: () => void;
-  onLevels: () => void;
+  /** Return the player to the main menu from the fail screen. */
+  onHome: () => void;
   /** Callback to watch a rewarded ad and recover +2 extra hearts. */
   onNearMiss?: () => void;
 }
@@ -192,7 +189,7 @@ export const FailOverlay = memo(function FailOverlay({
   stillWinnable,
   remainingArrows,
   onRetry,
-  onLevels,
+  onHome,
   onNearMiss,
 }: FailOverlayProps) {
   const isNearMiss = remainingArrows !== undefined && remainingArrows > 0 && remainingArrows <= 2;
@@ -226,8 +223,8 @@ export const FailOverlay = memo(function FailOverlay({
       ) : null}
 
       <View style={styles.actions}>
-        <Action palette={palette} label="Levels" onPress={onLevels} />
         <Action palette={palette} label="Try again" onPress={onRetry} primary={!isNearMiss} />
+        <Action palette={palette} label="Home" onPress={onHome} />
       </View>
     </Sheet>
   );
@@ -239,7 +236,6 @@ export interface StuckOverlayProps {
   /** True when arrows can still be tapped but the level is already lost. */
   quietly: boolean;
   onRetry: () => void;
-  onLevels: () => void;
 }
 
 /**
@@ -255,7 +251,6 @@ export const StuckOverlay = memo(function StuckOverlay({
   visible,
   quietly,
   onRetry,
-  onLevels,
 }: StuckOverlayProps) {
   return (
     <Sheet palette={palette} visible={visible}>
@@ -274,7 +269,6 @@ export const StuckOverlay = memo(function StuckOverlay({
       </Text>
 
       <View style={styles.actions}>
-        <Action palette={palette} label="Levels" onPress={onLevels} />
         <Action palette={palette} label="Start over" onPress={onRetry} primary />
       </View>
     </Sheet>
@@ -331,7 +325,7 @@ const styles = StyleSheet.create({
   eyebrow: { ...typography.tiny, letterSpacing: 1.4 },
   title: { ...typography.title, marginTop: 2, textAlign: 'center' },
   hearts: { flexDirection: 'row', gap: 4, marginTop: spacing.md },
-  heart: { fontSize: 24 },
+  heart: { width: 24, height: 24 },
   body: {
     ...typography.body,
     textAlign: 'center',
@@ -363,6 +357,4 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   actionLabel: { ...typography.body, fontWeight: '700' },
-  textLink: { marginTop: spacing.md, padding: spacing.sm },
-  textLinkLabel: { ...typography.small, fontWeight: '600' },
 });

@@ -383,6 +383,35 @@ export const SHIELD_IMAGES = {
 // groups it is split into for human readability.
 // ---------------------------------------------------------------------------
 
+/**
+ * The two heart icons shown by the HUD and the win/fail overlays.
+ *
+ * Why these exist as derived PNGs rather than the shipped JPEGs: `heart.jpg` and
+ * `heartfilled.jpg` are 1376x768 JPEGs on an opaque white rectangle. Rendered
+ * into the dark HUD surface they would print as a white box, and at 18-24dp the
+ * 16:9 framing would make the glyph a few pixels across. Each is cropped to the
+ * heart, squared, and matted onto transparency (see `tools/_make-heart-assets.py`,
+ * now deleted). `tintColor` — set per palette by the caller — supplies the live
+ * colour, so the bitmaps stay palette-agnostic and survive every theme.
+ *
+ * Kept here, not inline, so there is one audited require path for the asset and
+ * so `tools/check-architecture.ts` can see it.
+ */
+export const HEART_IMAGES = {
+  heartOutline: image(
+    'hud.heartOutline',
+    'Heart outline',
+    'An empty heart shown once a heart of the budget has been spent.',
+    require('../../../../assets/heart-outline.png'),
+  ),
+  heartFilled: image(
+    'hud.heartFilled',
+    'Filled heart',
+    'A full heart shown while that heart of the budget remains.',
+    require('../../../../assets/heart-filled.png'),
+  ),
+} as const;
+
 export const IMAGES = {
   ...BRAND_IMAGES,
   ...RECORD_IMAGES,
@@ -390,6 +419,7 @@ export const IMAGES = {
   ...TROPHY_IMAGES,
   ...THEME_IMAGES,
   ...SHIELD_IMAGES,
+  ...HEART_IMAGES,
 } as const;
 
 /** Every image in the registry, in declaration order. */

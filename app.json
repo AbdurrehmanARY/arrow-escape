@@ -2,7 +2,7 @@
   "expo": {
     "name": "Arrow Puzzle",
     "slug": "ary",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.abdurrehmanary.arrowpuzzle",
-      "versionCode": 30,
+      "versionCode": 37,
       "permissions": [
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
