@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.abdurrehmanary.arrowpuzzle",
-      "versionCode": 46,
+      "versionCode": 50,
       "permissions": [
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
@@ -48,7 +48,7 @@
             "kotlinVersion": "2.1.20",
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "extraProguardRules": "# Google Play Services (Google Sign-In + Mobile Ads)\n-dontwarn com.google.android.gms.**\n-keep class com.google.android.gms.auth.api.signin.** { *; }\n-keep class com.google.android.gms.common.internal.** { *; }\n-keep class com.google.android.gms.tasks.** { *; }\n-keep class com.google.android.gms.ads.** { *; }\n-keep class com.google.android.gms.ads.initialization.** { *; }\n# React Native\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.facebook.react.bridge.** { *; }\n-keep class com.facebook.react.modules.** { *; }\n-keep class com.facebook.react.runtime.** { *; }\n-dontwarn com.facebook.react.**\n-dontwarn com.facebook.yoga.**\n# Expo modules\n-keep class expo.modules.** { *; }\n-dontwarn expo.modules.**\n# react-native-reanimated\n-keep class com.swmansion.reanimated.** { *; }\n# react-native-gesture-handler\n-keep class com.swmansion.gesture_handler.** { *; }\n# Skia\n-keep class com.shopify.reactnative.skia.** { *; }\n# Safe area context\n-keep class com.th3rdwave.safeareacontext.** { *; }\n# Screens\n-keep class com.th3rdwave.screens.** { *; }\n# Keep annotations and signatures\n-keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod\n# R8 optimization\n-optimizationpasses 3\n-allowaccessmodification\n-allowmerger\n-allowrepackaging"
+            "extraProguardRules": "# Google Play Services (Google Sign-In + Mobile Ads)\n-dontwarn com.google.android.gms.**\n-keep class com.google.android.gms.auth.api.signin.** { *; }\n-keep class com.google.android.gms.common.internal.** { *; }\n-keep class com.google.android.gms.tasks.** { *; }\n-keep class com.google.android.gms.ads.** { *; }\n-keep class com.google.android.gms.ads.initialization.** { *; }\n# React Native\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.facebook.react.bridge.** { *; }\n-keep class com.facebook.react.modules.** { *; }\n-keep class com.facebook.react.runtime.** { *; }\n-dontwarn com.facebook.react.**\n-dontwarn com.facebook.yoga.**\n# Expo modules\n-keep class expo.modules.** { *; }\n-dontwarn expo.modules.**\n# react-native-reanimated\n-keep class com.swmansion.reanimated.** { *; }\n# react-native-gesture-handler\n-keep class com.swmansion.gesture_handler.** { *; }\n# Skia\n-keep class com.shopify.reactnative.skia.** { *; }\n# Safe area context\n-keep class com.th3rdwave.safeareacontext.** { *; }\n# Screens\n-keep class com.th3rdwave.screens.** { *; }\n# Keep annotations and signatures\n-keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod"
           }
         }
       ],
