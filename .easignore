@@ -1,0 +1,36 @@
+# .easignore - controls what EAS Build excludes from upload
+# When this file exists, EAS merges it with .gitignore
+# Standard exclusions
+node_modules/
+.git/
+*.log
+.expo/
+.idea/
+.vscode/
+.claude/
+__pycache__/
+*.apk
+*.aab
+dist/
+coverage/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+.env*.local/
+*.tsbuildinfo
+.audit-state.json
+verify.log
+eas-build*.log
+build-release-apk.log
+build-test-apk.log
+.temp/
+supabase/.temp/
+scripts/
+assets/heart.jpg
+assets/heartfilled.jpg
+
+# Un-ignore credentials needed for credentialsSource: local
+!credentials.json
+!keystore/
+!keystore/**
