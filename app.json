@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.abdurrehmanary.arrowpuzzle",
-      "versionCode": 50,
+      "versionCode": 55,
       "permissions": [
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
@@ -28,8 +28,8 @@
       ]
     },
     "react-native-google-mobile-ads": {
-      "android_app_id": "ca-app-pub-1159231009656865~7919651294",
-      "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
+      "android_app_id": "ca-app-pub-7288667796446979~5219080732",
+      "ios_app_id": "ca-app-pub-7288667796446979~5219080732"
     },
     "plugins": [
       "expo-router",
@@ -37,8 +37,8 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-1159231009656865~7919651294",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+          "androidAppId": "ca-app-pub-7288667796446979~5219080732",
+          "iosAppId": "ca-app-pub-7288667796446979~5219080732"
         }
       ],
       [

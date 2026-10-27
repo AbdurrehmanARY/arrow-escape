@@ -183,7 +183,7 @@ are also no-ops; out of scope, flagged as debt.)
 No privacy/terms screens or text. Root `LICENSE` is **Expo's MIT template**
 (`Copyright (c) 2015-present 650 Industries, Inc.`), not the app's own. No
 company name, contact email or jurisdiction exists in the repo. Package id
-`com.abdurrehmanary.arrowpath`; AdMob app id `ca-app-pub-1159231009656865~8175461307`.
+`com.abdurrehmanary.arrowpath`; AdMob app id `ca-app-pub-7288667796446979~5219080732`.
 
 **Verified behaviour for the policy.** Critically, **telemetry never leaves the
 device** — `src/services/telemetry.ts:55 trackTelemetry` writes to a 50-entry

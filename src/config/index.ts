@@ -44,9 +44,9 @@ export const USE_TEST_ADS =
  * is rejected.
  */
 export const AD_UNIT_IDS = {
-  banner:       'ca-app-pub-1159231009656865/5448867799',
-  interstitial: 'ca-app-pub-1159231009656865/3126965944',
-  rewarded:     'ca-app-pub-1159231009656865/9388112809',
+  banner:       'ca-app-pub-7288667796446979/7582088414',
+  interstitial: 'ca-app-pub-7288667796446979/1736619388',
+  rewarded:     'ca-app-pub-7288667796446979/9116203924',
 } as const;
 
 /** Board sizes above this get a smaller minimum cell, so 12x12 still fits a phone. */

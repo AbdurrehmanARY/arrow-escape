@@ -33,9 +33,9 @@ if (Test-Path $bundle) {
     $text = [System.IO.File]::ReadAllText($bundle, [System.Text.Encoding]::GetEncoding('latin1'))
     Write-Output ("  expo/virtual/env refs (dev marker) : " + ([regex]::Matches($text, 'expo/virtual/env').Count))
     Write-Output ("  EXPO_PUBLIC_USE_TEST_ADS literal   : " + $text.Contains('EXPO_PUBLIC_USE_TEST_ADS'))
-    Write-Output ("  production rewarded unit literal   : " + $text.Contains('ca-app-pub-1159231009656865/9388112809'))
-    Write-Output ("  production interstitial unit        : " + $text.Contains('ca-app-pub-1159231009656865/3126965944'))
-    Write-Output ("  production banner unit              : " + $text.Contains('ca-app-pub-1159231009656865/5448867799'))
+    Write-Output ("  production rewarded unit literal   : " + $text.Contains('ca-app-pub-7288667796446979/9116203924'))
+    Write-Output ("  production interstitial unit        : " + $text.Contains('ca-app-pub-7288667796446979/1736619388'))
+    Write-Output ("  production banner unit              : " + $text.Contains('ca-app-pub-7288667796446979/7582088414'))
 } else {
     Write-Output '=== BUNDLE: NOT EMBEDDED (bad) ==='
 }
