@@ -23,9 +23,15 @@
 import { NativeModules, TurboModuleRegistry, View } from 'react-native';
 import React from 'react';
 
-import { AD_UNIT_IDS, USE_TEST_ADS } from '@config';
-import { trackTelemetry } from './telemetry';
+import { AD_UNITS } from '../constants/adUnits';
 
+import { trackTelemetry } from './telemetry';
+import NetInfo from '@react-native-community/netinfo';
+
+export const isOnline = async (): Promise<boolean> => {
+  const state = await NetInfo.fetch();
+  return state.isConnected === true && state.isInternetReachable === true;
+};
 export type AdAvailability =
   /** The SDK is present and an ad is ready to show. */
   | 'ready'
@@ -73,7 +79,6 @@ interface AdsModule {
   RewardedAdEventType: { LOADED: string; EARNED_REWARD: string };
   InterstitialAd: { createForAdRequest: (unitId: string, options?: unknown) => RewardedAdLike };
   AdEventType: { CLOSED: string; ERROR: string; LOADED: string };
-  TestIds: { REWARDED: string; INTERSTITIAL: string; BANNER: string };
   default?: () => { initialize: () => Promise<unknown> };
 }
 
@@ -133,9 +138,7 @@ function loadSdk(): AdsModule | undefined {
 }
 
 function unitId(): string {
-  const module = loadSdk();
-  if (USE_TEST_ADS && module) return module.TestIds.REWARDED;
-  return AD_UNIT_IDS.rewarded;
+  return AD_UNITS.rewarded;
 }
 
 /**
@@ -149,7 +152,22 @@ export async function initAds(): Promise<void> {
   if (!module) return;
 
   try {
+    // Initialize the SDK — must be called once at app launch.
     await module.default?.().initialize();
+
+    // Set request configuration: limit to non-personalized ads on the emulator.
+    // Replace ['EMULATOR'] with your test device hash (from logcat: "AdMob test
+    // device: XXXX-XXXX-XXXX-XXXX-XXXX") when you want personalised test ads on a
+    // physical device.
+    const { setRequestConfiguration } = module as any;
+    if (setRequestConfiguration) {
+      setRequestConfiguration({
+        // Non-personalized ads only (COPPA-friendly).
+        // Set to false if you later add UMP consent flow and want personalised ads.
+        nonPersonalizedAdsOnly: true,
+      });
+    }
+
     preload();
     preloadInterstitial();
   } catch {
@@ -190,7 +208,7 @@ export function preloadInterstitial(): void {
 
   try {
     const ad = module.InterstitialAd.createForAdRequest(
-      USE_TEST_ADS ? module.TestIds.INTERSTITIAL : AD_UNIT_IDS.interstitial,
+      AD_UNITS.interstitial,
       { requestNonPersonalizedAdsOnly: true },
     );
     ad.addAdEventListener(module.AdEventType.LOADED, () => {
@@ -405,7 +423,7 @@ export function showInterstitial(): Promise<boolean> {
       const ad = interstitialLoaded ? interstitial : undefined;
       if (!ad) {
         // Fallback: create on-demand.
-        const unit = USE_TEST_ADS ? module.TestIds.INTERSTITIAL : AD_UNIT_IDS.interstitial;
+        const unit = AD_UNITS.interstitial;
         debug(`[AdMob] Requesting InterstitialAd with unitId: ${unit}`);
         const fallback = (module as any).InterstitialAd?.createForAdRequest?.(unit, {
           requestNonPersonalizedAdsOnly: true,
@@ -512,7 +530,7 @@ export function getBannerComponent(): React.ComponentType<{ style?: object }> | 
   const BannerAd = (module as any).BannerAd;
   if (!BannerAd) return undefined;
 
-  const unitId = USE_TEST_ADS ? module.TestIds.BANNER : AD_UNIT_IDS.banner;
+  const unitId = AD_UNITS.banner;
 
   // v16's `BannerAd` no longer honours a caller-supplied `style` — `BaseAd`
   // computes one from the ad's reported dimensions — and it rejects the old
@@ -532,5 +550,9 @@ export function getBannerComponent(): React.ComponentType<{ style?: object }> | 
     );
   };
 }
+
+
+
+
 
 

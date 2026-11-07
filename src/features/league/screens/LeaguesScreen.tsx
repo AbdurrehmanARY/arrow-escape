@@ -6,12 +6,13 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 import { LeagueIntro, Screen, Springy, useTheme, withClick } from '@components';
 import { playMusic } from '@services/audio';
 import { syncProfile } from '@services/sync';
+import { isOnline } from '@services/ads';
 import { useAuthStore } from '@state';
 import { fonts, radius, spacing, typography, withAlpha, type Palette } from '@theme';
 
@@ -51,6 +52,21 @@ export function LeaguesScreen() {
 
   const userName = customName ?? defaultName;
 
+  const [isConnected, setIsConnected] = useState<boolean>(true);
+  useEffect(() => {
+    const checkOnline = async () => {
+      const online = await isOnline() ?? false;
+      setIsConnected(online)
+      if (!online) {
+        Alert.alert(
+          'No Internet',
+          'Please check your connection and try again.',
+        )
+      }
+    }
+    checkOnline()
+  }, [])
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
@@ -60,7 +76,8 @@ export function LeaguesScreen() {
   const { userLeague, remainingText, leaderboardData, loading } = useLeagueBoard({
     now,
     userName,
-  });
+    enabled: isConnected,
+  })
 
   const saveName = () => {
     const trimmed = nameInput.trim();
@@ -73,6 +90,13 @@ export function LeaguesScreen() {
 
   return (
     <Screen palette={palette} scroll>
+      {!isConnected ? (
+        <View style={styles.noInternetContainer}>
+          <FontAwesome name="wifi" size={64} color={palette.textFaint} />
+          <Text style={[styles.noInternetText, { color: palette.text }]}>No Internet Connection</Text>
+          <Text style={[styles.noInternetSubtext, { color: palette.textFaint }]}>Please check your connection and try again.</Text>
+        </View>
+      ) : (
       <View style={styles.container}>
         {/* ---- Header: League Title, Countdown, and Info Button ----------- */}
         <View style={styles.header}>
@@ -242,6 +266,7 @@ export function LeaguesScreen() {
           onClose={() => setShowIntro(false)}
         />
       </View>
+      )}
     </Screen>
   );
 }
@@ -503,4 +528,25 @@ const styles = StyleSheet.create({
   emptyGlyph: { fontSize: 40 },
   emptyTitle: { ...typography.heading },
   emptyBody: { ...typography.body, textAlign: 'center' },
+
+  noInternetContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.xl,
+  },
+  noInternetText: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  noInternetSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 });
+
+
+

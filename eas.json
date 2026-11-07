@@ -24,6 +24,11 @@
       "autoIncrement": true,
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_ADMOB_BANNER_ID": "ca-app-pub-7288667796446979/7582088414",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID": "ca-app-pub-7288667796446979/1736619388",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID": "ca-app-pub-7288667796446979/9116203924"
       }
     },
     "production": {
@@ -33,6 +38,11 @@
       "credentialsSource": "local",
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_ADMOB_BANNER_ID": "ca-app-pub-7288667796446979/7582088414",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID": "ca-app-pub-7288667796446979/1736619388",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ID": "ca-app-pub-7288667796446979/9116203924"
       }
     }
   },

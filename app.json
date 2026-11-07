@@ -2,14 +2,10 @@
   "expo": {
     "name": "Arrow Puzzle",
     "slug": "ary",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.abdurrehmanary.arrowpath"
-    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#EEEBE4",
@@ -19,26 +15,26 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.abdurrehmanary.arrowpuzzle",
-      "versionCode": 55,
+      "versionCode": 75,
       "permissions": [
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ]
     },
-    "react-native-google-mobile-ads": {
-      "android_app_id": "ca-app-pub-7288667796446979~5219080732",
-      "ios_app_id": "ca-app-pub-7288667796446979~5219080732"
-    },
     "plugins": [
       "expo-router",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false
+        }
+      ],
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-7288667796446979~5219080732",
-          "iosAppId": "ca-app-pub-7288667796446979~5219080732"
+          "androidAppId": "ca-app-pub-7288667796446979~5219080732"
         }
       ],
       [
@@ -79,10 +75,6 @@
       "expo-font"
     ],
     "scheme": "arrowpuzzle",
-    "androidStatusBar": {
-      "backgroundColor": "#EEEBE4",
-      "barStyle": "dark-content"
-    },
     "extra": {
       "router": {},
       "eas": {

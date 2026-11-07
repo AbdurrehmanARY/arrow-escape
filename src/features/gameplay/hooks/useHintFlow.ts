@@ -19,9 +19,10 @@
  *               durations and every dependency array are unchanged.
  */
 
+import { Alert } from 'react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { availability, preload, showRewarded } from '@services/ads';
+import { availability, isOnline, preload, showRewarded } from '@services/ads';
 import { playSfx } from '@services/audio';
 import { triggerHintHaptic } from '@services/haptics';
 import {
@@ -214,8 +215,14 @@ export function useHintFlow({
     activateHintHighlight(hint.arrowIndex);
   }, [built, spendHint, boardState, status, activateHintHighlight, notify, padCells, cellSize]);
 
-  const onEarnHint = useCallback(() => {
+  const onEarnHint = useCallback(async () => {
     setEarning(true);
+    const online = await isOnline();
+    if (online === false) {
+      Alert.alert('No Internet', 'Please check your connection and try again.');
+      setEarning(false);
+      return;
+    }
     void showRewarded()
       .then((outcome) => {
         if (outcome.kind === 'earned') {

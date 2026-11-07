@@ -37,7 +37,7 @@ import {
 import { LEVEL_COUNT, levelById, tierOf } from '@data';
 import { TIER_LABELS } from '@game/codec';
 import { WIN_OVERLAY_DELAY_MS } from '@config';
-import { bannerHeight, getBannerComponent, recordLevelCompleteAndCheckInterstitial, showRewarded } from '@services/ads';
+import { bannerHeight, getBannerComponent, isOnline, recordLevelCompleteAndCheckInterstitial, showRewarded } from '@services/ads';
 import { playMusic, playSfx, playSting, stopAllSfx, type SfxName } from '@services/audio';
 import { gameReducer, initGameState , statsOf, useChallengeStore , useLeagueStore , useProgressStore , useSettingsStore } from '@state';
 
@@ -512,7 +512,9 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
         remainingArrows={state.session.state.remaining}
         onRetry={doRestart}
         onHome={() => router.replace('/')}
-        onNearMiss={() => {
+        onNearMiss={async () => {
+          const online = await isOnline();
+          if (online === false) return;
           showRewarded().then((outcome) => {
             if (outcome.kind === 'earned') {
               dispatch({ type: 'addHearts', count: 2 });

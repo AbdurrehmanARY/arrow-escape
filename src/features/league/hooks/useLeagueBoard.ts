@@ -84,6 +84,8 @@ export interface UseLeagueBoardArgs {
   readonly now: number;
   /** The name to place in the table, which may be one the player is still typing. */
   readonly userName: string;
+  /** When false, skips the network fetch (e.g. no internet). Defaults to true. */
+  enabled?: boolean;
 }
 
 /**
@@ -95,7 +97,7 @@ export interface UseLeagueBoardArgs {
  * the guard — there is no length threshold to get wrong, because each divider
  * already keys off the rank it labels.
  */
-export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
+export function useLeagueBoard({ now, userName, enabled = true }: UseLeagueBoardArgs) {
   const challengeRecords = useChallengeStore((state) => state.records);
   const session = useAuthStore((state) => state.session);
 
@@ -130,9 +132,10 @@ export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
    * sees fresh rankings immediately.
    */
   const [fetched, setFetched] = useState<string | undefined>(undefined);
-  const loading = fetched !== weekId;
+  const loading = enabled ? (fetched !== weekId) : false;
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     const load = async (): Promise<void> => {
       let rows: readonly LeaderboardRow[] = [];
@@ -151,9 +154,10 @@ export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
     return () => {
       cancelled = true;
     };
-  }, [weekId]);
+  }, [weekId, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     import('react-native').then(({ AppState }) => {
       if (cancelled) return;
@@ -171,7 +175,7 @@ export function useLeagueBoard({ now, userName }: UseLeagueBoardArgs) {
     return () => {
       cancelled = true;
     };
-  }, [loading, fetched, weekId]);
+  }, [loading, fetched, weekId, enabled]);
 
   const leaderboardData = useMemo<LeaderboardEntry[]>(() => {
     // No server rows means no table. The player still sees their league, shield,
