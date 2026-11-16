@@ -36,6 +36,10 @@ import { statsOf, useChallengeStore } from '@state';
 import { useCurrentShield } from '@hooks';
 
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
+import { bannerHeight, getBannerComponent } from '@services/ads';
+
+const BannerAd = getBannerComponent();
+const bannerSpace = bannerHeight();
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -235,6 +239,7 @@ export function CollectionScreen() {
           }
         }}
       />
+    {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
     </Screen>
   );
 }

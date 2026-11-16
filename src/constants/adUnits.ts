@@ -21,4 +21,6 @@ export const AD_UNITS = {
   interstitial: "ca-app-pub-7288667796446979/1736619388",
 
   rewarded: "ca-app-pub-7288667796446979/9116203924",
+
+  rewardedHeartRefill: "ca-app-pub-7288667796446979/1281416679",
 } as const;

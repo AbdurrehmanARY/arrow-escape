@@ -29,6 +29,10 @@ import { isBackendConfigured } from '@services/supabase';
 import { syncReachable } from '@services/sync';
 import { accountEmail, syncedAgo, useAuthStore } from '@state';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
+import { bannerHeight, getBannerComponent } from '@services/ads';
+
+const BannerAd = getBannerComponent();
+const bannerSpace = bannerHeight();
 
 /** Why the last attempt failed, in the player's terms rather than the API's. */
 const FAILURE_TEXT: Record<string, string> = {

@@ -24,6 +24,7 @@ import {
   startSession,
   tapArrow,
 } from '@game';
+import { saveSlice, IN_PROGRESS_KEYS } from '@services/storage';
 
 /** What the board should be flashing right now, after a failed tap. */
 export interface BlockHighlight {
@@ -57,7 +58,10 @@ export type GameAction =
   /** The failed-tap flash has run its course. */
   | { readonly type: 'clearHighlight' }
   | { readonly type: 'restart'; readonly initial: BoardState; readonly hearts: number }
-  | { readonly type: 'addHearts'; readonly count: number };
+  /** Add hearts to the current session. */
+  | { readonly type: 'addHearts'; readonly count: number }
+  /** Save in-progress level state to AsyncStorage. */
+  | { readonly type: 'saveInProgress'; readonly levelId: number; readonly mode: 'classic' | 'monthly'; readonly challengeId?: string; readonly initialBoardState: BoardState; readonly clearedArrowIds: readonly number[]; readonly heartsLeft: number; readonly mistakes: number };
 
 /** Fresh state for a level, used both on entry and on Restart. */
 export function initGameState(initial: BoardState, hearts: number): GameState {
@@ -88,6 +92,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           status: newHearts > 0 && state.session.state.remaining > 0 ? 'playing' : state.session.status,
         },
       };
+    }
+
+    case 'saveInProgress': {
+      const { levelId, mode, challengeId, initialBoardState, clearedArrowIds, heartsLeft, mistakes } = action;
+      const key = mode === 'classic'
+        ? IN_PROGRESS_KEYS.classic(levelId)
+        : IN_PROGRESS_KEYS.monthly(challengeId || '0');
+      saveSlice(key, {
+        levelId,
+        mode,
+        challengeId,
+        initialBoardState,
+        clearedArrowIds,
+        heartsLeft,
+        mistakes,
+        timestamp: Date.now(),
+      });
+      return state;
     }
 
     case 'departed': {

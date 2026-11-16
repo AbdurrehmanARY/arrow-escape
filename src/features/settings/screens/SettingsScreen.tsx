@@ -31,6 +31,10 @@ import { APP_VERSION } from '@config';
 import { playSfx } from '@services/audio';
 import { accountEmail, useAuthStore , useSettingsStore } from '@state';
 import { fonts, radius, spacing, THEMES } from '@theme';
+import { bannerHeight, getBannerComponent } from '@services/ads';
+
+const BannerAd = getBannerComponent();
+const bannerSpace = bannerHeight();
 import { useCurrentShield } from '@hooks';
 import { useRewardBadge } from '@challenge';
 
@@ -300,6 +304,7 @@ export function SettingsScreen() {
           </Pressable>
         </Modal>
       </View>
+    {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
     </Screen>
   );
 }

@@ -31,6 +31,10 @@ import {
   useProgressStore,
  useHintStore } from '@state';
 import { radius, spacing, typography, type Palette } from '@theme';
+import { bannerHeight, getBannerComponent } from '@services/ads';
+
+const BannerAd = getBannerComponent();
+const bannerSpace = bannerHeight();
 
 export function RecordScreen() {
   const router = useRouter();
@@ -167,7 +171,9 @@ export function RecordScreen() {
           <Line palette={palette} label="Wrong taps on your best runs" value={`${mistakes}`} />
           <Line palette={palette} label="Hints used" value={`${hintsSpent}`} />
         </Section>
-      </ScrollView>
+      {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
+
+  </ScrollView>
     </Screen>
   );
 }

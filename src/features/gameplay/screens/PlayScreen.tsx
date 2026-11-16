@@ -51,6 +51,7 @@ import type { DifficultyTier } from '@game/codec';
 import { useArrowTap } from '../hooks/useArrowTap';
 import { useBoardViewport } from '../hooks/useBoardViewport';
 import { useHintFlow } from '../hooks/useHintFlow';
+import { requestReview, checkReviewSupport, DEFAULT_REVIEW_ELIGIBILITY } from '@services/review';
 
 /**
  * Banner ad component, resolved once at module scope.

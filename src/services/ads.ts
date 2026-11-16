@@ -21,6 +21,7 @@
  */
 
 import { NativeModules, TurboModuleRegistry, View } from 'react-native';
+import { useRef } from 'react';
 import React from 'react';
 
 import { AD_UNITS } from '../constants/adUnits';
@@ -500,6 +501,134 @@ export function showInterstitial(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
+// Heart-refill Rewarded Ad — separate ad instance for refilling hearts
+// ---------------------------------------------------------------------------
+
+/**
+ * Separate ref for the heart-refill rewarded ad instance.
+ * Kept distinct from the hint rewarded ad so they never conflict.
+ */
+const heartRefillAdRef = useRef<RewardedAdLike | null>(null);
+const heartRefillLoadedRef = useRef(false);
+const heartRefillLoadStateRef = useRef<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
+
+/**
+ * Preload the heart-refill rewarded ad. Safe to call repeatedly — reloads
+ * automatically after each show or load failure.
+ */
+async function preloadRewardedHeartRefill(): Promise<void> {
+  const module = loadSdk();
+  if (!module) {
+    heartRefillLoadStateRef.current = 'failed';
+    return;
+  }
+
+  if (heartRefillLoadStateRef.current === 'loading') return; // already loading
+
+  const unitId = AD_UNITS.rewardedHeartRefill;
+  const options = { requestNonPersonalizedAdsOnly: true };
+
+  const ad = (module as any).RewardedAd?.createForAdRequest(unitId, options);
+  if (!ad) {
+    heartRefillLoadStateRef.current = 'failed';
+    return;
+  }
+
+  heartRefillAdRef.current = ad;
+  heartRefillLoadStateRef.current = 'loading';
+
+  const unsubLoaded = ad.addAdEventListener(module.AdEventType.LOADED, () => {
+    heartRefillLoadedRef.current = true;
+    heartRefillLoadStateRef.current = 'loaded';
+    debug('[AdMob] Heart-refill rewarded LOADED.');
+  });
+
+  const unsubError = ad.addAdEventListener(module.AdEventType.ERROR, (err: unknown) => {
+    console.warn('[AdMob] Heart-refill rewarded ERROR:', err);
+    heartRefillLoadedRef.current = false;
+    heartRefillLoadStateRef.current = 'failed';
+    // Auto-reload after failure so the next call can retry.
+    setTimeout(() => {
+      heartRefillLoadStateRef.current = 'idle';
+      void preloadRewardedHeartRefill();
+    }, 1000);
+  });
+
+  const unsubClosed = ad.addAdEventListener(module.AdEventType.CLOSED, () => {
+    heartRefillLoadedRef.current = false;
+    heartRefillLoadStateRef.current = 'idle';
+    // Auto-reload after close so a fresh ad is ready next time.
+    setTimeout(() => {
+      void preloadRewardedHeartRefill();
+    }, 1000);
+  });
+
+  try {
+    await ad.load();
+  } catch (e) {
+    console.warn('[AdMob] Heart-refill rewarded load exception:', e);
+    heartRefillLoadStateRef.current = 'failed';
+    unsubLoaded?.();
+    unsubError?.();
+    unsubClosed?.();
+    heartRefillAdRef.current = null;
+  }
+}
+
+/**
+ * Show the heart-refill rewarded ad. Returns the reward outcome.
+ * Returns `false` immediately if the ad is not ready.
+ */
+async function showRewardedHeartRefill(): Promise<boolean> {
+  const ad = heartRefillAdRef.current;
+  if (!ad || !heartRefillLoadedRef.current) return false;
+
+  const module = loadSdk();
+  if (!module) return false;
+
+  const unsubLoaded = ad.addAdEventListener(module.AdEventType.LOADED, () => {
+    debug('[AdMob] Heart-refill rewarded LOADED before show.');
+  });
+
+  const unsubError = ad.addAdEventListener(module.AdEventType.ERROR, (err: unknown) => {
+    console.warn('[AdMob] Heart-refill rewarded show ERROR:', err);
+    heartRefillLoadedRef.current = false;
+  });
+
+  const unsubClosed = ad.addAdEventListener(module.AdEventType.CLOSED, () => {
+    heartRefillLoadedRef.current = false;
+    heartRefillLoadStateRef.current = 'idle';
+    void preloadRewardedHeartRefill();
+  });
+
+  try {
+    await ad.show();
+    heartRefillLoadedRef.current = true;
+    unsubLoaded?.();
+    unsubError?.();
+    unsubClosed?.();
+    return true;
+  } catch (e) {
+    console.warn('[AdMob] Heart-refill rewarded show failed:', e);
+    heartRefillLoadedRef.current = false;
+    unsubLoaded?.();
+    unsubError?.();
+    unsubClosed?.();
+    return false;
+  }
+}
+
+/**
+ * Check whether a heart-refill rewarded ad is ready to show.
+ */
+function availabilityRewardedHeartRefill(): 'ready' | 'loading' | 'unavailable' {
+  const module = loadSdk();
+  if (!module) return 'unavailable';
+  if (heartRefillLoadStateRef.current === 'loaded') return 'ready';
+  return 'loading';
+}
+
+// ---------------------------------------------------------------------------
 // Banner Ad support
 // ---------------------------------------------------------------------------
 
@@ -551,7 +680,15 @@ export function getBannerComponent(): React.ComponentType<{ style?: object }> | 
   };
 }
 
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
 
+export {
+  preloadRewardedHeartRefill,
+  showRewardedHeartRefill,
+  availabilityRewardedHeartRefill,
+};
 
 
 

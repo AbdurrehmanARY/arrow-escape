@@ -1,3 +1,45 @@
+export const IN_PROGRESS_KEYS = {
+  classic: (levelId: number) => `in-progress:classic:${levelId}`,
+  monthly: (challengeId: string) => `in-progress:monthly:${challengeId}`,
+} as const;
+
+export interface InProgressState {
+  readonly levelId: number;
+  readonly mode: 'classic' | 'monthly';
+  readonly challengeId?: string;
+  readonly initialBoardState: BoardState;
+  readonly clearedArrowIds: readonly number[];
+  readonly heartsLeft: number;
+  readonly mistakes: number;
+  readonly timestamp: number;
+}
+
+export const STORAGE_KEYS = {
+  progress: 'progress',
+  settings: 'settings',
+  hints: 'hints',
+  onboarding: 'onboarding',
+  challenges: 'challenges',
+  league: 'league',
+  streak: 'streak',
+} as const;
+/**
+ * storage.ts — the only place the app touches the disk.
+ *
+ * Purpose:      Load and save the player's progress, settings, and hints, safely.
+ * Responsibilities:
+ *               - A versioned save envelope with migration.
+ *               - Read/write helpers that never throw.
+ * Notes:        Corruption-safe by design (TDD §9). A save that fails to parse,
+ *               is from a future version, or is half-written falls back to a fresh
+ *               default rather than crashing on launch. Losing progress is bad;
+ *               an app that will not open is worse, and unrecoverable without a
+ *               reinstall.
+ *
+ *               Writes are fire-and-forget with a caught rejection: a failed save
+ *               must never interrupt play. The next meaningful event will write
+ *               again anyway.
+ */
 /**
  * storage.ts — the only place the app touches the disk.
  *
@@ -17,6 +59,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { type BoardState } from '@game';
 
 /** Bump when the shape of a persisted slice changes, and add a migration below. */
 export const SAVE_VERSION = 1;
@@ -110,12 +153,4 @@ export async function clearAll(): Promise<void> {
   }
 }
 
-export const STORAGE_KEYS = {
-  progress: 'progress',
-  settings: 'settings',
-  hints: 'hints',
-  onboarding: 'onboarding',
-  challenges: 'challenges',
-  league: 'league',
-  streak: 'streak',
-} as const;
+

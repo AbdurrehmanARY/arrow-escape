@@ -34,6 +34,7 @@ import {
 } from '@expo-google-fonts/inter';
 
 import { initAds } from '@services/ads';
+import { checkUpdateOnAppStart } from '@services/updates';
 import { applyAudioSettings, initAudio } from '@services/audio';
 import { useHintStore , useOnboardingStore , useChallengeStore , useAuthStore , useLeagueStore , useProgressStore , useSettingsStore } from '@state';
 
@@ -132,6 +133,8 @@ export default function RootLayout() {
       void hydrateAuth();
       void hydrateLeague();
       void initAds();
+      void checkUpdateOnAppStart();
+      checkUpdateOnAppStart();
     })();
 
     return () => {
