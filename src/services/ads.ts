@@ -21,13 +21,19 @@
  */
 
 import { NativeModules, TurboModuleRegistry, View } from 'react-native';
-import { useRef } from 'react';
-import React from 'react';
-
-import { AD_UNITS } from '../constants/adUnits';
-
-import { trackTelemetry } from './telemetry';
 import NetInfo from '@react-native-community/netinfo';
+import { AD_UNITS } from '../constants/adUnits';
+import React from 'react';
+import type { BuiltLevel, DifficultyTier, Result } from '@game';
+import type { Palette } from '@theme';
+import { trackTelemetry } from '@services/telemetry';
+
+// Replaced useRef declarations with plain object to avoid React hook rules at module level
+const heartRefillState = {
+  adRef: null as RewardedAdLike | null,
+  loadedRef: false,
+  loadStateRef: 'idle' as 'idle' | 'loading' | 'loaded' | 'failed',
+};
 
 export const isOnline = async (): Promise<boolean> => {
   const state = await NetInfo.fetch();
@@ -350,7 +356,7 @@ export function showRewarded(): Promise<RewardOutcome> {
 
 const GRACE_PERIOD_MS = 90_000; // 90 seconds initial session grace period
 const INTERSTITIAL_COOLDOWN_MS = 60_000; // 60 seconds minimum between interstitials
-const CADENCE_LEVELS = 3; // Show interstitial every 3 level completes
+const CADENCE_LEVELS = 2; // Show interstitial every 2 level completes
 
 const sessionStartTime = Date.now();
 let lastInterstitialTime = 0;
@@ -508,9 +514,7 @@ export function showInterstitial(): Promise<boolean> {
  * Separate ref for the heart-refill rewarded ad instance.
  * Kept distinct from the hint rewarded ad so they never conflict.
  */
-const heartRefillAdRef = useRef<RewardedAdLike | null>(null);
-const heartRefillLoadedRef = useRef(false);
-const heartRefillLoadStateRef = useRef<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
+
 
 /**
  * Preload the heart-refill rewarded ad. Safe to call repeatedly — reloads
@@ -519,44 +523,44 @@ const heartRefillLoadStateRef = useRef<'idle' | 'loading' | 'loaded' | 'failed'>
 async function preloadRewardedHeartRefill(): Promise<void> {
   const module = loadSdk();
   if (!module) {
-    heartRefillLoadStateRef.current = 'failed';
+    heartRefillState.loadStateRef = 'failed';
     return;
   }
 
-  if (heartRefillLoadStateRef.current === 'loading') return; // already loading
+  if (heartRefillState.loadStateRef === 'loading') return; // already loading
 
   const unitId = AD_UNITS.rewardedHeartRefill;
   const options = { requestNonPersonalizedAdsOnly: true };
 
   const ad = (module as any).RewardedAd?.createForAdRequest(unitId, options);
   if (!ad) {
-    heartRefillLoadStateRef.current = 'failed';
+    heartRefillState.loadStateRef = 'failed';
     return;
   }
 
-  heartRefillAdRef.current = ad;
-  heartRefillLoadStateRef.current = 'loading';
+  heartRefillState.adRef = ad;
+  heartRefillState.loadStateRef = 'loading';
 
   const unsubLoaded = ad.addAdEventListener(module.AdEventType.LOADED, () => {
-    heartRefillLoadedRef.current = true;
-    heartRefillLoadStateRef.current = 'loaded';
+    heartRefillState.loadedRef = true;
+    heartRefillState.loadStateRef = 'loaded';
     debug('[AdMob] Heart-refill rewarded LOADED.');
   });
 
   const unsubError = ad.addAdEventListener(module.AdEventType.ERROR, (err: unknown) => {
     console.warn('[AdMob] Heart-refill rewarded ERROR:', err);
-    heartRefillLoadedRef.current = false;
-    heartRefillLoadStateRef.current = 'failed';
+    heartRefillState.loadedRef = false;
+    heartRefillState.loadStateRef = 'failed';
     // Auto-reload after failure so the next call can retry.
     setTimeout(() => {
-      heartRefillLoadStateRef.current = 'idle';
+      heartRefillState.loadStateRef = 'idle';
       void preloadRewardedHeartRefill();
     }, 1000);
   });
 
   const unsubClosed = ad.addAdEventListener(module.AdEventType.CLOSED, () => {
-    heartRefillLoadedRef.current = false;
-    heartRefillLoadStateRef.current = 'idle';
+    heartRefillState.loadedRef = false;
+    heartRefillState.loadStateRef = 'idle';
     // Auto-reload after close so a fresh ad is ready next time.
     setTimeout(() => {
       void preloadRewardedHeartRefill();
@@ -567,11 +571,11 @@ async function preloadRewardedHeartRefill(): Promise<void> {
     await ad.load();
   } catch (e) {
     console.warn('[AdMob] Heart-refill rewarded load exception:', e);
-    heartRefillLoadStateRef.current = 'failed';
+    heartRefillState.loadStateRef = 'failed';
     unsubLoaded?.();
     unsubError?.();
     unsubClosed?.();
-    heartRefillAdRef.current = null;
+    heartRefillState.adRef = null;
   }
 }
 
@@ -580,8 +584,8 @@ async function preloadRewardedHeartRefill(): Promise<void> {
  * Returns `false` immediately if the ad is not ready.
  */
 async function showRewardedHeartRefill(): Promise<boolean> {
-  const ad = heartRefillAdRef.current;
-  if (!ad || !heartRefillLoadedRef.current) return false;
+  const ad = heartRefillState.adRef;
+  if (!ad || !heartRefillState.loadedRef) return false;
 
   const module = loadSdk();
   if (!module) return false;
@@ -592,25 +596,25 @@ async function showRewardedHeartRefill(): Promise<boolean> {
 
   const unsubError = ad.addAdEventListener(module.AdEventType.ERROR, (err: unknown) => {
     console.warn('[AdMob] Heart-refill rewarded show ERROR:', err);
-    heartRefillLoadedRef.current = false;
+    heartRefillState.loadedRef = false;
   });
 
   const unsubClosed = ad.addAdEventListener(module.AdEventType.CLOSED, () => {
-    heartRefillLoadedRef.current = false;
-    heartRefillLoadStateRef.current = 'idle';
+    heartRefillState.loadedRef = false;
+    heartRefillState.loadStateRef = 'idle';
     void preloadRewardedHeartRefill();
   });
 
   try {
     await ad.show();
-    heartRefillLoadedRef.current = true;
+    heartRefillState.loadedRef = true;
     unsubLoaded?.();
     unsubError?.();
     unsubClosed?.();
     return true;
   } catch (e) {
     console.warn('[AdMob] Heart-refill rewarded show failed:', e);
-    heartRefillLoadedRef.current = false;
+    heartRefillState.loadedRef = false;
     unsubLoaded?.();
     unsubError?.();
     unsubClosed?.();
@@ -624,7 +628,7 @@ async function showRewardedHeartRefill(): Promise<boolean> {
 function availabilityRewardedHeartRefill(): 'ready' | 'loading' | 'unavailable' {
   const module = loadSdk();
   if (!module) return 'unavailable';
-  if (heartRefillLoadStateRef.current === 'loaded') return 'ready';
+  if (heartRefillState.loadStateRef === 'loaded') return 'ready';
   return 'loading';
 }
 

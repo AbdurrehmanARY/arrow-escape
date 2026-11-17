@@ -66,7 +66,7 @@ jest.mock('react-native-google-mobile-ads', () => {
     BannerAd: MockBannerAd,
     BannerAdSize,
     TestIds: {
-      BANNER: 'ca-app-pub-3940256099942544/6300978111',
+      BANNER: 'ca-app-pub-7288667796446979/7582088414',
       REWARDED: 'ca-app-pub-3940256099942544/5224354917',
       INTERSTITIAL: 'ca-app-pub-3940256099942544/1033173712',
     },
@@ -113,7 +113,7 @@ describe('getBannerComponent with the SDK present', () => {
       expect(bannerNodes).toHaveLength(1);
       expect(bannerNodes[0].props).toMatchObject({
         size: 'BANNER',
-        unitId: 'ca-app-pub-3940256099942544/6300978111',
+        unitId: 'ca-app-pub-7288667796446979/7582088414',
       });
 
       // The ad is not rendered bare: it is wrapped in a reserved-height View.
