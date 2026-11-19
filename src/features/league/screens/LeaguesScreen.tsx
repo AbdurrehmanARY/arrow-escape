@@ -12,12 +12,16 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { LeagueIntro, Screen, Springy, useTheme, withClick } from '@components';
 import { playMusic } from '@services/audio';
 import { syncProfile } from '@services/sync';
-import { isOnline } from '@services/ads';
+import { isOnline, bannerHeight, getBannerComponent } from '@services/ads';
 import { useAuthStore } from '@state';
 import { fonts, radius, spacing, typography, withAlpha, type Palette } from '@theme';
 
 import { NEUTRAL_AVATAR, useLeagueBoard } from '../hooks/useLeagueBoard';
 import { useThemeAssets } from '@features/settings';
+
+/** Banner ad component, resolved once at module scope. */
+const BannerAd = getBannerComponent();
+const bannerSpace = bannerHeight();
 
 export function LeaguesScreen() {
   const { palette } = useTheme();
@@ -267,6 +271,10 @@ export function LeaguesScreen() {
         />
       </View>
       )}
+
+    { /* ---- Banner Ad at bottom ------------------------------------------- */ }
+    {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
+
     </Screen>
   );
 }

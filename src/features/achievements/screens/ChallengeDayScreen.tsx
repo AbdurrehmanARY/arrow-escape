@@ -25,11 +25,16 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { PillButton, Screen, ScreenHeader, useTheme } from '@components';
+import { bannerHeight, getBannerComponent } from '@services/ads';
 import { challengeFor, isChallengeDay, parseChallengeId, today } from '@challenge';
 import { TIER_LABELS } from '@game/codec';
 import { summaryOf, tierOf } from '@data';
 import { useChallengeStore } from '@state';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
+
+/** Banner ad component, resolved once at module scope. */
+const BannerAd = getBannerComponent();
+const bannerSpace = bannerHeight();
 
 import { formatDuration } from './ChallengeScreen';
 
@@ -142,6 +147,10 @@ export function ChallengeDayScreen({ day }: ChallengeDayScreenProps) {
           />
         ) : null}
       </View>
+
+    { /* ---- Banner Ad at bottom ------------------------------------------- */ }
+    {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
+
     </Screen>
   );
 }

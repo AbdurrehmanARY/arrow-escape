@@ -4,8 +4,8 @@
  * Purpose:      Give the play screen one door out to everything that is not
  *               tapping an arrow, so the board is not surrounded by chrome.
  * Responsibilities:
- *               - `PauseMenu` — level identity, progress, and the actions
- *                 that lead away from the board.
+ *               - `PauseMenu` — level identity and the actions that lead away
+ *                 from the board.
  * Notes:        This exists as much to *remove* things as to add them. The play
  *               screen used to carry a back button, a settings button and a hint
  *               chip across its top edge, all of them one mis-tap away from the
@@ -34,39 +34,20 @@ import { withClick } from './sound';
 export interface PauseMenuProps {
   palette: Palette;
   visible: boolean;
-  levelNumber: number;
   levelName: string;
-  /** Human-readable tier, e.g. "Super Hard". Shown so the label earns its keep. */
-  tierLabel: string;
-  boardRows: number;
-  boardCols: number;
-  arrowsLeft: number;
-  arrowsTotal: number;
-  heartsLeft: number;
-  maxHearts: number;
   onResume: () => void;
   onRestart: () => void;
-  onSettings: () => void;
+  onHome: () => void;
 }
 
 export const PauseMenu = memo(function PauseMenu({
   palette,
   visible,
-  levelNumber,
   levelName,
-  tierLabel,
-  boardRows,
-  boardCols,
-  arrowsLeft,
-  arrowsTotal,
-  heartsLeft,
-  maxHearts,
   onResume,
   onRestart,
-  onSettings,
+  onHome,
 }: PauseMenuProps) {
-  const cleared = arrowsTotal - arrowsLeft;
-
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       {/*
@@ -87,72 +68,20 @@ export const PauseMenu = memo(function PauseMenu({
           style={[styles.sheet, { backgroundColor: palette.surface, borderColor: palette.border }]}
         >
           <Text style={[styles.eyebrow, { color: palette.textFaint }]}>
-            LEVEL {levelNumber} · {tierLabel.toUpperCase()}
+            LEVEL {levelName}
           </Text>
-          <Text style={[styles.title, { color: palette.text }]}>{levelName}</Text>
-
-          <View style={styles.stats}>
-            <Stat
-              palette={palette}
-              value={`${cleared}/${arrowsTotal}`}
-              label="arrows out"
-              progress={arrowsTotal === 0 ? 0 : cleared / arrowsTotal}
-            />
-            <Stat palette={palette} value={`${heartsLeft}/${maxHearts}`} label="hearts left" />
-            <Stat palette={palette} value={`${boardRows}×${boardCols}`} label="board" />
-          </View>
 
           <ResumeButton palette={palette} onPress={onResume} />
 
           <View style={styles.row}>
-            <Secondary palette={palette} label="Restart" glyph="↺" onPress={onRestart} />
-            <Secondary palette={palette} label="Settings" glyph="⚙" onPress={onSettings} />
+            <Secondary palette={palette} label="Restart" glyph="🔁" onPress={onRestart} />
+            <Secondary palette={palette} label="Home" glyph="🏠" onPress={onHome} />
           </View>
         </Pressable>
       </Pressable>
     </Modal>
   );
 });
-
-/**
- * One figure from the level in progress.
- *
- * The arrows-out tile carries a bar as well as a number, because "31/48" needs
- * arithmetic and a bar does not. The other two are genuinely just numbers, so they
- * do not get one — a progress bar under a board size would be decoration wearing
- * the costume of information.
- */
-function Stat({
-  palette,
-  value,
-  label,
-  progress,
-}: {
-  palette: Palette;
-  value: string;
-  label: string;
-  progress?: number;
-}) {
-  return (
-    <View style={[styles.stat, { borderColor: palette.border }]}>
-      <Text style={[styles.statValue, { color: palette.text }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: palette.textFaint }]}>{label}</Text>
-      {progress === undefined ? null : (
-        <View style={[styles.track, { backgroundColor: palette.border }]}>
-          <View
-            style={[
-              styles.fill,
-              {
-                backgroundColor: palette.accent,
-                width: `${Math.round(Math.max(0, Math.min(1, progress)) * 100)}%`,
-              },
-            ]}
-          />
-        </View>
-      )}
-    </View>
-  );
-}
 
 /**
  * The sheet's one primary action, and the only thing on it that glows.
@@ -220,21 +149,6 @@ const styles = StyleSheet.create({
   eyebrow: { ...typography.tiny, letterSpacing: 1.1 },
   title: { ...typography.title, marginTop: 2 },
 
-  stats: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  stat: {
-    flexGrow: 1,
-    flexBasis: 0,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    alignItems: 'center',
-  },
-  statValue: { ...typography.heading, fontVariant: ['tabular-nums'] },
-  statLabel: { ...typography.tiny, marginTop: 1, textAlign: 'center' },
-  track: { height: 3, borderRadius: radius.pill, alignSelf: 'stretch', marginTop: spacing.xs },
-  fill: { height: 3, borderRadius: radius.pill },
-
   resume: {
     minHeight: MIN_TOUCH_TARGET + 8,
     borderRadius: radius.lg,
@@ -258,5 +172,4 @@ const styles = StyleSheet.create({
   },
   secondaryGlyph: { fontSize: 15 },
   secondaryLabel: { ...typography.body, fontWeight: '700' },
-});
-/* stray duplicate close removed */
+});

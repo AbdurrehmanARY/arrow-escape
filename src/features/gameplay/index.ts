@@ -19,3 +19,4 @@
  */
 
 export { PlayScreen, type PlayScreenProps } from './screens/PlayScreen';
+export { GameProgressProvider } from './providers/GameProgressProvider';

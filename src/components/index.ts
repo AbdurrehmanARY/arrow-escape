@@ -42,4 +42,5 @@ export * from './AwardInfoPage';
 export * from './LeagueIntro';
 export * from './StreakRewardModal';
 export * from './MonthlyTrophyBadge';
+export * from './UpdateBanner';
 

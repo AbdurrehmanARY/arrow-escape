@@ -16,7 +16,7 @@
  */
 
 import { memo } from 'react';
-import { Image, Modal, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, StyleSheet, Text, View } from 'react-native';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
 
@@ -30,32 +30,39 @@ interface ActionProps {
   onPress: () => void;
   primary?: boolean;
   disabled?: boolean;
+  glyph?: string;
+  loading?: boolean | undefined;
 }
 
-function Action({ palette, label, onPress, primary = false, disabled = false }: ActionProps) {
+function Action({ palette, label, onPress, primary = false, disabled = false, glyph, loading = false }: ActionProps) {
   // Only the primary action carries elevation. Two glowing buttons side by side
   // is two primary actions, which is none.
   const elevation = useGlow(palette.accent, 'primary');
+  const isDisabled = disabled || loading;
 
   return (
     <Springy
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
+      accessibilityState={{ disabled: isDisabled }}
+      disabled={isDisabled}
       onPress={withClick(onPress)}
       style={[
         styles.action,
         {
           backgroundColor: primary ? palette.accent : palette.surfaceRaised,
           borderColor: primary ? palette.accent : palette.border,
-          opacity: disabled ? 0.45 : 1,
+          opacity: isDisabled ? 0.45 : 1,
         },
-        primary && !disabled && elevation,
+        primary && !isDisabled && elevation,
       ]}
     >
-      <Text style={[styles.actionLabel, { color: primary ? palette.textOnAccent : palette.text }]}>
-        {label}
-      </Text>
+      {loading ? (
+        <ActivityIndicator size="small" color={primary ? palette.textOnAccent : palette.text} />
+      ) : (
+        <Text style={[styles.actionLabel, { color: primary ? palette.textOnAccent : palette.text }]}>
+          {glyph ? glyph + ' ' : ''}{label}
+        </Text>
+      )}
     </Springy>
   );
 }
@@ -104,7 +111,7 @@ export interface WinOverlayProps {
   perfectStreak?: number;
   /** Undefined on the last level — nothing is queued to play after the final board. */
   onNext: (() => void) | undefined;
-  onReplay: () => void;
+  onHome: () => void;
 }
 
 export const WinOverlay = memo(function WinOverlay({
@@ -116,7 +123,7 @@ export const WinOverlay = memo(function WinOverlay({
   mistakes,
   perfectStreak = 0,
   onNext,
-  onReplay,
+  onHome,
 }: WinOverlayProps) {
   const perfect = mistakes === 0;
   // Only once it is genuinely a run. Announcing "streak: 1" on every clean level
@@ -158,10 +165,10 @@ export const WinOverlay = memo(function WinOverlay({
       ) : null}
 
       <View style={styles.actions}>
-        <Action palette={palette} label="Replay" onPress={onReplay} />
         {onNext ? (
           <Action palette={palette} label="Next" onPress={onNext} primary />
         ) : null}
+        <Action palette={palette} label="Home" onPress={onHome} />
       </View>
     </Sheet>
   );
@@ -181,6 +188,12 @@ export interface FailOverlayProps {
   onHome: () => void;
   /** Callback to watch a rewarded ad and recover +2 extra hearts. */
   onNearMiss?: () => void;
+  /** Callback to watch a rewarded ad and recover full hearts (regular fail). */
+  onHeartRefill?: () => void;
+  /** Loading state for Near Miss ad. */
+  nearMissLoading?: boolean;
+  /** Loading state for Heart Refill ad. */
+  heartRefillLoading?: boolean;
 }
 
 export const FailOverlay = memo(function FailOverlay({
@@ -191,6 +204,9 @@ export const FailOverlay = memo(function FailOverlay({
   onRetry,
   onHome,
   onNearMiss,
+  onHeartRefill,
+  nearMissLoading,
+  heartRefillLoading,
 }: FailOverlayProps) {
   const isNearMiss = remainingArrows !== undefined && remainingArrows > 0 && remainingArrows <= 2;
 
@@ -215,9 +231,24 @@ export const FailOverlay = memo(function FailOverlay({
         <View style={{ marginTop: spacing.md, width: '100%' }}>
           <Action
             palette={palette}
-            label="+2 Hearts (Watch Ad)"
+            label="Refill"
+            glyph="▶️"
             onPress={onNearMiss}
             primary
+            loading={nearMissLoading}
+          />
+        </View>
+      ) : null}
+
+      {onHeartRefill ? (
+        <View style={{ marginTop: spacing.md, width: '100%' }}>
+          <Action
+            palette={palette}
+            label="Refill"
+            glyph="▶️"
+            onPress={onHeartRefill}
+            primary
+            loading={heartRefillLoading}
           />
         </View>
       ) : null}
@@ -356,5 +387,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
   },
-  actionLabel: { ...typography.body, fontWeight: '700' },
+  actionLabel: { ...typography.body, fontWeight: '700' },
+
 });

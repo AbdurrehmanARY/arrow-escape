@@ -142,6 +142,39 @@ export async function saveSlice<T>(key: string, data: T): Promise<void> {
   }
 }
 
+/** Load in-progress state for a level/challenge. */
+export async function loadInProgress(
+  mode: 'classic' | 'monthly',
+  id: number | string
+): Promise<InProgressState | null> {
+  const key = mode === 'classic'
+    ? IN_PROGRESS_KEYS.classic(id as number)
+    : IN_PROGRESS_KEYS.monthly(id as string);
+  try {
+    const raw = await AsyncStorage.getItem(KEY_PREFIX + key);
+    if (raw === null) return null;
+    return JSON.parse(raw) as InProgressState;
+  } catch (error) {
+    warn(`could not load in-progress "${key}"`, error);
+    return null;
+  }
+}
+
+/** Remove in-progress state for a level/challenge. */
+export async function clearInProgress(
+  mode: 'classic' | 'monthly',
+  id: number | string
+): Promise<void> {
+  const key = mode === 'classic'
+    ? IN_PROGRESS_KEYS.classic(id as number)
+    : IN_PROGRESS_KEYS.monthly(id as string);
+  try {
+    await AsyncStorage.removeItem(KEY_PREFIX + key);
+  } catch (error) {
+    warn(`could not clear in-progress "${key}"`, error);
+  }
+}
+
 /** Wipe everything this app has stored. Used by Settings → Reset progress. */
 export async function clearAll(): Promise<void> {
   try {

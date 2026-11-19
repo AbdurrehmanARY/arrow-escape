@@ -21,6 +21,7 @@ import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
+import { UpdateBanner } from '../src/components/UpdateBanner';
 import {
   Sora_600SemiBold,
   Sora_700Bold,
@@ -167,6 +168,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <UpdateBanner />
         <Stack
           screenOptions={{
             headerShown: false,

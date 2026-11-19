@@ -9,7 +9,7 @@
  */
 
 import { memo } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 import { MIN_TOUCH_TARGET, type Palette, radius, spacing, typography } from '@theme';
@@ -105,12 +105,17 @@ function HudInner({
         accessibilityRole="button"
         accessibilityLabel="Hint"
         onPress={withClick(onHint)}
+        disabled={earning}
         style={[styles.hintPill, { backgroundColor: palette.accent }]}
       >
-        <FontAwesome name="video-camera" size={14} color={palette.textOnAccent} />
-        <Text style={[styles.hintText, { color: palette.textOnAccent }]}>
-          {earning ? 'Loading…' : 'Hint'}
-        </Text>
+        {earning ? (
+          <ActivityIndicator size="small" color={palette.textOnAccent} />
+        ) : (
+          <>
+            <FontAwesome name="video-camera" size={14} color={palette.textOnAccent} />
+            <Text style={[styles.hintText, { color: palette.textOnAccent }]}>Hint</Text>
+          </>
+        )}
       </Springy>
     </View>
   );

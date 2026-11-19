@@ -293,6 +293,10 @@ export function AccountScreen() {
         }}
         onCancel={() => setConfirmDelete(false)}
       />
+
+    { /* ---- Banner Ad at bottom ------------------------------------------- */ }
+    {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
+
     </Screen>
   );
 }

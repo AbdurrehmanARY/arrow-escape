@@ -21,7 +21,7 @@
  */
 
 import { useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
@@ -32,9 +32,11 @@ import { playSfx } from '@services/audio';
 import { accountEmail, useAuthStore , useSettingsStore } from '@state';
 import { fonts, radius, spacing, THEMES } from '@theme';
 import { bannerHeight, getBannerComponent } from '@services/ads';
+import { useBannerAd } from '@hooks';
 
 const BannerAd = getBannerComponent();
 const bannerSpace = bannerHeight();
+const { shouldShow } = useBannerAd();
 import { useCurrentShield } from '@hooks';
 import { useRewardBadge } from '@challenge';
 
@@ -71,8 +73,9 @@ export function SettingsScreen() {
   };
 
   return (
-    <Screen palette={palette} scroll>
-      <View style={styles.container}>
+    <Screen palette={palette} scroll={false}>
+      <View style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={[styles.container, { paddingBottom: bannerSpace > 0 ? bannerSpace + spacing.lg : spacing.xl }]}>
         {/* ---- Group 1: Preferences (Vibrations, Music, Sounds, Themes) --------- */}
         <View style={[styles.cardGroup, { backgroundColor: palette.surface, borderColor: palette.border }]}>
           {/* Vibrations */}
@@ -303,8 +306,9 @@ export function SettingsScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+      </ScrollView>
       </View>
-    {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
+    {BannerAd && shouldShow && <BannerAd style={{ height: bannerSpace }} />}
     </Screen>
   );
 }

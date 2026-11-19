@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Arrow Puzzle",
-    "slug": "ary",
+    "slug": "arrow-puzzle",
     "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,7 +15,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.abdurrehmanary.arrowpuzzle",
-      "versionCode": 79,
+      "versionCode": 90,
       "permissions": [
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
@@ -35,6 +35,12 @@
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-7288667796446979~5219080732"
+        }
+      ],
+      [
+        "react-native-mmkv",
+        {
+          "id": "arrowpuzzle-storage"
         }
       ],
       [
@@ -72,13 +78,19 @@
       "expo-asset",
       "expo-secure-store",
       "@react-native-google-signin/google-signin",
+      [
+        "expo-updates",
+        {
+          "username": "ary124s-team"
+        }
+      ],
       "expo-font"
     ],
     "scheme": "arrowpuzzle",
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "6654493d-5ba4-4242-86c9-17c24ebda7e9"
+        "projectId": "79e04e0c-5d84-41d9-a79a-11b1c197222b"
       },
       "supabase": {
         "url": "https://otaoosekzkgzwspmdgfj.supabase.co",
@@ -92,8 +104,8 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/8a99525d-7d1b-493b-96ec-d7b7628fc213"
+      "url": "79e04e0c-5d84-41d9-a79a-11b1c197222b"
     },
-    "owner": "ary1234s-team"
+    "owner": "ary124s-team"
   }
 }

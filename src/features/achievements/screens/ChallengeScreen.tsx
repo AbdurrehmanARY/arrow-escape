@@ -19,6 +19,7 @@ import {
   withClick,
 } from '@components';
 import { playMusic } from '@services/audio';
+import { bannerHeight, getBannerComponent } from '@services/ads';
 import {
   challengeFor,
   challengeId,
@@ -30,6 +31,10 @@ import {
 } from '@challenge';
 import { useChallengeStore } from '@state';
 import { fonts, radius, spacing, typography, type Palette } from '@theme';
+
+/** Banner ad component, resolved once at module scope. */
+const BannerAd = getBannerComponent();
+const bannerSpace = bannerHeight();
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
 const MONTHS = [
@@ -278,6 +283,10 @@ export function ChallengeScreen() {
           palette={palette}
         />
       </View>
+
+    { /* ---- Banner Ad at bottom ------------------------------------------- */ }
+    {BannerAd && bannerSpace > 0 ? <BannerAd style={{ height: bannerSpace }} /> : null}
+
     </Screen>
   );
 }
@@ -337,6 +346,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: 0,
     paddingBottom: spacing.sm,
+    position: 'relative',
   },
   trophyHeader: {
     flexDirection: 'row',

@@ -25,6 +25,7 @@ import { MonthlyTrophyBadge, Screen, Springy, useTheme, withClick } from '@compo
 import { APP_NAME, brandWordmarkFor } from '@shared/branding';
 import { playMusic } from '@services/audio';
 import { bannerHeight, getBannerComponent } from '@services/ads';
+import { loadInProgress, clearInProgress } from '@services/storage';
 import { challengeId, daysInMonth, today } from '@challenge';
 import { LEVEL_COUNT, tierOf } from '@data';
 import { TIER_LABELS } from '@game';
@@ -75,6 +76,18 @@ export function HomeScreen() {
   const resume = useMemo(() => nextLevel(records, LEVEL_COUNT), [records]);
   const resumeTier = tierOf(resume);
   const resumeTierLabel = resumeTier ? TIER_LABELS[resumeTier] : 'Medium';
+
+  const [inProgressLevel, setInProgressLevel] = useState<number | null>(null);
+
+  useEffect(() => {
+    const checkInProgress = async () => {
+      const saved = await loadInProgress('classic', resume);
+      if (saved && saved.levelId === resume) {
+        setInProgressLevel(resume);
+      }
+    };
+    checkInProgress();
+  }, [resume]);
 
   const { shield, score } = useCurrentShield(nowMs);
   const league = shield ?? LEAGUES[0]!;
@@ -161,19 +174,41 @@ export function HomeScreen() {
             </Text>
           </View>
 
-          <Springy
-            accessibilityRole="button"
-            accessibilityLabel={`Play level ${resume}`}
-            onPress={withClick(() => router.push(`/play/${resume}`))}
-            style={[
-              styles.play,
-              { backgroundColor: palette.accent },
-            ]}
-          >
-            <Text style={[styles.playLabel, { color: palette.textOnAccent }]}>
-              Play
-            </Text>
-          </Springy>
+          {inProgressLevel ? (
+            <>
+              <Text style={styles.inProgressBadge}>In Progress</Text>
+              <Springy
+                accessibilityRole="button"
+                accessibilityLabel={`Resume level ${resume}`}
+                onPress={withClick(() => router.push(`/play/${resume}`))}
+                style={[
+                  styles.play,
+                  { backgroundColor: palette.accent },
+                ]}
+              >
+                <Text style={[styles.playLabel, { color: palette.textOnAccent }]}>
+                  Resume
+                </Text>
+              </Springy>
+            </>
+          ) : (
+            <Springy
+              accessibilityRole="button"
+              accessibilityLabel={`Play level ${resume}`}
+              onPress={withClick(async () => {
+                await clearInProgress('classic', resume);
+                router.push(`/play/${resume}`);
+              })}
+              style={[
+                styles.play,
+                { backgroundColor: palette.accent },
+              ]}
+            >
+              <Text style={[styles.playLabel, { color: palette.textOnAccent }]}>
+                Play
+              </Text>
+            </Springy>
+          )}
 
           </View>
           {/* ---- Banner Ad at bottom ------------------------------------------- */}
@@ -303,6 +338,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  inProgressBadge: {
+    ...typography.tiny,
+    fontWeight: '700',
+    color: '#ffcc00',
+    marginBottom: spacing.xs,
+    textAlign: 'center',
   },
 
   });

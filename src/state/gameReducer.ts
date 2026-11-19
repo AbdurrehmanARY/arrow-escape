@@ -61,7 +61,9 @@ export type GameAction =
   /** Add hearts to the current session. */
   | { readonly type: 'addHearts'; readonly count: number }
   /** Save in-progress level state to AsyncStorage. */
-  | { readonly type: 'saveInProgress'; readonly levelId: number; readonly mode: 'classic' | 'monthly'; readonly challengeId?: string; readonly initialBoardState: BoardState; readonly clearedArrowIds: readonly number[]; readonly heartsLeft: number; readonly mistakes: number };
+  | { readonly type: 'saveInProgress'; readonly levelId: number; readonly mode: 'classic' | 'monthly'; readonly challengeId?: string; readonly initialBoardState: BoardState; readonly clearedArrowIds: readonly number[]; readonly heartsLeft: number; readonly mistakes: number }
+  /** Restore in-progress level state from AsyncStorage. */
+  | { readonly type: 'restoreInProgress'; readonly initialBoardState: BoardState; readonly clearedArrowIds: readonly number[]; readonly heartsLeft: number; readonly mistakes: number };
 
 /** Fresh state for a level, used both on entry and on Restart. */
 export function initGameState(initial: BoardState, hearts: number): GameState {
@@ -110,6 +112,30 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         timestamp: Date.now(),
       });
       return state;
+    }
+
+    case 'restoreInProgress': {
+      const { initialBoardState, clearedArrowIds, heartsLeft, mistakes } = action;
+      // Reconstruct session with cleared arrows
+      let sessionState = initialBoardState;
+      for (const arrowId of clearedArrowIds) {
+        // Mark arrow as not active (cleared)
+        sessionState = {
+          ...sessionState,
+          alive: sessionState.alive.map((v, i) => i === arrowId ? 0 : v),
+          remaining: sessionState.remaining - 1,
+        };
+      }
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          state: sessionState,
+          heartsLeft,
+          mistakes,
+          status: 'playing',
+        },
+      };
     }
 
     case 'departed': {

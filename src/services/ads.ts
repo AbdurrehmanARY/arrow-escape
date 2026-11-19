@@ -177,6 +177,7 @@ export async function initAds(): Promise<void> {
 
     preload();
     preloadInterstitial();
+    preloadRewardedHeartRefill();
   } catch {
     // An SDK that will not initialise simply means no ads this session.
   }
@@ -367,7 +368,7 @@ let levelCompleteCounter = 0;
  *
  * Rules (Master Brief Section 6):
  * - Zero interstitials during the initial 90s grace period.
- * - Shows an interstitial every 3 completed levels.
+ * - Shows an interstitial every 2 completed levels.
  * - Respects a 60-second minimum cooldown between ads.
  */
 export function recordLevelCompleteAndCheckInterstitial(): Promise<boolean> {
@@ -692,6 +693,7 @@ export {
   preloadRewardedHeartRefill,
   showRewardedHeartRefill,
   availabilityRewardedHeartRefill,
+  preloadRewardedHeartRefill as preloadHeartRefillAd,
 };
 
 

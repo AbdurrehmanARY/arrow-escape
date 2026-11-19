@@ -29,5 +29,6 @@
  */
 
 export * from './useCurrentShield';
+export * from './useBannerAd';
 export * from '@features/settings';
 

@@ -20,8 +20,8 @@
  *               would hide the difference between a deep link and a typed value.
  */
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
@@ -30,20 +30,17 @@ import { Celebration, ConfirmDialog, FailOverlay, Hud, PauseMenu, PillButton, Sc
 import { earnedCount, today } from '@challenge';
 import {
   buildLevel,
-  emptyBoardState,
   findAllSafeMoves,
   isDoomed,
 } from '@game';
 import { LEVEL_COUNT, levelById, tierOf } from '@data';
 import { TIER_LABELS } from '@game/codec';
 import { WIN_OVERLAY_DELAY_MS } from '@config';
-import { bannerHeight, getBannerComponent, isOnline, recordLevelCompleteAndCheckInterstitial, showRewarded } from '@services/ads';
+import { bannerHeight, getBannerComponent, isOnline, recordLevelCompleteAndCheckInterstitial, showRewarded, showRewardedHeartRefill } from '@services/ads';
+import { clearInProgress } from '@services/storage';
+
 import { playMusic, playSfx, playSting, stopAllSfx, type SfxName } from '@services/audio';
-import { gameReducer, initGameState , statsOf, useChallengeStore , useLeagueStore , useProgressStore , useSettingsStore } from '@state';
-
-
-
-
+import { statsOf, useChallengeStore , useLeagueStore , useProgressStore , useSettingsStore } from '@state';
 
 import { radius, spacing, typography } from '@theme';
 import type { DifficultyTier } from '@game/codec';
@@ -51,7 +48,8 @@ import type { DifficultyTier } from '@game/codec';
 import { useArrowTap } from '../hooks/useArrowTap';
 import { useBoardViewport } from '../hooks/useBoardViewport';
 import { useHintFlow } from '../hooks/useHintFlow';
-import { requestReview, checkReviewSupport, DEFAULT_REVIEW_ELIGIBILITY } from '@services/review';
+import { requestReview, checkReviewSupport, DEFAULT_REVIEW_ELIGIBILITY, shouldRequestReview } from '@services/review';
+import { useGameProgress } from '../providers/GameProgressProvider';
 
 /**
  * Banner ad component, resolved once at module scope.
@@ -62,8 +60,6 @@ import { requestReview, checkReviewSupport, DEFAULT_REVIEW_ELIGIBILITY } from '@
  */
 const BannerAd = getBannerComponent();
 const bannerSpace = bannerHeight();
-
-
 
 /**
  * Props for {@link PlayScreen}, forwarded from `app/play/[id].tsx`.
@@ -156,17 +152,16 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
   });
 
   const hearts = 3;
-  const [state, dispatch] = useReducer(
-    gameReducer,
-    built?.ok ? initGameState(built.value.initial, hearts) : undefined,
-    (initial) => initial ?? initGameState(emptyBoardState(), hearts),
-  );
+  const { gameState, dispatch } = useGameProgress();
+  const state = gameState;
 
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(false);
   /** Bumped to send the board back to fit-to-screen. */
   const [fitNonce] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [nearMissLoading, setNearMissLoading] = useState(false);
+  const [heartRefillLoading, setHeartRefillLoading] = useState(false);
 
   const status = state.session.status;
 
@@ -310,6 +305,15 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
     // Evaluate ad monetization policy (grace period & cadence)
     void recordLevelCompleteAndCheckInterstitial();
 
+    // Clear in-progress state on win
+    clearInProgress('classic', levelId);
+
+    // Request review if eligible (after level completion)
+    const records = useProgressStore.getState().records;
+    if (shouldRequestReview(records)) {
+      void requestReview();
+    }
+
     // Only the overlay is delayed, so the board clearing is visible before
     // anything covers it.
     const timer = setTimeout(() => setOverlayVisible(true), WIN_OVERLAY_DELAY_MS);
@@ -340,6 +344,20 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
     playSting('failure');
     if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   }, [status, haptics]);
+
+  /** Handle Android back gesture */
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (status === 'playing' && !paused) {
+        setPaused(true);
+        return true;
+      }
+      // Navigate Home outside gameplay
+      router.replace('/');
+      return false;
+    });
+    return () => backHandler.remove();
+  }, [status, paused, router]);
 
   /**
    * Has a shutter already cost the player the level, before the board looks lost?
@@ -468,29 +486,16 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
       <PauseMenu
         palette={palette}
         visible={paused && status === 'playing'}
-        levelNumber={level.id}
         levelName={level.name}
-        tierLabel={tierLabel}
-        boardRows={built.value.board.rows}
-        boardCols={built.value.board.cols}
-        arrowsLeft={state.session.state.remaining}
-        arrowsTotal={built.value.board.arrows.length}
-        heartsLeft={state.session.heartsLeft}
-        maxHearts={state.session.maxHearts}
         onResume={() => {
           playSfx('resume');
           setPaused(false);
         }}
-        onRestart={() => {
-          // No `levelRestart` here any more: the sound belongs to the restart
-          // itself, which lives in `doRestart`. Four different buttons can cause
-          // one, and only this one was making the noise.
+        onRestart={doRestart}
+        onHome={() => {
+          playSfx('popupClose');
           setPaused(false);
-          onRestartPressed();
-        }}
-        onSettings={() => {
-          setPaused(false);
-          router.push('/settings');
+          router.replace('/');
         }}
       />
 
@@ -503,7 +508,7 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
         mistakes={state.session.mistakes}
         perfectStreak={perfectStreak}
         onNext={levelId < LEVEL_COUNT ? () => router.replace(`/play/${levelId + 1}`) : undefined}
-        onReplay={doRestart}
+        onHome={() => router.replace('/')}
       />
 
       <FailOverlay
@@ -514,15 +519,35 @@ export function PlayScreen({ levelId: levelIdParam, challengeDay }: PlayScreenPr
         onRetry={doRestart}
         onHome={() => router.replace('/')}
         onNearMiss={async () => {
-          const online = await isOnline();
-          if (online === false) return;
-          showRewarded().then((outcome) => {
+          setNearMissLoading(true);
+          try {
+            const online = await isOnline();
+            if (online === false) return;
+            const outcome = await showRewarded();
             if (outcome.kind === 'earned') {
               dispatch({ type: 'addHearts', count: 2 });
               if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }
-          });
+          } finally {
+            setNearMissLoading(false);
+          }
         }}
+        onHeartRefill={async () => {
+          setHeartRefillLoading(true);
+          try {
+            const online = await isOnline();
+            if (online === false) return;
+            const success = await showRewardedHeartRefill();
+            if (success) {
+              dispatch({ type: 'addHearts', count: 3 });
+              if (haptics) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+          } finally {
+            setHeartRefillLoading(false);
+          }
+        }}
+        nearMissLoading={nearMissLoading}
+        heartRefillLoading={heartRefillLoading}
       />
 
       <StuckOverlay
@@ -567,7 +592,6 @@ const styles = StyleSheet.create({
   },
   fitPressed: { opacity: 0.6 },
   fitLabel: { ...typography.tiny, fontWeight: '700' },
-
 
   actions: { flexDirection: 'row', gap: spacing.sm },
 
