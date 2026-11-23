@@ -58,7 +58,7 @@ export const STORAGE_KEYS = {
  *               again anyway.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { mmkvStorage } from './mmkvStorage';
 import { type BoardState } from '@game';
 
 /** Bump when the shape of a persisted slice changes, and add a migration below. */
@@ -110,7 +110,7 @@ export async function loadSlice<T>(
   migrate?: (version: number, data: unknown) => T | undefined,
 ): Promise<T> {
   try {
-    const raw = await AsyncStorage.getItem(KEY_PREFIX + key);
+    const raw = await mmkvStorage.getItem(KEY_PREFIX + key);
     if (raw === null) return fallback;
 
     const parsed = JSON.parse(raw) as Partial<SaveEnvelope<T>>;
@@ -136,7 +136,7 @@ export async function loadSlice<T>(
 export async function saveSlice<T>(key: string, data: T): Promise<void> {
   try {
     const envelope: SaveEnvelope<T> = { version: SAVE_VERSION, data };
-    await AsyncStorage.setItem(KEY_PREFIX + key, JSON.stringify(envelope));
+    await mmkvStorage.setItem(KEY_PREFIX + key, JSON.stringify(envelope));
   } catch (error) {
     warn(`could not write "${key}"`, error);
   }
@@ -151,7 +151,7 @@ export async function loadInProgress(
     ? IN_PROGRESS_KEYS.classic(id as number)
     : IN_PROGRESS_KEYS.monthly(id as string);
   try {
-    const raw = await AsyncStorage.getItem(KEY_PREFIX + key);
+    const raw = await mmkvStorage.getItem(KEY_PREFIX + key);
     if (raw === null) return null;
     return JSON.parse(raw) as InProgressState;
   } catch (error) {
@@ -169,7 +169,7 @@ export async function clearInProgress(
     ? IN_PROGRESS_KEYS.classic(id as number)
     : IN_PROGRESS_KEYS.monthly(id as string);
   try {
-    await AsyncStorage.removeItem(KEY_PREFIX + key);
+    await mmkvStorage.removeItem(KEY_PREFIX + key);
   } catch (error) {
     warn(`could not clear in-progress "${key}"`, error);
   }
@@ -178,9 +178,9 @@ export async function clearInProgress(
 /** Wipe everything this app has stored. Used by Settings → Reset progress. */
 export async function clearAll(): Promise<void> {
   try {
-    const keys = await AsyncStorage.getAllKeys();
+    const keys = await mmkvStorage.getAllKeys();
     const ours = keys.filter((key) => key.startsWith(KEY_PREFIX));
-    if (ours.length > 0) await AsyncStorage.multiRemove(ours);
+    if (ours.length > 0) await mmkvStorage.multiRemove(ours);
   } catch (error) {
     warn('could not clear saved data', error);
   }

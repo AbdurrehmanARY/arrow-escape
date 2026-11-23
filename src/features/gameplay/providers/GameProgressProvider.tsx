@@ -1,5 +1,5 @@
 /**
- * GameProgressProvider.tsx — React context provider for game progress management.
+ * GameProgressProvider.tsx -- React context provider for game progress management.
  *
  * Integrates with the game reducer and handles automatic save/restore.
  */
@@ -28,10 +28,11 @@ interface GameProgressProviderProps {
   levelId: number;
   mode: 'classic' | 'monthly';
   initialBoard: any;
+  built: any;
   hearts: number;
 }
 
-export function GameProgressProvider({ children, levelId, mode, initialBoard, hearts }: GameProgressProviderProps) {
+export function GameProgressProvider({ children, levelId, mode, initialBoard, built, hearts }: GameProgressProviderProps) {
   const [gameState, dispatch] = useReducer(gameReducer, initGameState(initialBoard, hearts));
   const sessionStartRef = useRef(Date.now());
   const statusRef = useRef(gameState.session.status);
@@ -44,24 +45,33 @@ export function GameProgressProvider({ children, levelId, mode, initialBoard, he
   // Auto-save with debounce
   const doSaveProgress = useCallback(async () => {
     const state = gameState;
-    if (state.session.status !== 'playing') return;
+    if (state.session.status !== 'playing') {
+      return;
+    }
 
     // Extract escaped arrow IDs from state
     const escapedArrowIds: string[] = [];
     const remainingArrowIds: string[] = [];
     const chargedArrowIds: string[] = [];
     
-    // Build escaped/remaining arrays from state
+    // Build escaped/remaining arrays from state - use authored IDs, not indices
     state.session.state.alive.forEach((alive, index) => {
-      if (alive === 0) {
-        escapedArrowIds.push(String(index));
-      } else {
-        remainingArrowIds.push(String(index));
+      const arrowId = built?.value.board.arrows[index]?.id;
+      if (arrowId) {
+        if (alive === 0) {
+          escapedArrowIds.push(arrowId);
+        } else {
+          remainingArrowIds.push(arrowId);
+        }
       }
     });
-    
+
+    // Save charged arrows using authored IDs
     state.session.chargedArrows.forEach(idx => {
-      chargedArrowIds.push(String(idx));
+      const arrowId = built?.value.board.arrows[idx]?.id;
+      if (arrowId) {
+        chargedArrowIds.push(arrowId);
+      }
     });
 
     const stateToSave = {
@@ -77,7 +87,7 @@ export function GameProgressProvider({ children, levelId, mode, initialBoard, he
 
     // Save to MMKV via inProgressManager
     await saveInProgress(levelId, mode, stateToSave);
-  }, [gameState, levelId, mode]);
+  }, [gameState, levelId, mode, built]);
 
   // Debounced save
   const saveProgress = useCallback(async () => {
@@ -91,11 +101,20 @@ export function GameProgressProvider({ children, levelId, mode, initialBoard, he
   // Load in-progress on mount
   useEffect(() => {
     const loadProgress = async () => {
-      const saved = await loadInProgress(mode, levelId);
+      const saved = await loadInProgress(mode, levelId)
       if (saved && validateSavedGame(saved, { id: levelId, ...saved.originalBoard })) {
-        const restoredState = reconstructBoardState(saved);
-        // Dispatch restore action
-        dispatch({ type: 'restoreInProgress', ...saved });
+        // Dispatch restore action with proper payload
+        dispatch({ 
+          type: 'restoreInProgress', 
+          initialBoard: saved.originalBoard,
+          escapedArrowIds: saved.escapedArrowIds,
+          remainingArrowIds: saved.remainingArrowIds,
+          heartsLeft: saved.heartsLeft,
+          mistakes: saved.mistakes,
+          chargedArrowIds: saved.chargedArrowIds,
+          status: saved.status,
+          elapsedTime: saved.elapsedTime,
+        });
       }
     };
     loadProgress();
@@ -113,14 +132,39 @@ export function GameProgressProvider({ children, levelId, mode, initialBoard, he
     return () => subscription.remove();
   }, []);
 
+  // Restore progress for a specific level (used for manual restore)
+  const restoreProgress = useCallback(async (targetLevelId: number) => {
+    const saved = await loadInProgress(mode, targetLevelId);
+    if (saved && validateSavedGame(saved, { id: targetLevelId, ...saved.originalBoard })) {
+      dispatch({ 
+        type: 'restoreInProgress', 
+        initialBoard: saved.originalBoard,
+        escapedArrowIds: saved.escapedArrowIds,
+        remainingArrowIds: saved.remainingArrowIds,
+        heartsLeft: saved.heartsLeft,
+        mistakes: saved.mistakes,
+        chargedArrowIds: saved.chargedArrowIds,
+        status: saved.status,
+        elapsedTime: saved.elapsedTime,
+      });
+      return true;
+    }
+    return false;
+  }, [mode, dispatch]);
+
+  // Clear in-progress progress for current level
+  const clearProgress = useCallback(async () => {
+    await clearInProgress(mode, levelId);
+  }, [mode, levelId]);
+
   return (
     <GameProgressContext.Provider value={{
       gameState,
       dispatch,
       saveProgress,
       saveProgressImmediate,
-      restoreProgress: async () => false,
-      clearProgress: async () => {},
+      restoreProgress,
+      clearProgress,
     }}>
       {children}
     </GameProgressContext.Provider>

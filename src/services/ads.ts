@@ -168,10 +168,16 @@ export async function initAds(): Promise<void> {
     // physical device.
     const { setRequestConfiguration } = module as any;
     if (setRequestConfiguration) {
+      // Get test device IDs from environment or use EMULATOR for emulator
+      const testDeviceIds = __DEV__ 
+        ? ['EMULATOR'] 
+        : []; // Add your test device hashes here for production testing
+      
       setRequestConfiguration({
         // Non-personalized ads only (COPPA-friendly).
-        // Set to false if you later add UMP consent flow and want personalised ads.
-        nonPersonalizedAdsOnly: true,
+        // Set to false in dev to allow test ads, true in prod for COPPA compliance.
+        nonPersonalizedAdsOnly: !__DEV__,
+        testDeviceIds,
       });
     }
 
@@ -190,7 +196,7 @@ export function preload(): void {
 
   try {
     const ad = module.RewardedAd.createForAdRequest(unitId(), {
-      requestNonPersonalizedAdsOnly: true,
+      requestNonPersonalizedAdsOnly: !__DEV__,
     });
 
     ad.addAdEventListener(module.RewardedAdEventType.LOADED, () => {
@@ -217,7 +223,7 @@ export function preloadInterstitial(): void {
   try {
     const ad = module.InterstitialAd.createForAdRequest(
       AD_UNITS.interstitial,
-      { requestNonPersonalizedAdsOnly: true },
+      { requestNonPersonalizedAdsOnly: !__DEV__ },
     );
     ad.addAdEventListener(module.AdEventType.LOADED, () => {
       interstitialLoaded = true;
@@ -531,7 +537,7 @@ async function preloadRewardedHeartRefill(): Promise<void> {
   if (heartRefillState.loadStateRef === 'loading') return; // already loading
 
   const unitId = AD_UNITS.rewardedHeartRefill;
-  const options = { requestNonPersonalizedAdsOnly: true };
+  const options = { requestNonPersonalizedAdsOnly: !__DEV__ };
 
   const ad = (module as any).RewardedAd?.createForAdRequest(unitId, options);
   if (!ad) {
@@ -591,9 +597,7 @@ async function showRewardedHeartRefill(): Promise<boolean> {
   const module = loadSdk();
   if (!module) return false;
 
-  const unsubLoaded = ad.addAdEventListener(module.AdEventType.LOADED, () => {
-    debug('[AdMob] Heart-refill rewarded LOADED before show.');
-  });
+  let showSucceeded = false;
 
   const unsubError = ad.addAdEventListener(module.AdEventType.ERROR, (err: unknown) => {
     console.warn('[AdMob] Heart-refill rewarded show ERROR:', err);
@@ -603,24 +607,27 @@ async function showRewardedHeartRefill(): Promise<boolean> {
   const unsubClosed = ad.addAdEventListener(module.AdEventType.CLOSED, () => {
     heartRefillState.loadedRef = false;
     heartRefillState.loadStateRef = 'idle';
+    // Auto-preload next ad
     void preloadRewardedHeartRefill();
   });
 
   try {
     await ad.show();
-    heartRefillState.loadedRef = true;
-    unsubLoaded?.();
-    unsubError?.();
-    unsubClosed?.();
-    return true;
+    showSucceeded = true;
   } catch (e) {
     console.warn('[AdMob] Heart-refill rewarded show failed:', e);
+  } finally {
+    // Ad is consumed after show (regardless of success/failure)
     heartRefillState.loadedRef = false;
-    unsubLoaded?.();
+    heartRefillState.loadStateRef = 'idle';
+    // Auto-preload next ad
+    void preloadRewardedHeartRefill();
+    // Cleanup listeners
     unsubError?.();
-    unsubClosed?.();
-    return false;
+    // Note: unsubClosed is called by the SDK after CLOSED event
   }
+
+  return showSucceeded;
 }
 
 /**

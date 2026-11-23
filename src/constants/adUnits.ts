@@ -22,5 +22,7 @@ export const AD_UNITS = {
 
   rewarded: "ca-app-pub-7288667796446979/9116203924",
 
-  rewardedHeartRefill: "ca-app-pub-7288667796446979/1281416679",
+  rewardedHeartRefill: __DEV__
+    ? "ca-app-pub-3940256099942544/5224354917" // Google test rewarded ad
+    : "ca-app-pub-7288667796446979/1281416679",
 } as const;
